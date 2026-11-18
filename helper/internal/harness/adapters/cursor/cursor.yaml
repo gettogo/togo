@@ -19,7 +19,7 @@ feeds:
   hooks:            # `togo hook cursor <event>` in ~/.cursor/hooks.json (installed only by `togo hooks install`)
     hook:
       events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure,
-        AgentResponse, Stop, SubagentStart, SubagentStop, PreCompact, SessionEnd]
+        AgentResponse, Stop, StopFailure, SubagentStart, SubagentStop, PreCompact, SessionEnd]
     mapper: cursor.hooks
     stability: unverified
 sources:

@@ -27,9 +27,27 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 	var ready []harness.Item
 	now := s.e.cfg.Now()
 	mark := s.batchMark()
+	if !s.restoring {
+		// What an agent started by the session's agent does right now, not
+		// what a replayed file says it once did (see AgentsRunning).
+		for _, op := range ops {
+			if op.Section == harness.SectionAgents {
+				s.agentAt = now
+			}
+		}
+	}
 	for _, it := range items {
 		if it.ID == "" || it.Kind == "" {
 			continue
+		}
+		if !s.restoring && (it.Parent != "" || it.Kind == harness.KindAgent) {
+			s.agentAt = now
+		}
+		if it.Kind == harness.KindUser && it.Parent == "" && it.User != nil && !it.User.Queued {
+			// The user's next prompt: the failures shown since the last one go.
+			if d := s.mission.prompted(); d != nil {
+				s.missionDeltaLocked(d)
+			}
 		}
 		s.prepareLocked(&it, mark)
 		s.labelModelNoticeLocked(&it)
@@ -67,7 +85,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			ops[i].Status = &st
 		}
 	}
-	if d := s.mission.apply(ops); d != nil {
+	if d := s.mission.apply(s.unshadowLocked(ops)); d != nil {
 		s.missionDeltaLocked(d)
 	}
 	s.relinkLocked()
@@ -239,6 +257,11 @@ func (s *sess) notifyLocked(n harness.Notification) {
 		return
 	}
 	n.SessionID, n.TS, n.Epoch = s.id, s.e.cfg.Now(), s.e.log.Epoch(s.id)
+	if n.Kind == harness.NoteReset && len(s.subs) > 0 {
+		// A reset makes every open chat read the conversation again: rare
+		// by design, so each one is on record with its cause.
+		s.e.cfg.Logf("harness: %s chat reset (%s), %d open", s.id, n.Reason, len(s.subs))
+	}
 	for _, q := range s.subs {
 		q.push(n)
 	}
@@ -263,12 +286,21 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 	switch it.Kind {
 	case harness.KindUser:
 		if u := it.User; u != nil {
-			u.Text = clipBytes(red.String(u.Text), harness.MaxItemText)
+			u.Text = clipItemText(red.String(u.Text))
 			if u.Source == "" {
 				u.Source = "unknown"
 			}
 			if !u.Queued {
-				if p, ok := s.matchPhoneLocked(it.ID, u.Text); ok {
+				if id, ok := s.phoneAlias[it.ID]; ok {
+					// The agent's record of a prompt the phone sent, seen
+					// again (its conversation's past was loaded): the same
+					// item, not a second one.
+					it.ID, u.Source = id, "phone"
+				} else if p, ok := s.matchPhoneLocked(it.ID, u.Text); ok {
+					if s.phoneAlias == nil {
+						s.phoneAlias = map[string]string{}
+					}
+					s.phoneAlias[it.ID] = p.id
 					it.ID, u.Source = p.id, "phone"
 					// The phone's paths can be fetched; the agent's copy of a
 					// picture may be only described.
@@ -283,16 +315,14 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 		}
 	case harness.KindAssistant, harness.KindThinking:
 		if t := partialText(*it); t != nil {
-			t.Text = clipBytes(red.String(t.Text), harness.MaxItemText)
+			t.Text = clipItemText(red.String(t.Text))
 		}
 	case harness.KindTool:
 		if t := it.Tool; t != nil {
 			t.Title = clipRunes(red.String(t.Title), harness.MaxTitle)
 			t.Output = tailBytes(red.String(t.Output), harness.MaxToolOutput)
 			if t.Subject != nil {
-				sub := *t.Subject
-				sub.Text = red.String(sub.Text)
-				t.Subject = &sub
+				t.Subject = sendableSubject(*t.Subject, red.String(t.Subject.Text))
 			}
 		}
 	case harness.KindShell:
@@ -392,8 +422,9 @@ func (s *sess) notePhoneLocked(id, text string, images []harness.ImageRef) {
 	s.phone = append(keep, phoneText{id: id, text: strings.TrimSpace(text), images: images, at: now})
 }
 
-// imagePlaceholder is how an agent writes a pasted picture into the prompt text.
-var imagePlaceholder = regexp.MustCompile(`\[Image #\d+\]`)
+// imagePlaceholder is how an agent writes a pasted picture into the prompt
+// text: "[Image #1]" (Claude Code) or "[Image 1]" (OpenCode 2).
+var imagePlaceholder = regexp.MustCompile(`\[Image #?\d+\]`)
 
 // matchPhoneLocked finds the phone prompt the agent's record of text is.
 // A prompt sent with pictures matches once the pasted paths and the
@@ -442,6 +473,17 @@ func (s *sess) currentModeLocked() string {
 		}
 	}
 	return state["mode"]
+}
+
+// textCutMarker ends a text that was cut at MaxItemText.
+const textCutMarker = "\n\n[Text cut here. The terminal has the full text.]"
+
+// clipItemText limits chat text to MaxItemText bytes and says so when it cuts.
+func clipItemText(s string) string {
+	if len(s) <= harness.MaxItemText {
+		return s
+	}
+	return clipBytes(s, harness.MaxItemText-len(textCutMarker)) + textCutMarker
 }
 
 func clipBytes(s string, n int) string {

@@ -12,13 +12,46 @@ import (
 // statusline) to the Status section: model, effort, context, cost and the
 // rate limit meters.
 type statusline struct {
+	env   harness.Env
 	mu    sync.Mutex
 	state map[string]string
 	last  string
 }
 
-func newStatusline(harness.Env) *statusline {
-	return &statusline{state: map[string]string{}}
+func newStatusline(env harness.Env) *statusline {
+	return &statusline{env: env, state: map[string]string{}}
+}
+
+// statusContext remembers when each session's status line last reported a
+// context percentage. The transcript's own estimate (contextOps) is for
+// sessions without it: it knows the window only from the model id, so the
+// two disagree on a [1m] session and the meter would jump between them.
+var statusContext = struct {
+	sync.Mutex
+	at map[string]time.Time
+}{at: map[string]time.Time{}}
+
+// statusContextFresh is how long a status line's context figure keeps the
+// transcript's estimate out.
+const statusContextFresh = 30 * time.Minute
+
+func markStatusContext(session string) {
+	if session == "" {
+		return
+	}
+	statusContext.Lock()
+	defer statusContext.Unlock()
+	if len(statusContext.at) >= 512 {
+		clear(statusContext.at)
+	}
+	statusContext.at[session] = time.Now()
+}
+
+func hasStatusContext(session string) bool {
+	statusContext.Lock()
+	defer statusContext.Unlock()
+	at, ok := statusContext.at[session]
+	return ok && time.Since(at) < statusContextFresh
 }
 
 func (s *statusline) Name() string { return MapperStatusline }
@@ -61,6 +94,7 @@ func (s *statusline) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if v, ok := num(cw["used_percentage"]); ok && v > 0 && v <= 100 { // 0 is "not known yet"
 			st.ContextPercent = &v
 			s.state["context"] = strconv.FormatFloat(v, 'f', -1, 64)
+			markStatusContext(s.env.SessionID)
 		}
 	}
 	if c := obj(p["cost"]); c != nil {

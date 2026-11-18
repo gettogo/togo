@@ -48,6 +48,10 @@ func osEnv() map[string]string {
 // missing or too old), wherever that check sits in the report; every other
 // finding is advice.
 func runDoctor(args []string, e doctor.Env, out io.Writer) int {
+	return runDoctorContext(context.Background(), args, e, out)
+}
+
+func runDoctorContext(ctx context.Context, args []string, e doctor.Env, out io.Writer) int {
 	fs := newFlagSet("doctor")
 	asJSON := fs.Bool("json", false, "print the report as JSON")
 	positional, err := parseArgs(fs, args)
@@ -58,7 +62,7 @@ func runDoctor(args []string, e doctor.Env, out io.Writer) int {
 		return usageError(out, fmt.Errorf("doctor takes no arguments"))
 	}
 
-	checks := doctor.Run(context.Background(), e)
+	checks := doctor.Run(ctx, e)
 	integrations := doctorIntegrations(e)
 	if *asJSON {
 		if integrations == nil {

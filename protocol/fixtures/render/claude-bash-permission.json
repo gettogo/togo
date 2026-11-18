@@ -15,6 +15,7 @@
       "text": "rm -rf ./build \u0026\u0026 make"
     },
     "host": "studio",
+    "expires": 1793874600,
     "options": [
       {
         "n": 1,

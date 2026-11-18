@@ -2,7 +2,7 @@
 # Install the togo helper from a GitHub release, verifying every download.
 #
 #   curl -fsSL https://github.com/gettogo/togo/releases/latest/download/install.sh | sh
-#   sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service]
+#   sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service] [--no-modify-path]
 #
 # Unless --no-service is given, the helper's login service is installed too
 # (togo service install), so needs-you alerts arrive while the app is closed.
@@ -10,6 +10,8 @@
 #
 # The default directory is ~/.togo/bin, where the Togo app looks first; a
 # link from /usr/local/bin (when writable) puts it on the terminal PATH.
+# Without that link, one line is added to your shell profile (zsh, bash or
+# fish) instead; --no-modify-path leaves the profile alone.
 #
 # SHA256SUMS must carry a minisign signature by the release key below whose
 # trusted comment is exactly "togo <version> SHA256SUMS", and the archive must
@@ -37,7 +39,7 @@ say() { printf '%s\n' "$*"; }
 warn() { printf 'togo install: %s\n' "$*" >&2; }
 refuse() { printf 'togo install: %s\n' "$*" >&2; exit 1; }
 usage() {
-  printf 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service]\n' >&2
+  printf 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service] [--no-modify-path]\n' >&2
   exit 2
 }
 
@@ -70,11 +72,44 @@ loopback_url() {
 
 # Everything runs from main, called on the last line, so a download cut short
 # defines functions at most and runs nothing.
+# add_to_profile: put ~/.togo/bin on the terminal PATH through the profile of
+# the login shell, and name that file in $profile. It fails, writing nothing,
+# for a shell it does not know. A profile that already names the directory is
+# left as it is.
+add_to_profile() {
+  line='export PATH="$PATH:$HOME/.togo/bin"'
+  case ${SHELL:-} in
+    */zsh) profile=${ZDOTDIR:-$HOME}/.zshrc ;;
+    */bash)
+      # A login bash reads only the first of these that exists, so a new
+      # .bash_profile must not hide an existing .profile.
+      profile=$HOME/.bashrc
+      if [ "$(uname -s)" = Darwin ]; then
+        profile=$HOME/.bash_profile
+        for f in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+          if [ -f "$f" ]; then profile=$f; break; fi
+        done
+      fi
+      ;;
+    */fish)
+      profile=${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d/togo.fish
+      line='fish_add_path --append --path "$HOME/.togo/bin"'
+      mkdir -p "${profile%/*}" 2>/dev/null || return 1
+      ;;
+    *) return 1 ;;
+  esac
+  if [ -f "$profile" ] && grep -qF '.togo/bin' "$profile" 2>/dev/null; then
+    return 0
+  fi
+  printf '\n# Added by the Togo installer\n%s\n' "$line" >>"$profile" 2>/dev/null
+}
+
 main() {
   version=""
   dir=""
   restart=yes
   with_service=yes
+  modify_path=yes
   while [ $# -gt 0 ]; do
     case $1 in
       --version) [ $# -ge 2 ] || usage; version=$2; shift 2 ;;
@@ -83,9 +118,10 @@ main() {
       --dir=?*) dir=${1#--dir=}; shift ;;
       --no-restart) restart=no; shift ;;
       --no-service) with_service=no; shift ;;
+      --no-modify-path) modify_path=no; shift ;;
       --service) shift ;; # the default now; accepted for older instructions
       -h | --help)
-        say 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service]'
+        say 'usage: sh install.sh [--version vX.Y.Z] [--dir DIR] [--no-restart] [--no-service] [--no-modify-path]'
         exit 0
         ;;
       *) usage ;;
@@ -331,8 +367,11 @@ main() {
     # must be the togo Developer ID build, and of the version asked for.
     codesign --verify --strict -R "=$requirement" "$tmp/x/togo" >/dev/null 2>&1 ||
       refuse "the downloaded togo is not signed by the togo developer; nothing was installed."
-    [ "$("$tmp/x/togo" version </dev/null 2>/dev/null || true)" = "togo $version" ] ||
-      refuse "the downloaded togo is not version $version; refusing a mismatched or older release."
+    # `togo version` prints "togo vX.Y.Z (os/arch)"; compare the version field.
+    case "$("$tmp/x/togo" version </dev/null 2>/dev/null || true)" in
+      "togo $version" | "togo $version "*) ;;
+      *) refuse "the downloaded togo is not version $version; refusing a mismatched or older release." ;;
+    esac
   fi
   say "Verified $archive ($how)"
 
@@ -380,7 +419,11 @@ main() {
       case ":${PATH:-}:" in *":$linked:"*) on_path=yes ;; esac
     fi
   fi
-  [ "$on_path" = yes ] || warn "$dir is not on your PATH; add it in your shell profile (export PATH=\"$dir:\$PATH\")."
+  if [ "$on_path" = no ] && [ "$default_dir" = yes ] && [ "$modify_path" = yes ] && add_to_profile; then
+    say "Added togo to your PATH in $profile. Open a new terminal to use it; until then run $dir/togo"
+  elif [ "$on_path" = no ]; then
+    warn "$dir is not on your PATH; add it in your shell profile (export PATH=\"\$PATH:$dir\")."
+  fi
 
   installed_version=$("$dir/togo" version </dev/null 2>/dev/null || true)
   service=$("$dir/togo" service status </dev/null 2>/dev/null || true)

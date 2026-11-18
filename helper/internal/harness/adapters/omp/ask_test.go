@@ -1,6 +1,8 @@
 package omp
 
 import (
+	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -111,5 +113,68 @@ func TestAdapterAnswersAskWithKeys(t *testing.T) {
 	a := string(AdapterFile())
 	if !strings.Contains(a, "needs.questions") || !strings.Contains(a, "builtin: screen_answer") {
 		t.Fatal("omp.yaml lacks needs.questions or the screen_answer answer action")
+	}
+}
+
+// Seen live on omp 18.20: the ask tool sent one HTML form, the terminal
+// showed the "Audit color" field, and the chat had no question and needed
+// nothing from the user. The records below are that session's.
+func TestFormAskBecomesAQuestion(t *testing.T) {
+	const call = `{"html": "<form><fieldset><legend>Audit color</legend><label><input type=\"radio\" name=\"color\" value=\"red\" checked>Red</label><label><input type=\"radio\" name=\"color\" value=\"yellow\">Yellow</label></fieldset><button type=\"submit\">Submit</button></form>", "i": "Audit color selection"}`
+	var args map[string]any
+	if err := json.Unmarshal([]byte(call), &args); err != nil {
+		t.Fatal(err)
+	}
+	it := askQuestion("c1", "t1", "", t0, args)
+	if it == nil || len(it.Question.Questions) != 1 {
+		t.Fatalf("item = %+v, want one question", it)
+	}
+	q := it.Question.Questions[0]
+	if q.ID != "color" || q.Prompt != "Audit color" || q.Multi || len(q.Options) != 2 || q.Options[0].Label != "Red" || q.Options[1].Label != "Yellow" {
+		t.Fatalf("question = %+v", q)
+	}
+	if it.Question.Answerable == nil || *it.Question.Answerable {
+		t.Error("the form is offered as answerable from the phone, which nothing can do yet")
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(`{"role":"toolResult","toolName":"ask","details":{"answers":[{"name":"color","question":"Audit color","answer":"Red"}]},"isError":false}`), &result); err != nil {
+		t.Fatal(err)
+	}
+	if got := askAnswers(it.Question, result); len(got["color"]) != 1 || got["color"][0] != "Red" {
+		t.Errorf("answers = %v, want color Red", got)
+	}
+	// Cancelled with Escape: an error result with no answers closes it empty.
+	if err := json.Unmarshal([]byte(`{"role":"toolResult","toolName":"ask","content":[{"type":"text","text":"Ask tool was cancelled by the user"}],"details":{},"isError":true}`), &result); err != nil {
+		t.Fatal(err)
+	}
+	if got := askAnswers(it.Question, result); len(got) != 1 || len(got["color"]) != 0 {
+		t.Errorf("cancelled answers = %v, want an empty entry", got)
+	}
+}
+
+func TestFormFieldsOfEveryKind(t *testing.T) {
+	qs := formQuestions(`<form>
+	  <label>Project name <input type="text" name="name" placeholder="my-app"></label>
+	  <fieldset><legend>Targets &amp; platforms</legend>
+	    <label><input type="checkbox" name="targets" value="ios">iOS</label>
+	    <label><input type="checkbox" name="targets" value="mac">macOS</label></fieldset>
+	  <label>Region <select name="region"><option value="eu">Europe</option><option value="us">United States</option></select></label>
+	  <label>Notes <textarea name="notes"></textarea></label>
+	  <input type="hidden" name="token" value="x"><button type="submit">Go</button></form>`)
+	var got []string
+	for _, q := range qs {
+		got = append(got, fmt.Sprintf("%s|%s|multi=%v|text=%v|%d", q.ID, q.Prompt, q.Multi, q.AllowText, len(q.Options)))
+	}
+	want := []string{
+		"name|Project name|multi=false|text=true|0",
+		"targets|Targets & platforms|multi=true|text=false|2",
+		"region|Region|multi=false|text=false|2",
+		"notes|Notes|multi=false|text=true|0",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("fields:\n got %q\nwant %q", got, want)
+	}
+	if qs := formQuestions("not a form <<<"); len(qs) != 0 {
+		t.Errorf("unreadable form gave %d questions", len(qs))
 	}
 }

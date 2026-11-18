@@ -74,9 +74,10 @@ func (r *relayStub) raw() [][]byte {
 }
 
 type fakeHub struct {
-	fg  atomic.Int32
-	mu  sync.Mutex
-	fns []func(wire.Event)
+	fg    atomic.Int32
+	mu    sync.Mutex
+	fns   []func(wire.Event)
+	front []string
 }
 
 func (h *fakeHub) OnEvent(fn func(wire.Event)) {
@@ -86,6 +87,25 @@ func (h *fakeHub) OnEvent(fn func(wire.Event)) {
 }
 
 func (h *fakeHub) ForegroundSubscribers() int { return int(h.fg.Load()) }
+
+// ForegroundDevices names the devices put in front; with none named, the
+// apps in front are ones that did not say which device they are.
+func (h *fakeHub) ForegroundDevices() (map[string]bool, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := map[string]bool{}
+	for _, id := range h.front {
+		out[id] = true
+	}
+	return out, h.fg.Load() > 0 && len(h.front) == 0
+}
+
+func (h *fakeHub) setFront(ids ...string) {
+	h.mu.Lock()
+	h.front = ids
+	h.mu.Unlock()
+	h.fg.Store(int32(len(ids)))
+}
 
 func (h *fakeHub) publish(ev wire.Event) {
 	h.mu.Lock()

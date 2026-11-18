@@ -17,9 +17,11 @@ type fakeHolder struct {
 	held             bool
 	holds, releases  int
 	holdErr, exitErr error
+	attempts         int
 }
 
 func (f *fakeHolder) Hold() error {
+	f.attempts++
 	if f.holdErr != nil {
 		return f.holdErr
 	}
@@ -259,8 +261,28 @@ func TestHoldFailureReported(t *testing.T) {
 		t.Fatalf("retry: %+v", st)
 	}
 	r.holder.held, r.holder.exitErr = false, errors.New("caffeinate exited")
+	r.update()
+	r.advance(tick)
 	if st := r.update(); !st.Held || r.holder.holds != 2 {
 		t.Fatalf("a child that died was not restarted: %+v, holds %d", st, r.holder.holds)
+	}
+}
+
+func TestRefusedHoldIsRetriedWithBackoff(t *testing.T) {
+	r := newRig(t, ModePlugged)
+	r.holder.holdErr = errors.New("Failed to inhibit: access denied")
+	r.session("s_aaaaaaaaaa", "working")
+	for range 30 { // five minutes of ticks
+		r.update()
+		r.advance(10 * time.Second)
+	}
+	if r.holder.attempts > 8 {
+		t.Fatalf("%d start attempts in five minutes of ticks, want a backoff", r.holder.attempts)
+	}
+	r.holder.holdErr = nil
+	r.advance(10 * time.Minute)
+	if st := r.update(); !st.Held {
+		t.Fatalf("not held once the block was allowed: %+v", st)
 	}
 }
 

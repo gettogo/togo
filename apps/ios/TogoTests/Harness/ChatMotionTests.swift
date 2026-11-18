@@ -6,7 +6,7 @@ import TogoKit
 
 /// Chat motion v2: the live line never animates its clock and keeps it last, the store's
 /// arrival transaction never reaches it, the tapped answer becomes the answered line, and
-/// every motion in the app says why it moves (the v2 baseline is empty).
+/// every motion in the app says why it moves.
 @MainActor struct ChatMotionTests {
     private let t0 = Date(timeIntervalSince1970: 1_793_000_000)
 
@@ -132,15 +132,9 @@ import TogoKit
         .deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
-    /// The v2 baseline is empty and every motion in the app, the Watch and the widgets passes
-    /// every v2 rule, the same as `scripts/check-motion.sh`.
+    /// Every motion in the app, the Watch and the widgets passes every v2 rule, the same as
+    /// `scripts/check-motion.sh`.
     @Test func everyMotionSaysWhyItMoves() throws {
-        let baseline = try String(contentsOf: Self.repo.appending(path: "scripts/motion-v2-baseline.txt"), encoding: .utf8)
-        let entries = baseline.split(separator: "\n").filter { line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return !trimmed.isEmpty && !trimmed.hasPrefix("#")
-        }
-        #expect(entries.isEmpty, "\(entries)")
         var found: [String] = []
         for folder in ["Togo", "TogoWatch", "TogoWidgets", "TogoWatchWidgets"] {
             let root = Self.repo.appending(path: "apps/ios/\(folder)")

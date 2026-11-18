@@ -1,0 +1,172 @@
+{
+ "data": [
+  {
+   "id": "302ai",
+   "name": "302.AI",
+   "methods": [
+    {
+     "type": "key"
+    },
+    {
+     "type": "env",
+     "names": [
+      "302AI_API_KEY"
+     ]
+    }
+   ],
+   "connections": []
+  },
+  {
+   "id": "amazon-bedrock",
+   "name": "Amazon Bedrock",
+   "methods": [
+    {
+     "type": "key",
+     "label": "Bedrock API key"
+    },
+    {
+     "type": "env",
+     "names": [
+      "AWS_BEARER_TOKEN_BEDROCK"
+     ]
+    },
+    {
+     "id": "aws-profile",
+     "type": "external",
+     "label": "AWS profile (SSO or named profile)",
+     "form": [
+      {
+       "key": "profile",
+       "title": "AWS profile",
+       "description": "No profiles found in your AWS configuration.",
+       "required": true,
+       "type": "string",
+       "minLength": 1,
+       "pattern": "\\S",
+       "placeholder": "Profile name",
+       "options": [],
+       "custom": true
+      }
+     ]
+    }
+   ],
+   "connections": []
+  },
+  {
+   "id": "claude-agent",
+   "name": "Claude Agent",
+   "methods": [
+    {
+     "id": "claude-login",
+     "type": "external",
+     "label": "Claude Code login (claude auth login)"
+    }
+   ],
+   "connections": []
+  },
+  {
+   "id": "digitalocean",
+   "name": "DigitalOcean",
+   "methods": [
+    {
+     "type": "key"
+    },
+    {
+     "type": "env",
+     "names": [
+      "DIGITALOCEAN_ACCESS_TOKEN"
+     ]
+    },
+    {
+     "id": "browser",
+     "type": "oauth",
+     "label": "Login with DigitalOcean"
+    }
+   ],
+   "connections": []
+  },
+  {
+   "id": "github-copilot",
+   "name": "GitHub Copilot",
+   "methods": [
+    {
+     "type": "env",
+     "names": [
+      "GITHUB_TOKEN"
+     ]
+    },
+    {
+     "id": "device",
+     "type": "oauth",
+     "label": "Login with GitHub Copilot",
+     "form": [
+      {
+       "key": "deploymentType",
+       "title": "Select GitHub deployment type",
+       "required": true,
+       "type": "string",
+       "options": [
+        {
+         "value": "github.com",
+         "label": "GitHub.com",
+         "description": "Public"
+        },
+        {
+         "value": "enterprise",
+         "label": "GitHub Enterprise",
+         "description": "Data residency or self-hosted"
+        }
+       ]
+      },
+      {
+       "key": "enterpriseUrl",
+       "title": "Enter your GitHub Enterprise URL or domain",
+       "required": true,
+       "when": [
+        {
+         "key": "deploymentType",
+         "op": "eq",
+         "value": "enterprise"
+        }
+       ],
+       "type": "string",
+       "placeholder": "company.ghe.com or https://company.ghe.com"
+      }
+     ]
+    }
+   ],
+   "connections": []
+  },
+  {
+   "id": "openai",
+   "name": "OpenAI",
+   "methods": [
+    {
+     "type": "key"
+    },
+    {
+     "type": "env",
+     "names": [
+      "OPENAI_API_KEY"
+     ]
+    },
+    {
+     "id": "chatgpt-token-sharing",
+     "type": "oauth",
+     "label": "Sign in with ChatGPT"
+    },
+    {
+     "id": "chatgpt-browser",
+     "type": "oauth",
+     "label": "Codex browser (legacy)"
+    },
+    {
+     "id": "chatgpt-headless",
+     "type": "oauth",
+     "label": "Codex device code (legacy)"
+    }
+   ],
+   "connections": []
+  }
+ ]
+}

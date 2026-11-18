@@ -17,7 +17,7 @@ feeds:
   hooks:            # `togo hook copilot <event>` in ~/.copilot/hooks/togo.json (installed only by `togo hooks install --agent copilot`)
     hook:
       events: [SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure,
-        PermissionRequest, Stop, SubagentStart, SubagentStop, ErrorOccurred, PreCompact,
+        PermissionRequest, Stop, StopFailure, SubagentStart, SubagentStop, ErrorOccurred, PreCompact,
         Notification, SessionEnd]
     mapper: copilot.hooks
     stability: experimental

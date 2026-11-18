@@ -47,7 +47,12 @@ func (w *Wire) loopEvent(raw json.RawMessage, at time.Time) ([]harness.Item, []h
 	case "tool.result":
 		return w.toolResult(e, at)
 	case "step.end":
-		// Protocol 1.4 has no turn.ended: the last step ends the turn.
+		// Protocol 1.4 has no turn.ended: the last step ends the turn. From
+		// 1.5 the turn can go on after an end_turn step (a steer, a
+		// background notice) and turn.ended says when it is over.
+		if w.endsTurns {
+			return nil, nil
+		}
 		switch e.Finish {
 		case "end_turn":
 			return w.endTurn(harness.StateOK, at)
@@ -171,6 +176,14 @@ func (w *Wire) toolResult(e loopEvent, at time.Time) ([]harness.Item, []harness.
 		ab := *ag.Agent
 		if running && task != "" {
 			delete(w.tasks, e.ToolCallID)
+			// task.started may have made a Background item for this task
+			// first: the agent replaces it, so close it, or it runs for good.
+			if old, ok := w.tasks[task]; ok && old.Background != nil {
+				bb := *old.Background
+				bb.State, bb.Ended = harness.StateOK, x.Ptr(at)
+				old.Background = &bb
+				items, ops = append(items, old), append(ops, taskRow(old))
+			}
 			w.tasks[task] = ag
 		} else {
 			ab.State, ab.Ended = tb.State, x.Ptr(at)

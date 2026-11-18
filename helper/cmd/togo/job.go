@@ -32,7 +32,7 @@ func runJob(ctx context.Context, args []string, env map[string]string, stdout, s
 	progress := fs.Int("progress", -1, "percent done, 0-100")
 	message := fs.String("message", "", "short status message")
 	status := fs.String("status", "", "ok or failed (end only)")
-	pos, err := parseArgs(fs, args[1:])
+	pos, err := parseTextArgs(fs, args[1:])
 	if err != nil {
 		return usageError(stderr, err)
 	}
@@ -58,7 +58,10 @@ func runJob(ctx context.Context, args []string, env map[string]string, stdout, s
 		if len(pos) != 1 {
 			return usageError(stderr, fmt.Errorf("job %s needs one job id", op))
 		}
-		p.JobID = pos[0]
+		p.JobID = strings.TrimSpace(pos[0])
+		if p.JobID == "" {
+			return usageError(stderr, fmt.Errorf("job %s needs a job id; an empty one means job start printed nothing", op))
+		}
 		if op == wire.JobEnd {
 			if *status != wire.JobOK && *status != wire.JobFailed {
 				return usageError(stderr, errors.New("job end needs --status ok or --status failed"))

@@ -20,8 +20,26 @@ func (e *Engine) completeCommands(ctx context.Context, s *sess, query string, li
 	for _, sc := range c.Static {
 		all = append(all, e.staticCompletion(ctx, s, sc))
 	}
+	var rows []map[string]any
 	if c.Source != "" {
-		all = append(all, e.sourceCompletions(ctx, s, c)...)
+		rows = e.sourceRows(ctx, s, c)
+		all = append(all, sourceCompletions(rows)...)
+	}
+	fromProgram := false
+	if e.cfg.LiveCommands != nil {
+		if live := e.cfg.LiveCommands(s.id); len(live) > 0 {
+			all = mergeLive(c, all, rows, live)
+			fromProgram = true
+		}
+	}
+	// Without a list from the program itself, the one the harness draws
+	// when "/" is typed adds the commands no other source knows.
+	if !fromProgram {
+		more, pending := e.terminalCommands(s)
+		all = append(all, more...)
+		s.mu.Lock()
+		s.catalogPending = pending
+		s.mu.Unlock()
 	}
 	q := strings.ToLower(strings.TrimPrefix(query, "/"))
 	var out []harness.Completion
@@ -32,7 +50,7 @@ func (e *Engine) completeCommands(ctx context.Context, s *sess, query string, li
 	} {
 		for _, cm := range all {
 			n := strings.ToLower(strings.TrimPrefix(cm.Title, "/"))
-			if n == "" || seen[n] || !pass(n) {
+			if n == "" || seen[n] || !(pass(n) || aliasPasses(cm, q, pass)) {
 				continue
 			}
 			seen[n] = true
@@ -133,7 +151,8 @@ func (e *Engine) screenChoices(ctx context.Context, s *sess, name string) (choic
 
 // sourceCompletions lists the harness's own commands. They type their text
 // unless they say otherwise: run, or args when they take an argument.
-func (e *Engine) sourceCompletions(ctx context.Context, s *sess, c *spec.Commands) []harness.Completion {
+// sourceRows are the command rows of the adapter's command source.
+func (e *Engine) sourceRows(ctx context.Context, s *sess, c *spec.Commands) []map[string]any {
 	data, _, err := e.fetch(ctx, s, c.Source, nil, false)
 	if err != nil {
 		return nil
@@ -148,13 +167,19 @@ func (e *Engine) sourceCompletions(ctx context.Context, s *sess, c *spec.Command
 		}
 	}
 	arr, _ := list.([]any)
-	var out []harness.Completion
+	var out []map[string]any
 	for _, el := range arr {
-		m, _ := el.(map[string]any)
-		name := toString(m["name"])
-		if name == "" {
-			continue
+		if m, _ := el.(map[string]any); toString(m["name"]) != "" {
+			out = append(out, m)
 		}
+	}
+	return out
+}
+
+func sourceCompletions(rows []map[string]any) []harness.Completion {
+	var out []harness.Completion
+	for _, m := range rows {
+		name := toString(m["name"])
 		hint := toString(m["hint"])
 		kind := toString(m["kind"])
 		if !slices.Contains([]string{spec.CommandRun, spec.CommandArgs, spec.CommandTerminal}, kind) {

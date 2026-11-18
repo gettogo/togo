@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
+	"github.com/gettogo/togo/helper/internal/daemon/daemontest"
 	"github.com/gettogo/togo/helper/internal/mailbox"
 )
 
@@ -115,5 +117,29 @@ func TestUninstallWithoutServiceLeavesNoMarker(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, mailbox.StopMarkerName)); !os.IsNotExist(err) {
 		t.Fatalf("marker written with no service to stop: %v", err)
+	}
+}
+
+// A daemon started by serve has no service file. Uninstall must still stop
+// it, after the stop marker is written, and say so.
+func TestUninstallStopsDetachedDaemon(t *testing.T) {
+	home := shortHome(t)
+	t.Setenv("HOME", t.TempDir())
+	oldRunner, oldGOOS := serviceRunner, awakeGOOS
+	t.Cleanup(func() { serviceRunner, awakeGOOS = oldRunner, oldGOOS })
+	awakeGOOS = "plan9"
+	serviceRunner = func(context.Context, []string) error { return nil }
+	fake := daemontest.StartFake(t, home, "v1.0.0", nil)
+
+	var out, errOut bytes.Buffer
+	if code := runUninstall(context.Background(), nil, map[string]string{}, &out, &errOut); code != exitOK {
+		t.Fatalf("code %d: %s", code, errOut.String())
+	}
+	waitDone(t, fake)
+	if _, err := os.Stat(filepath.Join(home, mailbox.StopMarkerName)); err != nil {
+		t.Fatalf("stop marker not written for a running daemon: %v", err)
+	}
+	if !strings.Contains(out.String(), "daemon: stopped") {
+		t.Errorf("output does not mention the daemon stopping: %q", out.String())
 	}
 }

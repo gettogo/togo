@@ -301,11 +301,15 @@ func (d choiceDriver) moved(cur detect.Choice, key string) error {
 	}
 }
 
-// gone waits for the dialog to close after the last step.
+// gone waits for the Review page that was submitted to leave the screen. A
+// different dialog drawn at once (the agent asking again) means the page
+// was taken.
 func (d choiceDriver) gone() error {
 	deadline := time.Now().Add(askWait)
 	for {
-		if _, found := d.read(); !found && !d.waiting() {
+		if c, found := d.read(); found && !c.Review {
+			return nil
+		} else if !found && !d.waiting() {
 			return nil
 		}
 		if time.Now().After(deadline) || d.ctx.Err() != nil {

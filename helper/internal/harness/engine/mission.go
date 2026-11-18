@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"time"
+
 	"encoding/json"
 	"slices"
 
@@ -13,6 +15,9 @@ type missionState struct {
 	summary  harness.Summary
 	sections []harness.Section // supported kinds in SectionOrder
 	working  bool
+	// held are the agents and background rows that failed or were stopped,
+	// by section: shown until the user's next prompt (mission_rows.go).
+	held map[string]map[string]bool
 }
 
 // sectionCaps names the capability that turns each section on.
@@ -56,6 +61,7 @@ func (m *missionState) section(kind string) *harness.Section {
 func (m *missionState) apply(ops []harness.Op) *harness.Delta {
 	var applied []harness.Op
 	for _, op := range ops {
+		op = m.settle(op)
 		if m.applyOne(op) {
 			applied = append(applied, op)
 		}
@@ -179,6 +185,27 @@ func countRunning(rows []harness.Row) int {
 	return n
 }
 
+// stopRunning is the rows of subagents and background jobs still running,
+// marked interrupted: they ran inside an agent process that has exited.
+func (m *missionState) stopRunning() []harness.Op {
+	var ops []harness.Op
+	for _, kind := range []string{harness.SectionAgents, harness.SectionBackground} {
+		sec := m.section(kind)
+		if sec == nil {
+			continue
+		}
+		for _, r := range sec.Rows {
+			if r.State != harness.StateRunning && r.State != harness.StateWaiting {
+				continue
+			}
+			row := r
+			row.State = harness.StateInterrupted
+			ops = append(ops, harness.Op{Op: harness.OpUpsert, Section: kind, Row: &row})
+		}
+	}
+	return ops
+}
+
 // snapshot returns a deep copy.
 func (m *missionState) snapshot() harness.Mission {
 	out := harness.Mission{Rev: m.rev, Summary: m.summary, Sections: []harness.Section{}}
@@ -202,4 +229,58 @@ func sameJSON(a, b any) bool {
 	x, err1 := json.Marshal(a)
 	y, err2 := json.Marshal(b)
 	return err1 == nil && err2 == nil && string(x) == string(y)
+}
+
+// agentQuiet is how long agents may go without a record or a row change
+// and still count as running. A working agent writes its tool calls and
+// replies as it goes; a row left "running" with nothing behind it (its end
+// was never matched, or it ran before a helper restart) is not one.
+const agentQuiet = 2 * time.Minute
+
+// AgentsRunning reports whether agents the session's agent started still
+// work: a row of the agents section is running or waiting, and an agent
+// did something within agentQuiet. A main turn can end while they work on
+// (omp starts background agents, says so and stops), and the pane watcher
+// asks before it calls that silence a finished turn. Background jobs are
+// left out: a dev server runs for as long as the session does.
+//
+// The row alone is not enough. One left running for good held a session
+// "working" for minutes after its agent had gone idle: Stop stayed up,
+// queued prompts waited, the machine was kept awake. The watcher bounds
+// this word a second time (watch.maxAgentsVouched).
+func (e *Engine) AgentsRunning(id string) bool {
+	e.mu.Lock()
+	s, ok := e.sessions[id]
+	e.mu.Unlock()
+	if !ok || s.ad == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if agentGone(s.hubStatus()) {
+		return false
+	}
+	sec := s.mission.section(harness.SectionAgents)
+	if sec == nil {
+		return false
+	}
+	running := 0
+	for _, r := range sec.Rows {
+		if r.State == harness.StateRunning || r.State == harness.StateWaiting {
+			running++
+		}
+	}
+	if running == 0 {
+		s.agentsStale = false
+		return false
+	}
+	if s.agentAt.IsZero() || e.cfg.Now().Sub(s.agentAt) >= agentQuiet {
+		if !s.agentsStale {
+			s.agentsStale = true
+			e.cfg.Logf("harness: %s has %d agent rows running with no agent activity; not held as working", s.id, running)
+		}
+		return false
+	}
+	s.agentsStale = false
+	return true
 }

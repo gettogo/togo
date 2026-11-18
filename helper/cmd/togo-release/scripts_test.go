@@ -153,3 +153,38 @@ func TestCheckActionsPinned(t *testing.T) {
 		}
 	}
 }
+
+// The Darwin archives are repacked after signing; they must carry the same
+// MIT licence as the first build and the Linux archives, not the repository
+// root's GPL file.
+func TestBuildReleaseRepacksDarwinWithHelperLicense(t *testing.T) {
+	out, err := runScript(t, nil, "build-release.sh", "v1.0.0")
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "--license") && !strings.Contains(line, "/helper/LICENSE") {
+			t.Errorf("archive uses another licence: %s", line)
+		}
+	}
+	if !strings.Contains(out, "--license") {
+		t.Error("no archive step printed")
+	}
+}
+
+// A dist directory holding files from an earlier run would put them into
+// the new version's signed SHA256SUMS.
+func TestBuildReleaseRefusesNonEmptyDist(t *testing.T) {
+	scripts := testKeyRepo(t)
+	dist := filepath.Join(filepath.Dir(filepath.Dir(scripts)), "dist")
+	if err := os.MkdirAll(dist, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dist, "togo_0.9.0_linux_amd64.tar.gz"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runScriptIn(t, scripts, []string{"TOGO_RELEASE_TEST=1"}, "build-release.sh", "v1.0.0", "--run", "--skip-apple")
+	if err == nil || !strings.Contains(out, "not empty") {
+		t.Errorf("err %v, output %q", err, out)
+	}
+}

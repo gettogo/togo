@@ -1,8 +1,10 @@
 package opencode
 
 import (
+	"encoding/json"
 	"fmt"
-	"strconv"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +16,11 @@ import (
 // items with a needs row. The item id is "<request id>~<session id>", so
 // the answer action can name the session the request belongs to (a child
 // session's request is answered on that session).
+//
+// A form owned by "global" has no session: OpenCode asks an MCP server's
+// input request that way. It belongs to this chat when it was asked in the
+// folder the followed conversation works in, and its reply must name that
+// folder (the answer action reads it from the "location" state).
 //
 // A permission has one question "0" with the options once, always and
 // reject. A form's question ids are its field keys, marked with the type
@@ -30,13 +37,16 @@ type form2 struct {
 }
 
 type field2 struct {
-	Key         string `json:"key"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Type        string `json:"type"`
-	Hidden      bool   `json:"hidden"`
-	Custom      *bool  `json:"custom"`
-	URL         string `json:"url"`
+	Key         string          `json:"key"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	Type        string          `json:"type"`
+	Hidden      bool            `json:"hidden"`
+	Required    bool            `json:"required"`
+	Default     json.RawMessage `json:"default"`
+	When        []when2         `json:"when"`
+	Custom      *bool           `json:"custom"`
+	URL         string          `json:"url"`
 	Options     []struct {
 		Value       string `json:"value"`
 		Label       string `json:"label"`
@@ -45,6 +55,52 @@ type field2 struct {
 }
 
 func needID(req, sess string) string { return req + "~" + sess }
+
+// replyKey is a field name the answer action's form filter accepts (the
+// engine's formKey).
+var replyKey = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
+
+// globalOwner is the session id of a form no session owns (seen on 2.2.5
+// and in OpenCode's MCP client, GLOBAL_ELICITATION_SESSION_ID).
+const globalOwner = "global"
+
+// stateLocation is the state key naming the folder the followed
+// conversation works in, spelled as the server spells it.
+const stateLocation = "location"
+
+// located is a conversation and the folder its events name.
+type located struct{ sess, dir string }
+
+// locate runs after every event. It learns the followed conversation's
+// folder from that conversation's own events, and forgets it as soon as
+// the chat follows another conversation: the folder of the one left behind
+// must not decide which global forms are shown.
+func (e *Events2) locate(sess string, loc *location2) {
+	if sess != "" && sess == e.main && loc != nil && loc.Directory != "" {
+		e.loc = located{sess, loc.Directory}
+	}
+	if e.loc.sess != e.main {
+		e.loc = located{}
+	}
+	if e.loc.dir == "" {
+		delete(e.state, stateLocation)
+		return
+	}
+	e.state[stateLocation] = e.loc.dir
+}
+
+// here reports whether an event happened in this chat's folder: the
+// followed conversation's, or the session's own before any event named
+// one.
+func (e *Events2) here(loc *location2) bool {
+	if loc == nil || loc.Directory == "" {
+		return false
+	}
+	if e.loc.sess == e.main && e.loc.dir != "" {
+		return loc.Directory == e.loc.dir
+	}
+	return e.env.Cwd != "" && filepath.Clean(loc.Directory) == filepath.Clean(e.env.Cwd)
+}
 
 // asPermission marks a permission's question (the first item) as one a
 // notification answers: Approve allows it once, Deny rejects it. "Always
@@ -72,7 +128,7 @@ func (e *Events2) permission2(d ev2, at time.Time) ([]harness.Item, []harness.Op
 		{ID: "always", Label: "Always allow"},
 		{ID: "reject", Label: "Deny"},
 	}}
-	items, ops := e.need2(needID(d.ID, d.SessionID), d.SessionID, []harness.Question{q}, "Allow "+what, q.Prompt, at)
+	items, ops := e.need2(needID(d.ID, d.SessionID), d.SessionID, []harness.Question{q}, true, "Allow "+what, q.Prompt, at)
 	asPermission(items)
 	if d.Source != nil && d.Source.Type == "tool" {
 		if x, ok := e.tools[d.Source.ID]; ok {
@@ -80,59 +136,30 @@ func (e *Events2) permission2(d ev2, at time.Time) ([]harness.Item, []harness.Op
 			b.State = harness.StateWaiting
 			x.Tool = &b
 			e.tools[d.Source.ID] = x
+			e.waits[needID(d.ID, d.SessionID)] = d.Source.ID
 			items = append(items, x)
 		}
 	}
 	return items, ops
 }
 
-func (e *Events2) form(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
+func (e *Events2) form(d ev2, loc *location2, at time.Time) ([]harness.Item, []harness.Op) {
 	f := d.Form
-	if f == nil || f.ID == "" || !e.follows(f.SessionID) {
+	if f == nil || f.ID == "" {
 		return nil, nil
 	}
-	question := f.Metadata["kind"] == "question"
-	var qs []harness.Question
-	for i, fl := range f.Fields {
-		if fl.Key == "" && question {
-			// The helper strips every "key" field from what a harness
-			// sends (it names provider keys elsewhere), so the field key
-			// is gone; the question tool names its fields q0, q1... (seen
-			// on 2.2.5).
-			fl.Key = "q" + strconv.Itoa(i)
+	// The item keeps the form's own owner in its id, which the reply is
+	// sent to; a global form is shown in the followed conversation's turn.
+	in := f.SessionID
+	if f.SessionID == globalOwner {
+		if !e.here(loc) {
+			return nil, nil
 		}
-		if fl.Hidden || fl.Key == "" || len(qs) == MaxQuestions {
-			continue
-		}
-		q := harness.Question{ID: fl.Key, Header: fl.Title, Prompt: fl.Description}
-		if q.Prompt == "" {
-			q.Prompt, q.Header = fl.Title, ""
-		}
-		for _, o := range fl.Options {
-			label := o.Label
-			if label == "" {
-				label = o.Value
-			}
-			q.Options = append(q.Options, harness.Choice{ID: o.Value, Label: label, Detail: o.Description})
-		}
-		switch fl.Type {
-		case "multiselect":
-			q.ID += "[]"
-			q.Multi = true
-			q.AllowText = fl.Custom != nil && *fl.Custom
-		case "boolean":
-			q.ID += "!"
-			q.Options = []harness.Choice{{ID: "true", Label: "Yes"}, {ID: "false", Label: "No"}}
-		case "number", "integer":
-			q.ID += "#"
-			q.AllowText = true
-		case "external":
-			q.Prompt = strings.TrimSpace(q.Prompt + " " + fl.URL)
-		default:
-			q.AllowText = len(q.Options) == 0 || fl.Custom == nil || *fl.Custom
-		}
-		qs = append(qs, q)
+		in = e.main
+	} else if !e.follows(f.SessionID) {
+		return nil, nil
 	}
+	qs, answerable := formQuestions(f)
 	if len(qs) == 0 {
 		return nil, nil
 	}
@@ -143,7 +170,7 @@ func (e *Events2) form(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 	if title == "" {
 		title = f.Title
 	}
-	items, ops := e.need2(needID(f.ID, f.SessionID), f.SessionID, qs, title, qs[0].Prompt, at)
+	items, ops := e.need2(needID(f.ID, f.SessionID), in, qs, answerable, title, qs[0].Prompt, at)
 	if tool, ok := f.Metadata["tool"].(map[string]any); ok {
 		if id, _ := tool["id"].(string); id != "" {
 			if x, ok := e.tools[id]; ok {
@@ -151,6 +178,7 @@ func (e *Events2) form(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 				b.State = harness.StateWaiting
 				x.Tool = &b
 				e.tools[id] = x
+				e.waits[needID(f.ID, f.SessionID)] = id
 				items = append(items, x)
 			}
 		}
@@ -158,13 +186,21 @@ func (e *Events2) form(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 	return items, ops
 }
 
-func (e *Events2) need2(id, sess string, qs []harness.Question, title, subtitle string, at time.Time) ([]harness.Item, []harness.Op) {
-	x := harness.Item{ID: id, TurnID: e.turnFor(sess), Parent: e.parent(sess), Kind: harness.KindQuestion, At: at,
-		Question: &harness.QuestionBody{Questions: qs}}
-	e.open[id] = x
+// need2 opens a question item and its needs row. One that cannot be
+// answered from the phone opens the terminal instead of offering Answer.
+func (e *Events2) need2(id, sess string, qs []harness.Question, answerable bool, title, subtitle string, at time.Time) ([]harness.Item, []harness.Op) {
+	body := &harness.QuestionBody{Questions: qs}
 	row := harness.Row{ID: id, Title: truncate(title, harness.MaxTitle), Subtitle: truncate(subtitle, harness.MaxTitle),
-		State: harness.StateWaiting, Started: ptr(at),
-		Actions: []harness.ActionRef{{ID: harness.ActionAnswer, Label: "Answer", Role: harness.RolePrimary}}}
+		State: harness.StateWaiting, Started: ptr(at)}
+	if answerable {
+		row.Actions = []harness.ActionRef{{ID: harness.ActionAnswer, Label: "Answer", Role: harness.RolePrimary}}
+	} else {
+		no := false
+		body.Answerable = &no
+		row.Open = &harness.Open{Kind: harness.OpenTerminal, Ref: e.env.SessionID}
+	}
+	x := harness.Item{ID: id, TurnID: e.turnFor(sess), Parent: e.parent(sess), Kind: harness.KindQuestion, At: at, Question: body}
+	e.open[id] = x
 	return []harness.Item{x}, []harness.Op{{Op: harness.OpUpsert, Section: harness.SectionNeeds, Row: &row}}
 }
 
@@ -176,7 +212,7 @@ func (e *Events2) permissionReplied(d ev2) ([]harness.Item, []harness.Op) {
 	}
 	delete(e.open, id)
 	x = closeQuestion(x, func(string) []string { return []string{d.Reply} })
-	return []harness.Item{x}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
+	return append([]harness.Item{x}, e.resume(id)...), []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
 }
 
 func (e *Events2) formDone(kind string, d ev2) ([]harness.Item, []harness.Op) {
@@ -191,7 +227,7 @@ func (e *Events2) formDone(kind string, d ev2) ([]harness.Item, []harness.Op) {
 		pick = func(qid string) []string { return answerValues(d.Answer[fieldKey(qid)]) }
 	}
 	x = closeQuestion(x, pick)
-	return []harness.Item{x}, []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
+	return append([]harness.Item{x}, e.resume(id)...), []harness.Op{{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id}}
 }
 
 // closeQuestion marks a question item answered; pick gives each question's
@@ -236,4 +272,23 @@ func answerValues(v any) []string {
 		return []string{x}
 	}
 	return []string{fmt.Sprint(v)}
+}
+
+// resume sets the tool that waited on a request back to running (see
+// Events.resume).
+func (e *Events2) resume(need string) []harness.Item {
+	id, ok := e.waits[need]
+	if !ok {
+		return nil
+	}
+	delete(e.waits, need)
+	x, ok := e.tools[id]
+	if !ok || x.Tool.State != harness.StateWaiting {
+		return nil
+	}
+	b := *x.Tool
+	b.State = harness.StateRunning
+	x.Tool = &b
+	e.tools[id] = x
+	return []harness.Item{x}
 }

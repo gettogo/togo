@@ -101,7 +101,7 @@ func TestJobCommands(t *testing.T) {
 	if !strings.Contains(string(calls[0].Params), `"name":"nightly build"`) || !strings.Contains(string(calls[1].Params), `"progress":40`) {
 		t.Fatalf("calls %+v", calls)
 	}
-	for _, args := range [][]string{{"job"}, {"job", "end", "j_aaaaaaaaaa"}, {"job", "update", "x", "--progress", "101"}, {"job", "pause", "x"}} {
+	for _, args := range [][]string{{"job"}, {"job", "end", "j_aaaaaaaaaa"}, {"job", "update", "x", "--progress", "101"}, {"job", "pause", "x"}, {"job", "update", ""}, {"job", "end", "  ", "--status", "ok"}} {
 		if code, _, _ := runWith(t, env, nil, args...); code != exitUsage {
 			t.Fatalf("%v: code %d", args, code)
 		}

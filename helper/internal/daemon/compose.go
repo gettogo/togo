@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/gettogo/togo/helper/internal/detect"
 	"maps"
 	"net/http"
 	"os"
@@ -32,6 +33,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/push"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/surface"
 	"github.com/gettogo/togo/helper/internal/upload"
 	"github.com/gettogo/togo/helper/internal/watch"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -49,6 +51,10 @@ var Capabilities = []string{
 	hostinfo.Capability,
 	wire.CapAuthkeys,
 	wire.CapDoneSilent,
+	wire.CapExpiry,
+	wire.CapForegroundDevice,
+	wire.CapReceipt,
+	wire.CapAgentsLive,
 	wire.CapLiveContext,
 	api.RecentCapability,
 	wire.CapReply,
@@ -57,6 +63,7 @@ var Capabilities = []string{
 	wire.CapRestore,
 	harness.Capability,
 	integrations.Capability,
+	surface.Capability,
 }
 
 // Concurrent lists the methods the daemon runs off the connection's read
@@ -64,7 +71,7 @@ var Capabilities = []string{
 // runs lsof, git and fs touch the disk, describe and history may wait on
 // the version gate) are here too, so an Approve or a Send never queues
 // behind them.
-var Concurrent = append(append(append(append([]string{}, local.Concurrent...), browser.Concurrent...), harness.Concurrent...), readOnlySlow...)
+var Concurrent = append(append(append(append(append([]string{}, local.Concurrent...), browser.Concurrent...), harness.Concurrent...), surface.Concurrent...), readOnlySlow...)
 
 var readOnlySlow = []string{
 	wire.MethodPortsList,
@@ -105,6 +112,7 @@ type Components struct {
 	Will      *push.WillKeeper
 	Browser   *browser.Service
 	Harness   *engine.Engine
+	Surface   *surface.Service
 
 	logf       func(format string, args ...any)
 	followups  chan string
@@ -132,7 +140,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	c.Approvals = approval.New(approval.Config{Tmux: svc.Tmux, Pub: c.Hub})
 	w, err := watch.New(watch.Config{
 		Tmux: svc.Tmux, Sessions: svc, TogoPath: o.TogoPath, Home: o.Home,
-		Status: c.Hub, Activity: c.Hub, Prompts: c.Approvals, Pub: pub,
+		Status: c.Hub, Activity: c.Hub, Prompts: ownScreens{Store: c.Approvals, c: c}, Pub: pub,
 		Shell: deliverShell,
 	})
 	if err != nil {
@@ -177,7 +185,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	if svc.Manifest != nil {
 		svc.Manifest.Logf = logf
 	}
-	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach, DoneGrace: 3 * time.Second}
+	c.Local = &local.Handlers{Hub: c.Hub, Approvals: c.Approvals, Pub: pub, Reach: c.reach, DoneGrace: 3 * time.Second, TurnStarted: pub.newTurn}
 	c.Local.Agents = &local.AgentCache{Lookup: func(ctx context.Context, id string) string {
 		sess, err := svc.Resolve(ctx, id)
 		if err != nil {
@@ -196,6 +204,12 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	}
 	git := gitx.Git{}
 	c.Harness = newHarness(c, svc, &git, o)
+	c.Surface = surface.NewService(o.Home, svc, logf)
+	// A native screen takes a session's terminal under the lock the engine
+	// types under, so no keys are on their way when it does and none
+	// start once it is held.
+	c.Surface.BeforeOpen = engine.LockTyping
+	svc.PrepareLaunch = (&surface.Companions{Home: o.Home}).PrepareLaunch
 	integ := integrations.New(o.Home, o.TogoPath)
 
 	ext := map[string]api.Method{}
@@ -220,6 +234,7 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 		{wire.MethodSessionRestorable: api.Restorable(svc), wire.MethodSessionDismiss: api.Dismiss(svc)},
 		{wire.MethodSessionRestore: api.Restore(svc, c.restored)},
 		harness.Methods(c.Harness),
+		c.Surface.Methods(),
 		integ.Methods(),
 	} {
 		for name := range m {
@@ -239,6 +254,9 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	// The hub cannot publish from inside its own consumer, so the session
 	// id is handed to Run.
 	c.Hub.OnEvent(func(ev wire.Event) {
+		if ev.SessionID != nil && ev.Kind == wire.EventSessionRemoved {
+			c.Local.Forget(*ev.SessionID)
+		}
 		if ev.SessionID == nil || (ev.Kind != wire.EventApprovalOpen && ev.Kind != wire.EventApprovalClosed) {
 			return
 		}
@@ -285,6 +303,7 @@ func (c *Components) Run(ctx context.Context) {
 	wg.Go(func() { c.runFollowups(ctx) })
 	wg.Go(func() { c.Awake.Run(ctx) })
 	wg.Go(func() { c.Will.Run(ctx) })
+	wg.Go(func() { c.Surface.Run(ctx) })
 	wg.Go(func() { c.Hub.RunActivity(ctx) })
 	wg.Wait()
 }
@@ -416,6 +435,14 @@ func (d *doneDedupe) Publish(kind string, sessionID *string, payload any) {
 	d.pub.Publish(kind, sessionID, payload)
 }
 
+// newTurn forgets the session's last done: a prompt started another turn,
+// and its end is a new thing to report however soon it comes.
+func (d *doneDedupe) newTurn(sessionID string) {
+	d.mu.Lock()
+	delete(d.last, sessionID)
+	d.mu.Unlock()
+}
+
 func isDone(payload any) bool {
 	switch p := payload.(type) {
 	case wire.NotifyEvent:
@@ -434,4 +461,20 @@ func (c *Components) approvalPending(requestID string) bool {
 		}
 	}
 	return false
+}
+
+// ownScreens keeps the watcher from reporting, as the program asking for
+// someone, a list or prompt the phone itself opened in the terminal and is
+// showing natively (a command's chooser, its text prompt). The engine is
+// built after the watcher and read when called.
+type ownScreens struct {
+	*approval.Store
+	c *Components
+}
+
+func (o ownScreens) PromptSeen(ctx context.Context, sessionID string, p detect.Prompt) {
+	if o.c.Harness != nil && o.c.Harness.PhoneDriving(sessionID) {
+		return
+	}
+	o.Store.PromptSeen(ctx, sessionID, p)
 }

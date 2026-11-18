@@ -280,3 +280,20 @@ func TestHookMetaZeroContextIsUnknown(t *testing.T) {
 		t.Fatalf("context %v, want unknown", *hub.meta.ContextPercent)
 	}
 }
+
+func TestForgetDropsASessionsState(t *testing.T) {
+	h := &Handlers{}
+	const id = "s_aaaaaaaaaa"
+	h.setTurn(id, true)
+	h.mu.Lock()
+	h.meta = map[string]wire.SessionMeta{id: {}}
+	h.asking = map[string]bool{id: true}
+	h.doneT = map[string]*time.Timer{id: time.AfterFunc(time.Hour, func() {})}
+	h.mu.Unlock()
+	h.Forget(id)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if len(h.meta)+len(h.turns)+len(h.asking)+len(h.doneT) != 0 {
+		t.Fatalf("kept meta %v turns %v asking %v timers %d", h.meta, h.turns, h.asking, len(h.doneT))
+	}
+}

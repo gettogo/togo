@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -43,5 +45,101 @@ func TestInitialTranscriptReplayIsOneDelivery(t *testing.T) {
 	}
 	if len(delivered) != 2 || delivered[1].Replay != nil || !json.Valid(delivered[1].Data) {
 		t.Fatal("new output did not remain a live record")
+	}
+}
+
+func replayOf(t *testing.T, body []byte) []json.RawMessage {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(path, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []harness.Record
+	tl := &tail{path: path, name: "session", replay: true}
+	if err := tl.poll(func(r harness.Record) { got = append(got, r) }); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("deliveries = %d", len(got))
+	}
+	return got[0].Replay
+}
+
+// A long session keeps its header line when the replay is cut to the
+// last records.
+func TestReplayKeepsHeaderWhenCutByCount(t *testing.T) {
+	var b []byte
+	b = append(b, `{"type":"session","id":"abc"}`+"\n"...)
+	for i := 0; i < MaxRecords+50; i++ {
+		b = append(b, `{"type":"message","n":`+strconv.Itoa(i)+"}\n"...)
+	}
+	recs := replayOf(t, b)
+	if len(recs) != MaxRecords || string(recs[0]) != `{"type":"session","id":"abc"}` {
+		t.Fatalf("len=%d first=%s", len(recs), recs[0])
+	}
+	if string(recs[len(recs)-1]) != `{"type":"message","n":`+strconv.Itoa(MaxRecords+49)+"}" {
+		t.Fatalf("last = %s", recs[len(recs)-1])
+	}
+}
+
+// The same when the file is larger than one read (pasted images).
+func TestReplayKeepsHeaderWhenCutByBytes(t *testing.T) {
+	pad := strings.Repeat("x", 400<<10)
+	var b []byte
+	b = append(b, `{"type":"session","id":"abc"}`+"\n"...)
+	for i := 0; i < 30; i++ {
+		b = append(b, `{"type":"message","n":`+strconv.Itoa(i)+`,"pad":"`+pad+"\"}\n"...)
+	}
+	recs := replayOf(t, b)
+	if len(recs) < 2 || string(recs[0]) != `{"type":"session","id":"abc"}` {
+		t.Fatalf("len=%d first=%.60s", len(recs), recs[0])
+	}
+	if !json.Valid(recs[1]) {
+		t.Fatal("partial line replayed")
+	}
+}
+
+// A listing's head is the first records of the file, header first.
+func TestHeadTailHeadIsTheFirstRecords(t *testing.T) {
+	var b []byte
+	b = append(b, `{"type":"session","id":"abc"}`+"\n"...)
+	for i := 0; i < 30; i++ {
+		b = append(b, `{"type":"message","n":`+strconv.Itoa(i)+"}\n"...)
+	}
+	path := filepath.Join(t.TempDir(), "s.jsonl")
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	head, _ := headTail(path, "jsonl")
+	if len(head) != globHeadRecords || string(head[0]) != `{"type":"session","id":"abc"}` {
+		t.Fatalf("head = %s", head)
+	}
+}
+
+// A followed file replaced by a larger one is read again from its start.
+func TestTailNoticesReplacedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "s.jsonl")
+	if err := os.WriteFile(path, []byte("{\"a\":1}\n{\"a\":2}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var got []harness.Record
+	tl := &tail{path: path, name: "session", replay: true}
+	emit := func(r harness.Record) { got = append(got, r) }
+	if err := tl.poll(emit); err != nil {
+		t.Fatal(err)
+	}
+	next := filepath.Join(dir, "next.jsonl")
+	if err := os.WriteFile(next, []byte("{\"b\":1}\n{\"b\":2}\n{\"b\":3}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(next, path); err != nil {
+		t.Fatal(err)
+	}
+	if err := tl.poll(emit); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || len(got[1].Replay) != 3 || string(got[1].Replay[0]) != `{"b":1}` {
+		t.Fatalf("got %+v", got)
 	}
 }

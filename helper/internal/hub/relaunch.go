@@ -77,13 +77,42 @@ func (h *Hub) markRelaunched(id string) {
 // "No conversation found") takes longer to start and fail.
 const relaunchExitGrace = 2 * time.Second
 
-// Relaunched records that the agent was restarted in its pane by
+// Relaunched records that the agent is being restarted in its pane by
 // something other than session.relaunch (an adapter action with new
 // flags): the old run's exit report must not mark the session ended.
-// session.relaunch needs no grace: it starts an agent already gone.
-func (h *Hub) Relaunched(id string) {
+// session.relaunch needs no grace: it starts an agent already gone. The
+// caller runs undo when the restart did not happen.
+func (h *Hub) Relaunched(id string) (undo func()) {
+	h.mu.Lock()
+	st := h.stateLocked(id)
+	status, exit, restored := st.exitStatus, st.exit, st.exitRestored
+	h.mu.Unlock()
 	h.markRelaunched(id)
 	h.mu.Lock()
 	h.stateLocked(id).relaunchedAt = h.clock()
 	h.mu.Unlock()
+	return func() { h.relaunchFailed(id, status, exit, restored) }
+}
+
+// relaunchFailed puts back what Relaunched cleared. Nothing was started,
+// so no hook or exit of a new run is coming: left marked, an ended session
+// would read idle with no agent in it and refuse a relaunch as running,
+// and a live agent's real exit would be dropped.
+func (h *Hub) relaunchFailed(id, status string, exit *wire.SessionExit, restored bool) {
+	h.exitMu.Lock()
+	h.mu.Lock()
+	st := h.stateLocked(id)
+	st.awaitRun, st.relaunchedAt = false, time.Time{}
+	back := status != "" && st.exitStatus == ""
+	if back {
+		st.exitStatus, st.exit, st.exitKnown, st.exitRestored = status, exit, true, restored
+	}
+	h.mu.Unlock()
+	if back {
+		h.saveExit(id, &session.SavedExit{Status: status, Exit: *exit})
+	}
+	h.exitMu.Unlock()
+	if back {
+		h.publishSession(id)
+	}
 }

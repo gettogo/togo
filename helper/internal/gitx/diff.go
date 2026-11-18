@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gettogo/togo/helper/internal/session"
 )
@@ -77,6 +78,9 @@ func (g *Git) Diff(ctx context.Context, dir string, o DiffOptions) (Diff, error)
 		return res, err
 	}
 	res.Diff, res.Truncated = strings.ToValidUTF8(string(out), "�"), truncated
+	if clipped, cut := clipEncoded(res.Diff, maxDiffEncoded); cut {
+		res.Diff, res.Truncated = clipped, true
+	}
 	// numstat repeats the whole diff, so it runs only when binary files can exist.
 	if !truncated && !bytes.Contains(out, []byte("Binary files ")) {
 		return res, nil
@@ -90,10 +94,35 @@ func (g *Git) Diff(ctx context.Context, dir string, o DiffOptions) (Diff, error)
 	return res, nil
 }
 
+// maxDiffEncoded caps the JSON-encoded size of the diff text, so a diff full
+// of characters that JSON escapes still fits the transport's 1 MiB frame.
+const maxDiffEncoded = 900 << 10
+
+// clipEncoded cuts s, at a character boundary, so its JSON encoding takes at
+// most limit bytes. It reports whether it cut.
+func clipEncoded(s string, limit int) (string, bool) {
+	size := 0
+	for i, r := range s {
+		var n int
+		switch {
+		case r == '"' || r == '\\' || r == '\n' || r == '\r' || r == '\t' || r == '\b' || r == '\f':
+			n = 2
+		case r < 0x20 || r == '<' || r == '>' || r == '&' || r == 0x2028 || r == 0x2029:
+			n = 6
+		default:
+			n = utf8.RuneLen(r)
+		}
+		if size += n; size > limit {
+			return s[:i], true
+		}
+	}
+	return s, false
+}
+
 // parentOrEmpty returns the first parent of commit hash, or the empty tree
 // in the repository's hash format when hash is a root commit.
 func (g *Git) parentOrEmpty(ctx context.Context, dir, hash string) (string, error) {
-	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", "--end-of-options", hash+"^1^{commit}")
+	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", hash+"^1^{commit}")
 	var ee *ExitError
 	if errors.As(err, &ee) {
 		out, _, err = g.RunInput(ctx, dir, []byte{}, 1024, "hash-object", "-t", "tree", "--stdin")

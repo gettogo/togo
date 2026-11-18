@@ -35,6 +35,25 @@ type sess struct {
 	mu sync.Mutex
 	// restoring suppresses intermediate history notifications under mu.
 	restoring bool
+	// conv is the conversation the chat shows, as the mappers named it,
+	// and convGen counts the times the chat started over for another one
+	// (see conversation.go).
+	conv    string
+	convGen uint64
+	// catalogPending: the harness's own command list is still being read;
+	// the last command completion said so.
+	catalogPending bool
+	// hydrated is the conversation whose earlier messages were asked for,
+	// and held are a feed's live records kept back while they load (see
+	// history.go).
+	hydrated string
+	held     *heldRecords
+	// histFailed and histFails count the outright failures of reading one
+	// conversation's past; histNoticed is the conversation whose chat was
+	// told its earlier messages are not shown.
+	histFailed  string
+	histFails   int
+	histNoticed string
 	// starting serialises starting the harness's session for a setting
 	// picked before the first prompt (startSession).
 	starting   sync.Mutex
@@ -53,9 +72,17 @@ type sess struct {
 	queue      []queued
 	sent       map[string]bool // queued prompts already typed, by item id
 	phone      []phoneText
+	// phoneAlias maps the agent's id of a prompt to the phone item that
+	// took its place, so the record seen again stays that item. Cleared
+	// when the chat starts over.
+	phoneAlias map[string]string
 	working    bool
 	// stoppedAt is when a stop last ended the turn (see stopHold).
 	stoppedAt time.Time
+	// agentAt is when an agent the session's agent started last did
+	// something live; agentsStale notes that rows without it were logged.
+	agentAt     time.Time
+	agentsStale bool
 	// feedWorking is what the mappers last said about the turn, and
 	// feedEndedAt when they last said it ended (see feedTrust).
 	feedWorking bool
@@ -117,6 +144,9 @@ type feedRun struct {
 	rendered string
 	cancel   context.CancelFunc
 	failures int
+	// down are the capabilities this feed's failures took away, given
+	// back when it delivers a record again.
+	down []string
 }
 
 func newSess(e *Engine, info session.Session) *sess {
@@ -143,6 +173,7 @@ func newSess(e *Engine, info session.Session) *sess {
 		return s
 	}
 	s.env = e.envFor(info)
+	harness.ApplyRoots(s.ad.Adapter.Adapter, &s.env)
 	s.mission = newMission(s.missionCaps())
 	return s
 }
@@ -271,17 +302,20 @@ func (s *sess) start() {
 		}
 		return
 	}
+	if r.newer {
+		s.e.cfg.Logf("harness: %s: version %s is newer than the adapter was checked against (%s)", s.ad.Adapter.Adapter, r.version, s.ad.Harness.Range)
+	}
 	for _, name := range s.ad.feedOrder {
 		mname := s.ad.Feeds[name].Mapper
 		if _, ok := s.mappers[mname]; !ok {
-			f, _ := harness.LookupMapper(mname)
-			s.mappers[mname] = f(s.env)
+			s.mappers[mname] = s.e.mapperFor(mname, s.env)
 		}
 	}
 	s.storeSummaryLocked()
 	s.syncFeedsLocked()
 	s.mu.Unlock()
 	go s.seedAtStart()
+	go s.resumeHistory()
 	go s.resyncStateFeeds()
 	if s.e.cfg.OnSummary != nil {
 		s.e.cfg.OnSummary(s.id)
@@ -405,7 +439,9 @@ func (s *sess) stateLocked() map[string]string {
 		// A crashed or killed agent writes no turn end; its mappers would
 		// say working forever.
 		working = false
-	case status == "working" && !s.holdingStopLocked(states) && !feedEnded && !failed:
+	case status == "working" && !s.holdingStopLocked(states) && !feedEnded && !failed && !s.e.menuKeysJustNow(s.id, now):
+		// The hub calls a pane that keeps changing "working". Keys pressed
+		// in a list for the phone change it too; that is not the agent.
 		working = true
 	}
 	out["working"] = fmt.Sprint(working)
@@ -516,6 +552,7 @@ func (s *sess) syncFeedsLocked() {
 		}
 		if run != nil {
 			run.cancel()
+			s.e.cfg.Logf("harness: %s feed %s restarts: its source changed", s.id, name)
 		}
 		ctx, cancel := context.WithCancel(s.ctx)
 		run = &feedRun{name: name, rendered: string(rendered), cancel: cancel}
@@ -543,7 +580,8 @@ func (s *sess) runFeed(ctx context.Context, run *feedRun, spec harness.SourceSpe
 			run.failures++
 			if run.failures == 3 {
 				s.e.cfg.Logf("harness: %s feed %s (%s) failed three times: %v", s.ad.Adapter.Adapter, spec.Name, s.ad.Feeds[spec.Name].Stability, err)
-				s.degradeLocked(feedCaps(spec.Kind))
+				run.down = feedCaps(spec.Kind)
+				s.degradeLocked(run.down)
 			}
 		}
 		s.mu.Unlock()
@@ -576,6 +614,24 @@ func feedCaps(kind string) []string {
 	return []string{harness.CapHistory, harness.CapChatStream}
 }
 
+// recoverLocked gives back what a feed's failures took away once it
+// delivers again: a feed that failed three times and then recovered would
+// otherwise leave the chat off for the life of the session.
+func (s *sess) recoverLocked(run *feedRun) {
+	changed := false
+	for _, c := range run.down {
+		if s.degraded[c] {
+			delete(s.degraded, c)
+			changed = true
+		}
+	}
+	run.down = nil
+	if changed {
+		s.e.cfg.Logf("harness: %s feed %s delivers again", s.ad.Adapter.Adapter, run.name)
+		s.notifyLocked(harness.Notification{Kind: harness.NoteReset, Reason: "adapter"})
+	}
+}
+
 func (s *sess) degradeLocked(caps []string) {
 	changed := false
 	for _, c := range caps {
@@ -601,12 +657,26 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 	if ctx.Err() != nil {
 		return
 	}
+	if s.heldForHistoryLocked(rec) {
+		return
+	}
+	s.recordLocked(mapper, rec)
+	s.wantHistoryLocked(mapper, rec.Source)
+}
+
+// recordLocked maps one live record (already redacted) and publishes it.
+func (s *sess) recordLocked(mapper string, rec harness.Record) {
 	s.last[rec.Source] = rec.Data
 	m := s.mappers[mapper]
 	if m == nil {
 		return
 	}
 	items, ops := safeMap(m, rec, s.e.cfg.Logf)
+	if s.movedLocked() {
+		m = s.startOverLocked(mapper)
+		items, ops = safeMap(m, rec, s.e.cfg.Logf)
+		s.movedLocked()
+	}
 	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {
@@ -615,6 +685,7 @@ func (s *sess) record(ctx context.Context, mapper string, rec harness.Record) {
 	s.afterRecordLocked()
 	if run := s.feeds[rec.Source]; run != nil {
 		run.failures = 0
+		s.recoverLocked(run)
 	}
 }
 
@@ -779,9 +850,9 @@ func agentGone(status string) bool {
 	return status == wire.StatusEnded || status == wire.StatusFailed || status == "exited"
 }
 
-// agentExitedLocked closes what the dead agent left open: running turns
-// and tools end as interrupted, and prompts queued behind them are
-// withdrawn, since nothing will ever drain them.
+// agentExitedLocked closes what the dead agent left open: running turns,
+// tools, subagents and background jobs end as interrupted, and prompts
+// queued behind them are withdrawn, since nothing will ever drain them.
 func (s *sess) agentExitedLocked() {
 	recent, _, _ := s.e.log.Since(s.id, 0, 200)
 	now := s.e.cfg.Now()
@@ -796,12 +867,21 @@ func (s *sess) agentExitedLocked() {
 			t := *it.Tool
 			t.State, t.Ended = harness.StateInterrupted, &now
 			it.Tool = &t
+		case it.Kind == harness.KindAgent && it.Agent != nil && it.Agent.State == harness.StateRunning:
+			a := *it.Agent
+			a.State, a.Ended = harness.StateInterrupted, &now
+			it.Agent = &a
+		case it.Kind == harness.KindBackground && it.Background != nil && it.Background.State == harness.StateRunning:
+			b := *it.Background
+			b.State, b.Ended = harness.StateInterrupted, &now
+			it.Background = &b
 		default:
 			continue
 		}
 		it.Seq = 0
 		ended = append(ended, it)
 	}
+	rows := s.mission.stopRunning()
 	for _, q := range s.queue {
 		if q.item.User == nil {
 			continue
@@ -813,9 +893,12 @@ func (s *sess) agentExitedLocked() {
 		ended = append(ended, it)
 	}
 	s.queue = nil
-	if len(ended) > 0 {
-		s.publishLocked(ended, nil)
+	asked := s.unansweredLocked()
+	ended = append(ended, asked...)
+	if len(ended) > 0 || len(rows) > 0 {
+		s.publishLocked(ended, rows)
 	}
+	s.forgetQuestionsLocked()
 }
 
 // closeIdleLocked publishes what IdleCloser mappers close once the session

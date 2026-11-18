@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/fsx"
@@ -41,6 +42,13 @@ type Git struct {
 
 // DefaultTimeout is the per-process limit when Git.Timeout is unset.
 const DefaultTimeout = 10 * time.Second
+
+// DefaultWriteTimeout is the per-process limit for a write when Git.Timeout
+// is unset: staging a large file takes longer than any read.
+const DefaultWriteTimeout = 60 * time.Second
+
+// stopGrace is how long a git process gets to exit after SIGTERM.
+const stopGrace = 5 * time.Second
 
 // ErrTimeout is wrapped by a call that ran past its time limit.
 var ErrTimeout = errors.New("git timed out")
@@ -131,6 +139,15 @@ func Env() []string {
 	)
 }
 
+// forWrites returns g with the longer write limit when none is set.
+func (g *Git) forWrites() *Git {
+	w := *g
+	if w.Timeout == 0 {
+		w.Timeout = DefaultWriteTimeout
+	}
+	return &w
+}
+
 func (g *Git) timeout() time.Duration {
 	if g.Timeout > 0 {
 		return g.Timeout
@@ -180,6 +197,10 @@ func (g *Git) exec(ctx context.Context, dir string, stdin []byte, env []string, 
 	argv := append([]string{"-C", dir}, safeArgs...)
 	argv = append(argv, args...)
 	cmd := exec.CommandContext(ctx, g.bin(), argv...)
+	// Ask git to stop, so it removes its lock files; SIGKILL would leave an
+	// index.lock behind. A git that ignores the request is killed after the delay.
+	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.WaitDelay = stopGrace
 	cmd.Env = append(Env(), env...)
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
@@ -265,7 +286,7 @@ func (g *Git) ResolveCommit(ctx context.Context, dir, ref string) (string, error
 	if err := CheckRef(ref); err != nil {
 		return "", err
 	}
-	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", "--end-of-options", ref+"^{commit}")
+	out, _, err := g.Run(ctx, dir, 1024, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	var ee *ExitError
 	if errors.As(err, &ee) {
 		return "", fmt.Errorf("%w: ref does not resolve", fsx.ErrInvalidPath)

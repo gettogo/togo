@@ -33,6 +33,8 @@ type cacheEntry struct {
 	session string
 	at      time.Time
 	data    any
+	// rev is the source's cache_rev state value when the copy was read.
+	rev string
 }
 
 func (c *cache) get(key string) (cacheEntry, bool) {
@@ -105,7 +107,10 @@ func (e *Engine) fetch(ctx context.Context, s *sess, name string, query map[stri
 		return nil, false, err
 	}
 	key := s.id + "\x00" + name + "\x00" + string(rendered)
-	if c, ok := e.cache.get(key); ok && !fresh && src.Cache > 0 && e.cfg.Now().Sub(c.at) < s.cacheFor(src.Cache, e.cfg.Now()) {
+	// The rev is read before the source: a change that arrives during the
+	// read leaves the copy under the old value, and the next fetch reads again.
+	rev := state[src.CacheRev]
+	if c, ok := e.cache.get(key); ok && !fresh && src.Cache > 0 && c.rev == rev && e.cfg.Now().Sub(c.at) < s.cacheFor(src.Cache, e.cfg.Now()) {
 		return c.data, false, nil
 	}
 	v, err := e.read(ctx, s, name, src, rendered, state)
@@ -127,7 +132,7 @@ func (e *Engine) fetch(ctx context.Context, s *sess, name string, query map[stri
 		}
 		return nil, false, err
 	}
-	e.cache.put(key, cacheEntry{session: s.id, at: e.cfg.Now(), data: v})
+	e.cache.put(key, cacheEntry{session: s.id, at: e.cfg.Now(), data: v, rev: rev})
 	return v, false, nil
 }
 

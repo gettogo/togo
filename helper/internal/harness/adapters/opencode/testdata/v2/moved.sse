@@ -1,0 +1,12 @@
+data: {"id": "evt_1db786c09001YCH2d6Aj2I5wR0", "created": 1794683464713, "type": "session.created", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "slug": "playful-mountain", "version": "2.2.5", "projectID": "4ae7d7f5608578b01bf2f317809023cb8e2a5299", "location": {"directory": "/tmp/work"}, "subpath": ""}, "durable": {"aggregateID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "seq": 0, "version": 1}}
+
+data: {"id": "evt_1db7871640016DsOPm60I53IqI", "created": 1794683466084, "type": "session.inbox.enqueued", "data": {"inboxID": "msg_1db787163001Kuv7yKCUXZzutn", "sessionID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "item": {"type": "move", "payload": {"location": {"directory": "/tmp/alternate"}, "projectID": "291c617214546c9cff5beba3ac0ca074561b5eb5", "subpath": ""}, "delivery": "steer"}}, "durable": {"aggregateID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "seq": 1, "version": 1}}
+
+data: {"id": "evt_1db787167001EKUG8OYFeiDr2d", "created": 1794683466087, "type": "session.execution.started", "data": {"sessionID": "ses_e248793fbffe1C9pGgD1Q9qW5k"}, "durable": {"aggregateID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "seq": 2, "version": 1}}
+
+data: {"id": "evt_1db7871e7001hWrhKj67PnLX4o", "created": 1794683466215, "type": "session.inbox.delivered", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "inboxID": "msg_1db787163001Kuv7yKCUXZzutn"}, "durable": {"aggregateID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "seq": 3, "version": 1}}
+
+data: {"id": "evt_1db7871e7002ayWU5jpXqHyaBx", "created": 1794683466215, "type": "session.moved", "location": {"directory": "/tmp/work"}, "data": {"sessionID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "location": {"directory": "/tmp/alternate"}, "projectID": "291c617214546c9cff5beba3ac0ca074561b5eb5", "subpath": ""}, "durable": {"aggregateID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "seq": 4, "version": 1}}
+
+data: {"id": "evt_1db7871e90017y61HCYPufrDLy", "created": 1794683466217, "type": "session.execution.succeeded", "data": {"sessionID": "ses_e248793fbffe1C9pGgD1Q9qW5k"}, "durable": {"aggregateID": "ses_e248793fbffe1C9pGgD1Q9qW5k", "seq": 5, "version": 1}}
+

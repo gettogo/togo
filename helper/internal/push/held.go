@@ -64,14 +64,21 @@ func (s *Sender) releaseHeld(m Message) {
 	if s.Remind == nil || s.Remind.Pending == nil || !s.Remind.Pending(m.Plaintext.RequestID) {
 		return
 	}
-	if s.Hub.ForegroundSubscribers() > 0 || (s.Muted != nil && s.Muted()) {
+	all, skip := s.front()
+	if all || (s.Muted != nil && s.Muted()) {
 		return
 	}
+	m.skip = skip
 	if m.Plaintext.SessionID != nil && s.Session != nil {
 		if info, _ := s.Session(*m.Plaintext.SessionID); info.Muted {
 			return
 		}
 	}
 	m.Plaintext.TS = s.now().UnixMilli()
-	s.afterDeliver(m, s.send(context.Background(), m), "")
+	res := s.send(context.Background(), m)
+	if m.only == nil {
+		// A push limited to the devices skipped earlier follows one that
+		// already went out, and that one set up the reminder.
+		s.afterDeliver(m, res, "")
+	}
 }

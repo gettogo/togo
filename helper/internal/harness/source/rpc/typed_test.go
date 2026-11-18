@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +43,9 @@ func fakeTypedChild(in io.Reader, out io.Writer) {
 
 func TestMain(m *testing.M) {
 	if os.Getenv("TOGO_FAKE_TYPED_CHILD") == "1" {
+		if log := os.Getenv("TOGO_FAKE_ARGS_LOG"); log != "" {
+			_ = os.WriteFile(log, []byte(strings.Join(os.Args[1:], "\n")), 0o600)
+		}
 		fakeTypedChild(os.Stdin, os.Stdout)
 		os.Exit(0)
 	}
@@ -109,5 +113,33 @@ func TestRunnerFetchTypedChild(t *testing.T) {
 	}
 	if !strings.Contains(string(out), `"switch"`) {
 		t.Fatalf("out = %s", out)
+	}
+}
+
+// Seen live on omp 18.20: the session ran with --no-skills and an extension
+// loaded with -e, and the command list came from a child started with
+// --no-extensions alone: it offered skill commands the session had switched
+// off and missed the extension's. The child is started with the session's
+// own switches; a prompt or a conversation pick of the session is not.
+func TestChildIsStartedWithTheSessionsOwnSwitches(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := filepath.Join(t.TempDir(), "args")
+	t.Setenv("TOGO_FAKE_TYPED_CHILD", "1")
+	t.Setenv("TOGO_FAKE_ARGS_LOG", log)
+	b := spec.RPC{Method: "get_available_commands", Child: []string{exe, "--mode", "rpc"}, Framing: spec.FramingTyped,
+		ChildCarry: &spec.Carry{Values: []string{"-e", "--profile"}, Flags: []string{"--no-skills", "--no-extensions"}}}
+	raw, _ := json.Marshal(b)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	env := harness.Env{Cwd: t.TempDir(), Argv: []string{"omp", "--no-skills", "-e", "/x/ext.ts", "--resume", "abc", "--model", "m", "fix the bug"}}
+	if _, err := (&Runner{}).Fetch(ctx, harness.SourceSpec{Name: "commands", Kind: spec.KindRPC, Raw: raw}, env); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(log)
+	if want := "--mode\nrpc\n--no-skills\n-e\n/x/ext.ts"; string(got) != want {
+		t.Errorf("child args = %q, want %q", got, want)
 	}
 }

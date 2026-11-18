@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,10 @@ func (e *Events) partUpdated(raw json.RawMessage, at time.Time) ([]harness.Item,
 		return nil, nil
 	}
 	pt := p.Part
+	if pt.Type == "tool" && (pt.State.Status == "pending" || pt.State.Status == "running") ||
+		(pt.Type == "text" || pt.Type == "reasoning") && (pt.Time == nil || pt.Time.End == 0) {
+		e.running(pt.SessionID)
+	}
 	msg, known := e.messages[pt.MessageID]
 	turnID := msg.turn
 	parent := e.parentOf(pt.SessionID)
@@ -141,6 +146,7 @@ func (e *Events) partDelta(raw json.RawMessage, at time.Time) ([]harness.Item, [
 	if st == nil || st.kind == harness.KindUser {
 		return nil, nil
 	}
+	e.running(p.SessionID)
 	st.text += p.Delta
 	if !st.last.IsZero() && at.Sub(st.last) < partialEvery {
 		return nil, nil
@@ -150,6 +156,28 @@ func (e *Events) partDelta(raw json.RawMessage, at time.Time) ([]harness.Item, [
 		return nil, nil
 	}
 	return []harness.Item{textItem(p.PartID, st.turn, e.parentOf(st.sess), st.kind, st.start, st.text, true)}, nil
+}
+
+// flushParts closes the streamed text of a session whose turn ended: an
+// interrupt or an error can end it without the agent's own last copy, which
+// would leave the item partial and drop the words held back by the throttle.
+func (e *Events) flushParts(sess string) []harness.Item {
+	ids := make([]string, 0, len(e.parts))
+	for id, st := range e.parts {
+		if st.sess == sess {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	var items []harness.Item
+	for _, id := range ids {
+		st := e.parts[id]
+		delete(e.parts, id)
+		if strings.TrimSpace(st.text) != "" {
+			items = append(items, textItem(id, st.turn, e.parentOf(st.sess), st.kind, st.start, st.text, false))
+		}
+	}
+	return items
 }
 
 var categories = map[string]string{

@@ -1,0 +1,482 @@
+{
+ "captured": "omp 18.20.2 /resume picker on a session seeded with one saved conversation: as opened, after togo.query with a text that matches nothing, after togo.query \"\". Nodes exactly as sent; only folder paths replaced.",
+ "nodes": {
+  "1 opened": {
+   "id": "o",
+   "k": "picker",
+   "p": {
+    "actions": [
+     {
+      "id": "resume",
+      "keys": [
+       "enter"
+      ],
+      "label": "Resume",
+      "primary": true
+     },
+     {
+      "id": "delete",
+      "keys": [
+       "backspace"
+      ],
+      "label": "Delete"
+     },
+     {
+      "id": "rename",
+      "keys": [
+       "f2"
+      ],
+      "label": "Rename"
+     },
+     {
+      "id": "pin",
+      "keys": [
+       "alt",
+       "k"
+      ],
+      "label": "Pin"
+     },
+     {
+      "id": "scope",
+      "keys": [
+       "tab"
+      ],
+      "label": "All projects"
+     },
+     {
+      "end": true,
+      "id": "close",
+      "keys": [
+       "esc"
+      ],
+      "label": "Close"
+     }
+    ],
+    "columns": [
+     {
+      "format": "time",
+      "id": "when"
+     },
+     {
+      "format": "dim",
+      "id": "size"
+     }
+    ],
+    "current": [
+     "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T14-58-12-792Z_01a1dfb7-46b8-71df-8942-44aa5ae4f8c0.jsonl"
+    ],
+    "cursor": 0,
+    "empty": "No sessions in this folder yet",
+    "icon": "history",
+    "items": [
+     {
+      "detail": "Reply with exactly: Ready for native check. Do not use tools or change files.",
+      "dot": "success",
+      "facts": {
+       "size": "12.3KB",
+       "when": "now"
+      },
+      "id": "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T12-06-18-804Z_01a1df19-e5b4-762c-87c7-0cdb937132cf.jsonl",
+      "label": "🔍 CHECK: Native check A",
+      "title": "15 Nov 2026, 09:58"
+     }
+    ],
+    "layout": "cards",
+    "noun": "sessions",
+    "order": [
+     {
+      "count": 1,
+      "group": "today-0",
+      "label": "Today"
+     },
+     "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T12-06-18-804Z_01a1df19-e5b4-762c-87c7-0cdb937132cf.jsonl"
+    ],
+    "placeholder": "Search sessions in project…",
+    "preview": "side",
+    "query": "",
+    "selected": "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T12-06-18-804Z_01a1df19-e5b4-762c-87c7-0cdb937132cf.jsonl",
+    "size": "lg",
+    "state": "ready",
+    "total": 1
+   },
+   "c": [
+    {
+     "id": "o.0",
+     "k": "text",
+     "p": {
+      "role": "omp.picker.title",
+      "text": "🔍 CHECK: Native check A"
+     }
+    },
+    {
+     "id": "o.1",
+     "k": "kv",
+     "p": {
+      "items": [
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Folder"
+         }
+        ],
+        "v": [
+         {
+          "s": "path dim",
+          "t": "/tmp/fixture/"
+         },
+         {
+          "s": "path",
+          "t": "project"
+         }
+        ]
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Created"
+         }
+        ],
+        "v": "15 Nov 2026, 07:06"
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Modified"
+         }
+        ],
+        "v": "15 Nov 2026, 09:58"
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Size"
+         }
+        ],
+        "v": "12.3KB"
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Status"
+         }
+        ],
+        "v": [
+         {
+          "s": "success",
+          "t": "done"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "id": "o.2",
+     "k": "section",
+     "p": {
+      "head": "Conversation"
+     },
+     "c": [
+      {
+       "id": "o.2/0",
+       "k": "md",
+       "p": {
+        "text": "Reply with exactly: Ready for native check. Do not use tools or change files.",
+        "tone": "user"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "query 'zzzz-no-match-qqq'": {
+   "id": "o",
+   "k": "picker",
+   "p": {
+    "actions": [
+     {
+      "id": "resume",
+      "keys": [
+       "enter"
+      ],
+      "label": "Resume",
+      "primary": true
+     },
+     {
+      "id": "delete",
+      "keys": [
+       "backspace"
+      ],
+      "label": "Delete"
+     },
+     {
+      "id": "rename",
+      "keys": [
+       "f2"
+      ],
+      "label": "Rename"
+     },
+     {
+      "id": "pin",
+      "keys": [
+       "alt",
+       "k"
+      ],
+      "label": "Pin"
+     },
+     {
+      "id": "scope",
+      "keys": [
+       "tab"
+      ],
+      "label": "All projects"
+     },
+     {
+      "end": true,
+      "id": "close",
+      "keys": [
+       "esc"
+      ],
+      "label": "Close"
+     }
+    ],
+    "columns": [
+     {
+      "format": "time",
+      "id": "when"
+     },
+     {
+      "format": "dim",
+      "id": "size"
+     }
+    ],
+    "current": [
+     "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T14-58-12-792Z_01a1dfb7-46b8-71df-8942-44aa5ae4f8c0.jsonl"
+    ],
+    "cursor": 17,
+    "empty": "No sessions in this folder yet",
+    "icon": "history",
+    "items": [
+     {
+      "detail": "Reply with exactly: Ready for native check. Do not use tools or change files.",
+      "dot": "success",
+      "facts": {
+       "size": "12.3KB",
+       "when": "now"
+      },
+      "id": "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T12-06-18-804Z_01a1df19-e5b4-762c-87c7-0cdb937132cf.jsonl",
+      "label": "🔍 CHECK: Native check A",
+      "title": "15 Nov 2026, 09:58"
+     }
+    ],
+    "layout": "cards",
+    "noun": "sessions",
+    "order": [],
+    "placeholder": "Search sessions in project…",
+    "preview": "side",
+    "query": "zzzz-no-match-qqq",
+    "size": "lg",
+    "state": "ready",
+    "total": 1
+   }
+  },
+  "query ''": {
+   "id": "o",
+   "k": "picker",
+   "p": {
+    "actions": [
+     {
+      "id": "resume",
+      "keys": [
+       "enter"
+      ],
+      "label": "Resume",
+      "primary": true
+     },
+     {
+      "id": "delete",
+      "keys": [
+       "backspace"
+      ],
+      "label": "Delete"
+     },
+     {
+      "id": "rename",
+      "keys": [
+       "f2"
+      ],
+      "label": "Rename"
+     },
+     {
+      "id": "pin",
+      "keys": [
+       "alt",
+       "k"
+      ],
+      "label": "Pin"
+     },
+     {
+      "id": "scope",
+      "keys": [
+       "tab"
+      ],
+      "label": "All projects"
+     },
+     {
+      "end": true,
+      "id": "close",
+      "keys": [
+       "esc"
+      ],
+      "label": "Close"
+     }
+    ],
+    "columns": [
+     {
+      "format": "time",
+      "id": "when"
+     },
+     {
+      "format": "dim",
+      "id": "size"
+     }
+    ],
+    "current": [
+     "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T14-58-12-792Z_01a1dfb7-46b8-71df-8942-44aa5ae4f8c0.jsonl"
+    ],
+    "cursor": 0,
+    "empty": "No sessions in this folder yet",
+    "icon": "history",
+    "items": [
+     {
+      "detail": "Reply with exactly: Ready for native check. Do not use tools or change files.",
+      "dot": "success",
+      "facts": {
+       "size": "12.3KB",
+       "when": "now"
+      },
+      "id": "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T12-06-18-804Z_01a1df19-e5b4-762c-87c7-0cdb937132cf.jsonl",
+      "label": "🔍 CHECK: Native check A",
+      "title": "15 Nov 2026, 09:58"
+     }
+    ],
+    "layout": "cards",
+    "noun": "sessions",
+    "order": [
+     {
+      "count": 1,
+      "group": "today-0",
+      "label": "Today"
+     },
+     "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T12-06-18-804Z_01a1df19-e5b4-762c-87c7-0cdb937132cf.jsonl"
+    ],
+    "placeholder": "Search sessions in project…",
+    "preview": "side",
+    "query": "",
+    "selected": "/tmp/fixture/agent/sessions/--private-tmp-fixture-project--/2026-11-15T12-06-18-804Z_01a1df19-e5b4-762c-87c7-0cdb937132cf.jsonl",
+    "size": "lg",
+    "state": "ready",
+    "total": 1
+   },
+   "c": [
+    {
+     "id": "o.0",
+     "k": "text",
+     "p": {
+      "role": "omp.picker.title",
+      "text": "🔍 CHECK: Native check A"
+     }
+    },
+    {
+     "id": "o.1",
+     "k": "kv",
+     "p": {
+      "items": [
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Folder"
+         }
+        ],
+        "v": [
+         {
+          "s": "path dim",
+          "t": "/tmp/fixture/"
+         },
+         {
+          "s": "path",
+          "t": "project"
+         }
+        ]
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Created"
+         }
+        ],
+        "v": "15 Nov 2026, 07:06"
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Modified"
+         }
+        ],
+        "v": "15 Nov 2026, 09:58"
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Size"
+         }
+        ],
+        "v": "12.3KB"
+       },
+       {
+        "k": [
+         {
+          "s": "muted",
+          "t": "Status"
+         }
+        ],
+        "v": [
+         {
+          "s": "success",
+          "t": "done"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "id": "o.2",
+     "k": "section",
+     "p": {
+      "head": "Conversation"
+     },
+     "c": [
+      {
+       "id": "o.2/0",
+       "k": "md",
+       "p": {
+        "text": "Reply with exactly: Ready for native check. Do not use tools or change files.",
+        "tone": "user"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

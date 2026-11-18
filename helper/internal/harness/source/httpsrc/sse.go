@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -35,14 +36,48 @@ type Parser struct {
 	// Retry is the last reconnect delay the server asked for, kept even
 	// when the event that carried it had no data.
 	Retry time.Duration
+	// Skipped counts the events dropped for being larger than MaxEvent: one
+	// such event costs only itself, not the connection.
+	Skipped int
+
+	long    bool // a line did not fit: the rest of it is being discarded
+	tooLong bool // the line just read was cut
 }
 
 // NewParser reads from r.
 func NewParser(r io.Reader) *Parser {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64<<10), MaxEvent)
-	sc.Split(scanLines)
-	return &Parser{sc: sc}
+	p := &Parser{}
+	p.sc = bufio.NewScanner(r)
+	p.sc.Buffer(make([]byte, 64<<10), MaxEvent)
+	p.sc.Split(p.split)
+	return p
+}
+
+// split is scanLines that survives a line longer than the buffer: it
+// discards the line to its end and reports it with tooLong.
+func (p *Parser) split(data []byte, atEOF bool) (int, []byte, error) {
+	if p.long {
+		if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+			end := i + 1
+			if data[i] == '\r' {
+				if end == len(data) && !atEOF {
+					return i, nil, nil // maybe half of a CRLF: read more
+				}
+				if end < len(data) && data[end] == '\n' {
+					end++
+				}
+			}
+			p.long = false
+			return end, nil, nil // the end of the line that did not fit
+		}
+		return len(data), nil, nil
+	}
+	adv, tok, err := scanLines(data, atEOF)
+	if adv == 0 && tok == nil && err == nil && len(data) >= MaxEvent {
+		p.long, p.tooLong = true, true
+		return len(data), []byte{}, nil
+	}
+	return adv, tok, err
 }
 
 // Next returns the next event with data, or an error at the end of the
@@ -50,9 +85,21 @@ func NewParser(r io.Reader) *Parser {
 func (p *Parser) Next() (Event, error) {
 	var ev Event
 	var data []string
-	hasData := false
+	hasData, drop := false, false
 	for p.sc.Scan() {
 		line := p.sc.Text()
+		if p.tooLong {
+			p.tooLong = false
+			drop = true
+			p.Skipped++
+		}
+		if drop {
+			// An oversized event: skip to the blank line that ends it.
+			if line == "" && !p.long {
+				drop, ev, data, hasData = false, Event{}, nil, false
+			}
+			continue
+		}
 		if line == "" {
 			if hasData {
 				ev.Data = strings.Join(data, "\n")
@@ -84,7 +131,8 @@ func (p *Parser) Next() (Event, error) {
 			}
 		}
 		if len(data) > 0 && totalLen(data) > MaxEvent {
-			return Event{}, ErrTooLarge
+			drop = true
+			p.Skipped++
 		}
 	}
 	if err := p.sc.Err(); err != nil {
@@ -210,8 +258,13 @@ func stream(ctx context.Context, url, auth string, lastID *string, name string, 
 	*connected = true
 	p := NewParser(resp.Body)
 	var retry time.Duration
+	skipped := 0
 	for {
 		ev, err := p.Next()
+		if p.Skipped > skipped {
+			log.Printf("httpsrc: feed %s dropped %d event(s) over %d bytes", name, p.Skipped-skipped, MaxEvent)
+			skipped = p.Skipped
+		}
 		if p.LastID != "" {
 			*lastID = p.LastID
 		}

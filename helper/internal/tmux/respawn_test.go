@@ -115,3 +115,13 @@ func hasName(fg tmux.PaneForeground, name string) bool {
 	}
 	return false
 }
+
+func TestForegroundOfAMissingSessionIsErrNoSession(t *testing.T) {
+	c := tmuxtest.New(t)
+	if err := c.NewSession(context.Background(), tmux.NewSessionOpts{Name: "s_abcdefghij", Dir: t.TempDir(), Command: []string{"cat"}}); err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	if _, err := c.Foreground(context.Background(), "s_zzzzzzzzzz"); !errors.Is(err, tmux.ErrNoSession) {
+		t.Fatalf("Foreground of a missing session: %v, want ErrNoSession", err)
+	}
+}

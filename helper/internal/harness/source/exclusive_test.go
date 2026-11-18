@@ -45,3 +45,32 @@ func TestExclusiveGlobKeepsNeighboursApart(t *testing.T) {
 		t.Fatalf("A joined its neighbour's file: %v", a.recs)
 	}
 }
+
+func TestClaimsSurviveReplacedWatcher(t *testing.T) {
+	pattern, id := "/x/claims-replaced/*.jsonl", "s1"
+	old := &claimWatch{}
+	claims.Lock()
+	delete(claims.owner, "/x/claims-replaced/a.jsonl")
+	delete(claims.owner, "/x/claims-replaced/b.jsonl")
+	claims.watchers[pattern] = map[string]*claimWatch{id: old}
+	claims.Unlock()
+	fresh := &claimWatch{}
+	claims.Lock()
+	claims.watchers[pattern][id] = fresh
+	claims.Unlock()
+	unregisterWatch(pattern, id, old, nil) // the old watcher finishes late
+	if !claimOwn(pattern, id, "/x/claims-replaced/a.jsonl") {
+		t.Fatal("claimOwn failed")
+	}
+	if fresh.files != 1 {
+		t.Fatalf("files = %d, want 1", fresh.files)
+	}
+	unregisterWatch(pattern, id, fresh, nil)
+	// An entry that is gone must not panic.
+	if !claimOwn(pattern, id, "/x/claims-replaced/b.jsonl") {
+		t.Fatal("claimOwn without watcher failed")
+	}
+	if claim(pattern, id, "/x/claims-replaced/c.jsonl", true) {
+		t.Fatal("claim without watcher succeeded")
+	}
+}

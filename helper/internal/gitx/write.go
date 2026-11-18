@@ -81,8 +81,8 @@ type repo struct {
 // separated pathspec list, so no path is ever read as an option or glob.
 func (g *Git) gitWrite(ctx context.Context, r repo, stdin []byte, args ...string) ([]byte, error) {
 	argv := append(append([]string{}, writeArgs...), args...)
-	out, _, err := g.run(ctx, r.root, stdin, listLimit, argv...)
-	if stderrMentions(err, "index.lock") {
+	out, _, err := g.forWrites().run(ctx, r.root, stdin, listLimit, argv...)
+	if stderrMentions(err, "index.lock", ".lock': File exists") {
 		return nil, conflict(wire.ConflictLocked)
 	}
 	return out, err
@@ -141,6 +141,8 @@ func checkInside(root, p string) error {
 		}
 		last := i == len(parts)-1
 		switch {
+		case last && info.IsDir() && gitEntry(cur):
+			return &session.InvalidParamsError{Msg: fmt.Sprintf("%q is a submodule or another repository, which cannot be changed from here", p)}
 		case last && info.IsDir():
 			return &session.InvalidParamsError{Msg: fmt.Sprintf("%q is a folder; name each file", p)}
 		case !last && !info.IsDir():
@@ -152,6 +154,12 @@ func checkInside(root, p string) error {
 		}
 	}
 	return nil
+}
+
+// gitEntry reports whether folder dir holds its own .git.
+func gitEntry(dir string) bool {
+	_, err := os.Lstat(filepath.Join(dir, ".git"))
+	return err == nil
 }
 
 // prepare checks every path against a fresh status and the letters the
@@ -501,7 +509,7 @@ func (g *Git) Commit(ctx context.Context, dir, message string, amend bool, head 
 			return res, err
 		}
 	}
-	args := []string{"commit", "-q", "--no-verify", "--no-gpg-sign", "--cleanup=strip", "-F", "-"}
+	args := []string{"commit", "-q", "--no-verify", "--no-gpg-sign", "--cleanup=whitespace", "-F", "-"}
 	if amend {
 		args = append(args, "--amend", "--no-post-rewrite")
 	}
@@ -545,7 +553,7 @@ func (g *Git) Commit(ctx context.Context, dir, message string, amend bool, head 
 
 // parents returns the parent hashes of commit hash, first parent first.
 func (g *Git) parents(ctx context.Context, root, hash string) ([]string, error) {
-	out, _, err := g.Run(ctx, root, 4096, "rev-list", "--parents", "-n", "1", "--end-of-options", hash)
+	out, _, err := g.Run(ctx, root, 4096, "rev-list", "--parents", "-n", "1", hash)
 	if err != nil {
 		return nil, err
 	}

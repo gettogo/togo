@@ -39,6 +39,7 @@ group:
 		}
 		argv = append(argv, vals...)
 	}
+	argv = append(argv, carried(s.env.Argv, r.Carry, argv)...)
 	if !sameProgram(argv[0], s.info.Command, s.info.Agent) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "Only the session's own agent can be restarted"}, nil
 	}
@@ -52,6 +53,9 @@ group:
 	// Noted first: the relaunch drops the session's state, and what is
 	// rebuilt reads the agent as it now runs.
 	e.noteRelaunch(s.id, argv)
+	// The restarted agent may open another conversation: the one this
+	// session showed is no longer what a helper restart should load.
+	e.forgetConversation(s.id)
 	if err := e.cfg.Relaunch(ctx, s.id, argv); err != nil {
 		e.dropRelaunch(s.id)
 		if had {
@@ -103,4 +107,10 @@ func (a *adapter) modeIDs() map[string]bool {
 // ("--dangerously-skip-permissions" as a resume id) must stay a value.
 func flagFromInput(tmpl, rendered string) bool {
 	return strings.Contains(tmpl, "{{") && strings.HasPrefix(rendered, "-") && !strings.HasPrefix(tmpl, "-")
+}
+
+// carried returns the options of the running command line that the adapter
+// says a restart keeps (see spec.Carry.Pick).
+func carried(current []string, c *spec.Carry, next []string) []string {
+	return c.Pick(current, next, maxArgString)
 }

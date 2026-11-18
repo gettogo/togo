@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -237,5 +238,32 @@ func TestFixtures(t *testing.T) {
 	}
 	if len(pub.got) != 1 || pub.got[0].ev != (OpenEvent{URL: "http://localhost:54545/login?next=%2F"}) {
 		t.Errorf("published %+v", pub.got)
+	}
+}
+
+// With the helper binary gone, a Linux shim runs the next xdg-open on PATH,
+// not the macOS open path.
+func TestLinuxShimFallsBackToRealXdgOpen(t *testing.T) {
+	shimDir, realDir := t.TempDir(), t.TempDir()
+	record := filepath.Join(t.TempDir(), "argv")
+	real := "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + record + "'\n"
+	if err := os.WriteFile(filepath.Join(realDir, "xdg-open"), []byte(real), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{XdgOpenShim, BrowserShim} {
+		script := shimScriptFor("linux", "/nonexistent/togo", name)
+		path := filepath.Join(shimDir, name)
+		if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		os.Remove(record)
+		cmd := exec.Command(path, "https://example.com/x")
+		cmd.Env = []string{"PATH=" + shimDir + ":" + realDir + ":/usr/bin:/bin"}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("%s: %v: %s", name, err, out)
+		}
+		if got, _ := os.ReadFile(record); string(got) != "https://example.com/x\n" {
+			t.Errorf("%s: real xdg-open got %q", name, got)
+		}
 	}
 }

@@ -1,6 +1,10 @@
 package local
 
-import "github.com/gettogo/togo/helper/internal/wire"
+import (
+	"context"
+
+	"github.com/gettogo/togo/helper/internal/wire"
+)
 
 // closeAgentPrompts closes the session's pending prompt approvals as
 // answered at the desk: the agent moved on, so the user answered there.
@@ -14,6 +18,19 @@ func (h *Handlers) closeAgentPrompts(id string) {
 			h.Approvals.CloseDesk(a.RequestID)
 		}
 	}
+}
+
+// closeAnsweredPrompts runs when a tool finished. Another tool of the same
+// turn may still be waiting at its permission prompt, so a store that can
+// read the screen keeps an approval whose prompt is still shown.
+func (h *Handlers) closeAnsweredPrompts(ctx context.Context, id string) {
+	if c, ok := h.Approvals.(interface {
+		CloseAnswered(ctx context.Context, sessionID string)
+	}); ok {
+		c.CloseAnswered(ctx, id)
+		return
+	}
+	h.closeAgentPrompts(id)
 }
 
 // setTurn records whether id has a turn under way and returns whether it
@@ -31,4 +48,19 @@ func (h *Handlers) setTurn(id string, open bool) bool {
 		delete(h.turns, id)
 	}
 	return was
+}
+
+// Forget drops what the handlers keep for a session that was removed, so
+// nothing of it grows for the life of the daemon or reaches a later
+// session.
+func (h *Handlers) Forget(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.meta, id)
+	delete(h.turns, id)
+	delete(h.asking, id)
+	if t := h.doneT[id]; t != nil {
+		t.Stop()
+		delete(h.doneT, id)
+	}
 }

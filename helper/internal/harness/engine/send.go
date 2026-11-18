@@ -3,10 +3,8 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
-	"os"
+	"errors"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -24,40 +22,55 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		return harness.SendResult{}, err
 	}
 	images := harness.ImageRefs(req.Images)
+	// The prompt belongs to the conversation the chat showed when it was
+	// asked for. Waiting for the typing lock and reading the screen take
+	// time; if the agent moves to another conversation meanwhile, the
+	// prompt is not sent to it.
+	s.mu.Lock()
+	gen := s.convGen
+	s.mu.Unlock()
 	if act, ok := s.ad.Actions[actionCommand]; ok && len(req.Images) == 0 {
-		if name, args, ok := slashCommand(req.Text); ok {
+		// A command of the terminal's own is not the API's: it is typed below.
+		if name, args, ok := slashCommand(req.Text); ok && !s.ad.TypedCommand(name) {
 			// The harness API takes a / line as a command, not as prompt
 			// text the model would read (OpenCode's /init).
-			if err := e.runCommand(ctx, s, act, name, args); err != nil {
-				return harness.SendResult{}, err
+			err := e.runCommand(ctx, s, act, name, args)
+			// A line the API will not run is typed like any other: a
+			// command before the first prompt, one only the terminal
+			// has, or a prompt that merely starts with a slash word.
+			var refused *harness.FallbackError
+			if !errors.As(err, &refused) {
+				s.mu.Lock()
+				defer s.mu.Unlock()
+				if s.convGen != gen {
+					return harness.SendResult{}, errMoved
+				}
+				if err != nil {
+					return harness.SendResult{}, err
+				}
+				return s.userItemLocked(req.Text, nil, false), nil
 			}
-			return e.userItem(s, req.Text, nil, false), nil
 		}
 	}
-	if act, ok := s.ad.Actions["send"]; ok && !e.sendNotYet(s, act) {
-		// Through the harness API every path and the text go in the one request.
-		text := harness.Together(req.Text, req.Images)
-		raw, _ := json.Marshal(text)
-		res, err := e.run(ctx, s, "send", act, map[string]any{"text": text, "value": json.RawMessage(raw), "images": req.Images})
-		if err != nil {
-			return harness.SendResult{}, err
-		}
-		if res.Result == harness.ResultFailed || res.Result == harness.ResultFallback {
-			return harness.SendResult{}, &harness.FallbackError{Reason: "source", Detail: res.Message}
-		}
-		return e.userItem(s, req.Text, images, false), nil
-	}
-	if e.cfg.Typist == nil {
+	api, viaAPI := e.sendAction(s)
+	if !viaAPI && e.cfg.Typist == nil {
 		return harness.SendResult{}, &harness.FallbackError{Reason: "source", Detail: "no typist"}
 	}
-	// Typing takes the session's typing lock, so a prompt never lands
+	// Sending takes the session's typing lock, so a prompt never lands
 	// between the key presses of a mode cycle or a typed command; while
-	// prompts are queued a new one goes behind them.
+	// prompts are queued a new one goes behind them. The rule is the same
+	// whichever way the prompt travels: a prompt sent through the harness
+	// API while a turn runs would be taken as steering (OpenCode) or start
+	// at once (Kilo), which is neither "now" nor "queue".
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
-	blocked := e.blockedBy(ctx, s)
+	blocked := e.asking(ctx, s, viaAPI)
 	s.mu.Lock()
+	if s.convGen != gen {
+		s.mu.Unlock()
+		return harness.SendResult{}, errNotSent
+	}
 	working := s.stateLocked()["working"] == "true"
 	if working || len(s.queue) > 0 || blocked != "" {
 		if req.Mode == harness.SendNow && blocked != "" {
@@ -66,7 +79,10 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 			return harness.SendResult{}, refuseBlocked(blocked)
 		}
 		if req.Mode == harness.SendNow || len(s.queue) >= MaxQueued {
+			queuedNow := len(s.queue)
 			s.mu.Unlock()
+			// Why, for the log: a refusal the phone shows only as "busy".
+			e.cfg.Logf("harness: %s: a prompt was not sent now: working=%v queued=%d", s.ad.Adapter.Adapter, working, queuedNow)
 			return harness.SendResult{}, harness.ErrBusy
 		}
 		it := s.newUserItemLocked(req.Text, images, true)
@@ -78,10 +94,70 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		return harness.SendResult{Item: stored}, nil
 	}
 	s.mu.Unlock()
-	if err := e.typePrompt(ctx, s, req.Text, req.Images); err != nil {
+	if viaAPI {
+		err = e.sendAPI(ctx, s, api, req.Text, req.Images)
+	} else {
+		err = e.typePrompt(ctx, s, req.Text, req.Images)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.convGen != gen {
+		// The chat started over while the prompt travelled: it is not
+		// shown as sent in a conversation it may not be part of.
+		return harness.SendResult{}, errMoved
+	}
+	if err != nil {
 		return harness.SendResult{}, err
 	}
-	return e.userItem(s, req.Text, images, false), nil
+	return s.userItemLocked(req.Text, images, false), nil
+}
+
+// sendAction is the adapter's API send action, when prompts go that way
+// now: it has one and the harness session it names exists.
+func (e *Engine) sendAction(s *sess) (spec.Action, bool) {
+	act, ok := s.ad.Actions["send"]
+	return act, ok && !e.sendNotYet(s, act)
+}
+
+// sendAPI sends a prompt through the harness API: every path and the text
+// go in the one request.
+func (e *Engine) sendAPI(ctx context.Context, s *sess, act spec.Action, text string, images []string) error {
+	together := harness.Together(text, images)
+	raw, _ := json.Marshal(together)
+	res, err := e.run(ctx, s, "send", act, map[string]any{"text": together, "value": json.RawMessage(raw), "images": images})
+	if err != nil {
+		return err
+	}
+	if res.Result == harness.ResultFailed || res.Result == harness.ResultFallback {
+		return &harness.FallbackError{Reason: "source", Detail: res.Message}
+	}
+	return nil
+}
+
+// asking is what holds a prompt back besides a running turn: a question
+// the agent waits on. An API harness reports its questions itself, so its
+// screen is not read for one.
+func (e *Engine) asking(ctx context.Context, s *sess, viaAPI bool) string {
+	// A question the harness reported itself (a form, a permission) holds
+	// a prompt whichever way it travels: typed, it would land in the dialog.
+	s.mu.Lock()
+	open := len(s.needs.open) > 0
+	s.mu.Unlock()
+	if open {
+		return askingText(s, "")
+	}
+	if !viaAPI {
+		if err := e.heldNatively(s); err != nil {
+			return err.Detail
+		}
+		return e.blockedBy(ctx, s)
+	}
+	if e.cfg.Approvals != nil {
+		if p := e.cfg.Approvals.Pending(s.id); len(p) > 0 {
+			return askingText(s, p[0].Title)
+		}
+	}
+	return ""
 }
 
 // actionCommand is the action that runs a / line through the harness's
@@ -137,10 +213,17 @@ func slashCommand(text string) (name, args string, ok bool) {
 // typePrompt pastes a prompt and its image paths in the order the
 // adapter's images.insert asks for, pressing Enter once at the end.
 func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []string) error {
+	// A prompt is real input: from here the pane changing is the agent
+	// working, whatever keys a list had a moment ago.
+	e.menuKeyAt.Delete(s.id)
 	insert := harness.InsertTogether
 	if im := s.ad.Images; im != nil {
 		insert = im.Insert
 	}
+	if err := e.heldNatively(s); err != nil {
+		return err
+	}
+	e.awaitReady(ctx, s)
 	if err := e.screenClear(ctx, s); err != nil {
 		return err
 	}
@@ -177,6 +260,11 @@ var insertGap = 150 * time.Millisecond
 func (e *Engine) userItem(s *sess, text string, images []harness.ImageRef, queuedNow bool) harness.SendResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.userItemLocked(text, images, queuedNow)
+}
+
+func (s *sess) userItemLocked(text string, images []harness.ImageRef, queuedNow bool) harness.SendResult {
+	e := s.e
 	it := s.newUserItemLocked(text, images, queuedNow)
 	s.notePhoneLocked(it.ID, text, images)
 	if !queuedNow {
@@ -195,7 +283,10 @@ func (s *sess) newUserItemLocked(text string, images []harness.ImageRef, queued 
 
 // drainLocked starts typing the next queued prompt (see drainQueue).
 func (s *sess) drainLocked() {
-	if len(s.queue) == 0 || s.e.cfg.Typist == nil {
+	if len(s.queue) == 0 {
+		return
+	}
+	if _, api := s.ad.Actions["send"]; !api && s.e.cfg.Typist == nil {
 		return
 	}
 	go s.e.drainQueue(s)
@@ -232,14 +323,51 @@ func (e *Engine) Complete(ctx context.Context, req harness.CompleteRequest) (har
 	}
 	var items []harness.Completion
 	if req.Kind == harness.CompleteFile {
-		items = completeFiles(ctx, s.env.Cwd, req.Query, limit)
+		dir := s.filesDir(ctx)
+		items = completeFiles(ctx, dir, req.Query, limit)
+		// Additional workspace folders follow the session's own, each
+		// file named by its absolute path so it cannot be mistaken for
+		// one of the same name elsewhere.
+		if e.cfg.ExtraRoots != nil {
+			roots, incomplete := e.cfg.ExtraRoots(ctx, s.id)
+			// Folders that could not all be listed are not passed over in
+			// silence: a file missing from the list would look like a
+			// file that does not exist. The completion is refused, with a
+			// fixed message that names no path.
+			if incomplete {
+				return harness.CompleteResult{}, &harness.FallbackError{Reason: "roots", Detail: rootsIncompleteText}
+			}
+			lists := [][]harness.Completion{items}
+			for _, root := range roots {
+				if rel, err := filepath.Rel(dir, root); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+					continue // inside the session's folder: already listed
+				}
+				found := completeFiles(ctx, root, req.Query, limit)
+				for i, it := range found {
+					rel := strings.TrimSuffix(strings.TrimPrefix(it.Insert, "@"), " ")
+					abs := filepath.Join(root, rel)
+					found[i].Insert, found[i].Detail = "@"+abs+" ", filepath.Dir(abs)
+				}
+				lists = append(lists, found)
+			}
+			items = shareLimit(lists, limit)
+		}
 	} else {
 		items = e.completeCommands(ctx, s, req.Query, limit)
 	}
 	if items == nil {
 		items = []harness.Completion{}
 	}
-	return harness.CompleteResult{Items: items}, nil
+	if req.Kind == harness.CompleteFile {
+		items = mentionForm(items, s.ad.Mentions)
+	}
+	res := harness.CompleteResult{Items: items}
+	if req.Kind != harness.CompleteFile {
+		s.mu.Lock()
+		res.Pending = s.catalogPending
+		s.mu.Unlock()
+	}
+	return res, nil
 }
 
 // maxWalk bounds how many entries a file completion visits.
@@ -253,66 +381,6 @@ var junkFiles = map[string]bool{".DS_Store": true, "Thumbs.db": true, "desktop.i
 // isJunk reports whether a file is OS litter: a known name or an AppleDouble "._" file.
 func isJunk(name string) bool {
 	return junkFiles[name] || strings.HasPrefix(name, "._")
-}
-
-// completeFiles lists files under cwd whose path contains the query,
-// files whose name matches first.
-func completeFiles(ctx context.Context, cwd, query string, limit int) []harness.Completion {
-	q := strings.ToLower(query)
-	type hit struct {
-		rel  string
-		rank int
-	}
-	var hits []hit
-	visited := 0
-	_ = filepath.WalkDir(cwd, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || ctx.Err() != nil {
-			return filepath.SkipDir
-		}
-		visited++
-		if visited > maxWalk {
-			return filepath.SkipAll
-		}
-		if d.IsDir() {
-			if p != cwd && (skipDirs[d.Name()] || strings.HasPrefix(d.Name(), ".")) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.Type()&os.ModeSymlink != 0 || isJunk(d.Name()) {
-			return nil
-		}
-		rel, _ := filepath.Rel(cwd, p)
-		lr := strings.ToLower(rel)
-		switch {
-		case strings.Contains(strings.ToLower(d.Name()), q):
-			hits = append(hits, hit{rel, 0})
-		case strings.Contains(lr, q):
-			hits = append(hits, hit{rel, 1})
-		}
-		return nil
-	})
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].rank != hits[j].rank {
-			return hits[i].rank < hits[j].rank
-		}
-		if len(hits[i].rel) != len(hits[j].rel) {
-			return len(hits[i].rel) < len(hits[j].rel)
-		}
-		return hits[i].rel < hits[j].rel
-	})
-	var out []harness.Completion
-	for _, h := range hits {
-		if len(out) >= limit {
-			break
-		}
-		dir := filepath.Dir(h.rel)
-		if dir == "." {
-			dir = ""
-		}
-		out = append(out, harness.Completion{Insert: "@" + h.rel + " ", Title: filepath.Base(h.rel), Detail: dir})
-	}
-	return out
 }
 
 // sendNotYet reports whether the send action names the harness's session

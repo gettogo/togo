@@ -27,23 +27,33 @@ const MapperEvents2 = "opencode2.events"
 type Events2 struct {
 	env harness.Env
 
-	mu       sync.Mutex
-	state    map[string]string
-	main     string
-	children map[string]*session // child session id -> its agent
-	texts    map[string]*part    // streamed text and reasoning by item id
-	tools    map[string]harness.Item
-	inputs   map[string]json.RawMessage // tool input by call id
-	turns    map[string]*turn
-	turnOf   map[string]string // session -> its running turn
-	inbox    map[string]string // undelivered user prompt per session
-	open     map[string]harness.Item
+	mu          sync.Mutex
+	state       map[string]string
+	main        string
+	lost        bool                // the stream came back: the next sign of a running turn says so
+	retries     map[string]int      // turn id -> attempts of its retry notice
+	children    map[string]*session // child session id -> its agent
+	texts       map[string]*part    // streamed text and reasoning by item id
+	tools       map[string]harness.Item
+	waits       map[string]string          // need id -> id of the tool waiting on it
+	inputs      map[string]json.RawMessage // tool input by call id
+	turns       map[string]*turn
+	turnOf      map[string]string // session -> its running turn
+	inbox       map[string]string // undelivered user prompt per session
+	open        map[string]harness.Item
+	prompts     []prompt2       // the main session's prompts, in order (revert2.go)
+	undo        *undo2          // the staged undo the chat shows a notice for
+	redone      string          // id of the last revert.cleared event
+	shells      map[string]bool // background shells shown as rows (shells2.go)
+	shellsEnded []string        // shells that ended with no row, newest last
+	pastTurn    string          // turn of the past message being mapped (history2.go)
+	loc         located         // the followed conversation's folder (needs2.go)
 }
 
 // NewEvents2 returns a 2.x mapper for one session.
 func NewEvents2(env harness.Env) *Events2 {
 	e := &Events2{env: env, state: map[string]string{"working": "false", "idle": "true"},
-		children: map[string]*session{}, texts: map[string]*part{}, tools: map[string]harness.Item{}, inputs: map[string]json.RawMessage{},
+		children: map[string]*session{}, texts: map[string]*part{}, tools: map[string]harness.Item{}, waits: map[string]string{}, retries: map[string]int{}, inputs: map[string]json.RawMessage{},
 		turns: map[string]*turn{}, turnOf: map[string]string{}, inbox: map[string]string{}, open: map[string]harness.Item{}}
 	if id := sessionFlag(env.Argv); id != "" {
 		e.setMain(id)
@@ -54,7 +64,9 @@ func NewEvents2(env harness.Env) *Events2 {
 func (e *Events2) Name() string { return MapperEvents2 }
 
 // State reports harness_session, model, model_ref, provider, model_id,
-// mode (the agent), turn, working and idle.
+// mode (the agent), turn, working and idle, commands_rev and agents_rev,
+// which change when the server says its commands or agents did, and
+// conversation_cwd, the folder the conversation was moved to, if it was.
 func (e *Events2) State() map[string]string {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -84,6 +96,11 @@ type event2 struct {
 	Created int64           `json:"created"`
 	Type    string          `json:"type"`
 	Data    json.RawMessage `json:"data"`
+	// Conversation is the session a loaded past message belongs to
+	// (history2.go).
+	Conversation string `json:"conversation"`
+	// Location is the folder the event happened in (needs2.go reads it).
+	Location *location2 `json:"location"`
 }
 
 // ev2 is the union of the data fields the mapper reads.
@@ -115,11 +132,19 @@ type ev2 struct {
 	Form        *form2          `json:"form"`
 	Answer      map[string]any  `json:"answer"`
 	ContextUsed *int            `json:"contextUsed"`
+	Location    *location2      `json:"location"`
+	Revert      *revert2        `json:"revert"`
+	Info        *shell2         `json:"info"`
+}
+
+type location2 struct {
+	Directory string `json:"directory"`
 }
 
 type modelRef2 struct {
 	ID         string `json:"id"`
 	ProviderID string `json:"providerID"`
+	Variant    string `json:"variant"`
 }
 
 type content2 struct {
@@ -165,10 +190,22 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	defer e.locate(d.SessionID, ev.Location)
 	switch ev.Type {
+	case historyMessage:
+		return e.pastMessage(ev.Conversation, ev.Data)
 	case httpsrc.Reconnected:
 		e.lostTrack()
-		return e.dropOpen()
+		// A reload while the stream was down sent its events to nobody.
+		e.state["commands_rev"], e.state["agents_rev"] = lostRev(at), lostRev(at)
+		items, ops := e.dropOpen()
+		return items, append(ops, e.dropShells()...)
+	case "command.updated":
+		// The server read its commands again (a config reload, a new file):
+		// the cached commands source is renewed by this value (cache_rev).
+		e.state["commands_rev"] = ev.ID
+	case "agent.updated":
+		e.state["agents_rev"] = ev.ID
 	case "session.created":
 		return e.created(d, at)
 	case "session.inbox.enqueued":
@@ -178,10 +215,10 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "session.execution.succeeded":
 		return e.ended(d.SessionID, harness.StateOK, at)
 	case "session.execution.failed":
+		t := e.turnFor(d.SessionID) // before ended forgets a child's turn
 		items, ops := e.ended(d.SessionID, harness.StateFailed, at)
 		if d.Error != nil && e.follows(d.SessionID) {
 			// step.failed brought the same error: one notice per turn.
-			t := e.turnFor(d.SessionID)
 			items = append(items, e.noticeBody(failedID(t, ev.ID), t, d.SessionID, at, errorBody(d.Error.Type, d.Error.Status, d.Error.Message)))
 		}
 		return items, ops
@@ -193,6 +230,7 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		items, ops := e.ended(d.SessionID, harness.StateInterrupted, at)
 		return append(items, e.notice("interrupted-"+ev.ID, t, d.SessionID, at, "info", harness.NoticeInterrupted, "Interrupted")), ops
 	case "session.step.started":
+		e.running(d.SessionID)
 		if d.SessionID == e.main {
 			e.setAgentModel(d.Agent, d.Model)
 		}
@@ -200,14 +238,24 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if d.SessionID == e.main || e.main == "" {
 			e.setAgentModel(d.Agent, d.Model)
 		}
+	case "session.moved":
+		// The conversation works in another folder from here on: the @
+		// menu lists that one (the engine confines it first).
+		if d.SessionID == e.main && d.Location != nil {
+			e.state["conversation_cwd"] = d.Location.Directory
+		}
 	case "session.text.started", "session.reasoning.started":
 		e.textStarted(ev.Type, d, at)
 	case "session.text.delta", "session.reasoning.delta":
+		e.running(d.SessionID)
 		return e.textDelta(ev.Type, d, at)
 	case "session.text.ended", "session.reasoning.ended":
 		return e.textEnded(ev.Type, d, at)
 	case "session.tool.input.started", "session.tool.called", "session.tool.progress",
 		"session.tool.success", "session.tool.failed":
+		if ev.Type != "session.tool.success" && ev.Type != "session.tool.failed" {
+			e.running(d.SessionID)
+		}
 		return e.tool(ev.Type, d, at)
 	case "session.step.failed":
 		if d.Error != nil && d.Error.Type != "aborted" && e.follows(d.SessionID) {
@@ -226,6 +274,8 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			id := "retry-" + t
 			if t == "" {
 				id = "retry-" + ev.ID
+			} else {
+				e.retries[t] = max(d.Attempt, 1)
 			}
 			return []harness.Item{e.noticeBody(id, t, d.SessionID, at, retryBody(name, status, msg, d.Attempt))}, nil
 		}
@@ -233,12 +283,18 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if e.follows(d.SessionID) {
 			return []harness.Item{e.notice("compacted-"+ev.ID, e.turnFor(d.SessionID), d.SessionID, at, "info", harness.NoticeCompacted, "Context compacted")}, nil
 		}
+	case "session.revert.staged", "session.revert.cleared", "session.revert.committed":
+		return e.reverted(ev.Type, ev.ID, d, at)
+	case "shell.created":
+		return e.shellCreated(d)
+	case "shell.exited", "shell.deleted":
+		return e.shellEnded(d.ID)
 	case "permission.asked":
 		return e.permission2(d, at)
 	case "permission.replied":
 		return e.permissionReplied(d)
 	case "form.created":
-		return e.form(d, at)
+		return e.form(d, ev.Location, at)
 	case "form.replied", "form.cancelled":
 		return e.formDone(ev.Type, d)
 	}
@@ -246,8 +302,21 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 }
 
 func (e *Events2) setMain(id string) {
+	if id != e.main {
+		// The folder a move named was the last conversation's.
+		delete(e.state, "conversation_cwd")
+		if e.main != "" {
+			// What the last conversation was doing says nothing about this one.
+			e.state["working"], e.state["idle"] = "false", "true"
+			delete(e.state, "turn")
+			e.lost = false
+		}
+		e.forgetUndo()
+		e.forgetShells()
+	}
 	e.main = id
 	e.state["harness_session"] = id
+	e.state["conversation"] = id
 }
 
 func (e *Events2) setAgentModel(agent string, m *modelRef2) {
@@ -258,6 +327,9 @@ func (e *Events2) setAgentModel(agent string, m *modelRef2) {
 		e.state["model"] = m.ProviderID + "/" + m.ID
 		e.state["provider"], e.state["model_id"] = m.ProviderID, m.ID
 		e.state["model_ref"] = modelRef(m.ProviderID, m.ID)
+		// The variant picker marks its current row by this: the variant's
+		// id, or "default" for the model without one.
+		e.state["model_variant"] = firstNonEmptyString(m.Variant, "default")
 	}
 }
 
@@ -312,7 +384,7 @@ func (e *Events2) enqueued(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 		e.inbox[d.SessionID] = turn
 	}
 	x := textItem(d.InboxID, turn, e.parent(d.SessionID), harness.KindUser, at, d.Item.Payload.Text, false)
-	return []harness.Item{x}, nil
+	return append(e.prompted(d, at), x), nil
 }
 
 // started opens a turn, named after the prompt that started it (an item
@@ -357,10 +429,16 @@ func (e *Events2) ended(sess, state string, at time.Time) ([]harness.Item, []har
 	if sess == e.main {
 		e.state["working"], e.state["idle"] = "false", "true"
 	}
-	var items []harness.Item
+	items := e.flushTexts(sess)
 	var ops []harness.Op
 	if id := e.turnOf[sess]; id != "" {
 		delete(e.turnOf, sess)
+		if n := e.retries[id]; n > 0 {
+			delete(e.retries, id)
+			if state == harness.StateOK {
+				items = append(items, recoveredNotice("retry-"+id, id, e.parent(sess), at, n))
+			}
+		}
 		if tu := e.turns[id]; tu != nil {
 			tu.state = state
 			items = append(items, e.turnItem(id, tu, ptr(at)))
@@ -424,10 +502,15 @@ func (e *Events2) dropOpen() ([]harness.Item, []harness.Op) {
 		x := closeQuestion(e.open[id], nil)
 		delete(e.open, id)
 		items = append(items, x)
+		items = append(items, e.resume(id)...)
 		ops = append(ops, harness.Op{Op: harness.OpRemove, Section: harness.SectionNeeds, ID: id})
 	}
 	return items, ops
 }
+
+// lostRev is a commands_rev or agents_rev for a stream that came back: no
+// event names it, so the time does. It differs from every event id.
+func lostRev(at time.Time) string { return "reconnected-" + at.Format(time.RFC3339Nano) }
 
 // lostTrack forgets whether the main session's turn runs: the stream that
 // came back may have missed its end (session.idle, an execution's end),
@@ -437,4 +520,24 @@ func (e *Events2) lostTrack() {
 	if e.state["working"] == "true" {
 		e.state["working"], e.state["idle"] = "false", "true"
 	}
+	e.lost = true
+}
+
+// running notes a step, text or tool update of a turn that is still going:
+// after a reconnect it is the first sign the turn kept running while the
+// stream was down, so the session is working again.
+func (e *Events2) running(sess string) {
+	if e.lost && sess == e.main {
+		e.state["working"], e.state["idle"] = "true", "false"
+		e.lost = false
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

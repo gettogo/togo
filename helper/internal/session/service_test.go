@@ -380,6 +380,27 @@ func TestTmuxTooOld(t *testing.T) {
 	}
 }
 
+// A tmux upgraded while the helper runs is noticed on the next call: the
+// refusal is not kept for the life of the daemon.
+func TestTmuxUpgradedWhileRunning(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "tmux")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 'tmux 2.9'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	s := newService(t)
+	s.Tmux = &tmux.Client{Bin: bin, Socket: []string{"-L", "unused"}}
+	var tue *session.TmuxUnavailableError
+	if _, err := s.List(context.Background()); !errors.As(err, &tue) {
+		t.Fatalf("List error = %v, want *TmuxUnavailableError", err)
+	}
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 'tmux 3.4'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.List(context.Background()); errors.As(err, &tue) {
+		t.Fatalf("List still refuses after the upgrade: %v", err)
+	}
+}
+
 func TestTmuxMissing(t *testing.T) {
 	s := newService(t)
 	s.Tmux = &tmux.Client{Bin: "/nonexistent/tmux"}

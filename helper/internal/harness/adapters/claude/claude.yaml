@@ -31,7 +31,9 @@ feeds:
     mapper: claude.transcript
     stability: internal
   subagents:        # one file per subagent next to the transcript
-    jsonl: { glob: '{{.state.transcript_dir}}/subagents/agent-*.jsonl', follow: true }
+    # whole: the folder is this conversation's own; after a helper restart every subagent's
+    # file is read again, so one that finished earlier is not left running.
+    jsonl: { glob: '{{.state.transcript_dir}}/subagents/agent-*.jsonl', follow: true, whole: true }
     mapper: claude.transcript
     stability: internal
   status:

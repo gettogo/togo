@@ -25,6 +25,7 @@ type session struct {
 	mu        sync.Mutex
 	state     map[string]string
 	dirAt     time.Time
+	readAt    time.Time         // when the record being mapped was read
 	crumbAt   time.Time         // when the terminal record was last read
 	crumb     string            // the session file omp's terminal record names
 	parents   map[string]string // entry id -> agent item id ("" for the main session)
@@ -32,8 +33,10 @@ type session struct {
 	turn      *turn
 	tools     map[string]*harness.Item
 	asks      map[string]*harness.Item // ask call id -> its open question item
+	jobs      map[string]*harness.Item // async jobs by omp job id (jobs.go)
 	taskCalls map[string][]string      // task call id -> agent item ids
 	pending   []string                 // agent item ids still waiting for their file
+	detached  map[string]bool          // agent item ids of background task calls
 	agents    map[string]*harness.Item
 	headers   map[string]string // subagent header id -> agent item id
 	files     map[string]bool
@@ -57,8 +60,8 @@ type turn struct {
 func newSession(env harness.Env) *session {
 	return &session{env: env, cwd: env.Cwd, state: map[string]string{}, parents: map[string]string{},
 		tools: map[string]*harness.Item{}, asks: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
-		headers: map[string]string{}, files: map[string]bool{},
-		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}}
+		headers: map[string]string{}, files: map[string]bool{}, detached: map[string]bool{},
+		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}, jobs: map[string]*harness.Item{}}
 }
 
 func (s *session) Name() string { return MapperSession }
@@ -114,16 +117,39 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	at := stamp(e["timestamp"], rec.At)
+	s.readAt = rec.At
+	main := rec.Source == feedSession
+	if str(e, "type") == "session" {
+		return s.header(e, at, main)
+	}
+	// Every entry is placed, also the ones not shown: a note omp adds (a
+	// background result, a reminder) is the parent of what the agent says
+	// next.
+	parent := s.parentOf(e, main)
 	switch str(e, "type") {
-	case "title":
-		if s.cur == "" && str(e, "title") != "" {
+	case "title", "title_change":
+		// The conversation's own title, also when omp changes it later. A
+		// subagent's file opens with a title too, read before its header
+		// says whose it is.
+		if rec.Source != feedSubagents && parent == "" && str(e, "title") != "" {
 			s.state["title"] = str(e, "title")
 		}
 		return nil, nil
-	case "session":
-		return s.header(e, at)
+	case "custom_message":
+		if str(e, "customType") == "async-result" && rec.Source == feedSession {
+			return s.jobsSettled(e, at)
+		}
+		return nil, nil
+	case "reset_boundary":
+		// /clear keeps the conversation and its file but empties the
+		// agent's context: say so where it happened.
+		var out []harness.Item
+		if s.turn != nil && !s.turn.ended {
+			out = append(out, s.endTurn(harness.StateOK, at))
+		}
+		return append(out, harness.Item{ID: "reset-" + str(e, "id"), Kind: harness.KindNotice, At: at,
+			Notice: &harness.NoticeBody{Level: "info", Code: harness.NoticeCompacted, Text: "Context cleared. The agent no longer sees the messages above."}}), nil
 	}
-	parent := s.parentOf(e)
 	if parent == dropped {
 		return nil, nil
 	}
@@ -152,19 +178,47 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		if parent == "" {
 			return s.compaction(e, at)
 		}
+	case "custom":
+		// /todo in the terminal edits the list by hand and saves the whole
+		// list (seen on 18.20: "/todo done" wrote user_todo_edit and the
+		// plan stayed 0/2). It replaces the plan like a todo result does.
+		if main && str(e, "customType") == "session_exit" {
+			return s.exited(at)
+		}
+		if parent == "" && str(e, "customType") == "user_todo_edit" {
+			if phases, ok := phasesFromDetails(obj(e["data"])); ok {
+				s.todo = phases
+				return []harness.Item{planFrom("edit-"+str(e, "id"), s.turnID(), at, phases)}, []harness.Op{replacePlan(todoRowsFrom(phases))}
+			}
+		}
 	}
 	return nil, nil
 }
 
-// header starts a session file: the main session's, or a subagent's when
-// it names a parent session.
-func (s *session) header(e map[string]any, at time.Time) ([]harness.Item, []harness.Op) {
+// feedSession is the feed of the conversation the terminal shows.
+const feedSession = "session"
+
+// feedSubagents is the feed of the files omp's subagents write.
+const feedSubagents = "subagents"
+
+// header starts a session file: the main session's, or a subagent's. A file
+// the session feed reads is the terminal's own conversation whatever its
+// header says of a parent: /fork writes a new main conversation that names
+// the one it came from (seen on 18.20). A file of the subagents feed, or of
+// a mapper fed without feed names, is a subagent's when it names a parent.
+func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.Item, []harness.Op) {
 	id := str(e, "id")
 	parent := e["parentSession"]
-	if parent == nil || parent == "" {
+	if main || parent == nil || parent == "" {
+		if main && s.state["harness_session"] != "" {
+			s.restart()
+		}
 		s.cur = ""
 		if id != "" {
 			s.state["harness_session"] = id
+			// Naming the conversation lets the engine start the chat over
+			// when the terminal moves to another one (/new, /resume, /fork).
+			s.state["conversation"] = id
 		}
 		if t := str(e, "title"); t != "" {
 			s.state["title"] = t
@@ -202,17 +256,27 @@ func (s *session) header(e map[string]any, at time.Time) ([]harness.Item, []harn
 	return []harness.Item{it}, []harness.Op{s.agentRow(&it)}
 }
 
-func (s *session) parentOf(e map[string]any) string {
-	if p := str(e, "parentId"); p != "" {
-		if o, ok := s.parents[p]; ok {
-			s.parents[str(e, "id")] = o
-			return o
+// restart forgets what the main conversation accumulated, for a header
+// read again: the file is replayed (a feed restart) or the terminal moved
+// to another one. Spend, step counts, the plan and running tools come from
+// the records that follow, not from the pass before. Agent rows, which are
+// keyed by task id, are kept: their files are read by another feed.
+func (s *session) restart() {
+	s.turn, s.cost, s.usage = nil, 0, nil
+	for id, it := range s.tools {
+		if it.Parent == "" {
+			delete(s.tools, id)
 		}
 	}
-	if id := str(e, "id"); id != "" {
-		s.parents[id] = s.cur
+	for id, it := range s.asks {
+		if it.Parent == "" {
+			delete(s.asks, id)
+		}
 	}
-	return s.cur
+	s.jobs = map[string]*harness.Item{}
+	s.todo, s.todoBefore, s.todoUnread = nil, map[string][]todoPhase{}, map[string]bool{}
+	s.files = map[string]bool{}
+	delete(s.state, "compactions")
 }
 
 func (s *session) turnID() string {
@@ -240,6 +304,8 @@ func (s *session) message(e map[string]any, parent string, at time.Time) ([]harn
 		return s.toolResult(m, at)
 	case "bashExecution":
 		return s.bash(id, parent, m, at)
+	case "developer":
+		return s.note(id, parent, at)
 	case "compactionSummary", "branchSummary":
 		return nil, nil
 	}
@@ -266,18 +332,18 @@ func (s *session) user(id, parent, txt string, at time.Time) ([]harness.Item, []
 	return append(out, it, s.turn.item), nil
 }
 
-func (s *session) endTurn(state string, at time.Time) harness.Item {
-	t := s.turn
-	t.ended = true
-	t.item.Turn.State = state
-	t.item.Turn.Ended = ptr(at)
-	return t.item
-}
-
 func (s *session) assistant(id, parent string, m map[string]any, at time.Time) ([]harness.Item, []harness.Op) {
 	var items []harness.Item
 	var ops []harness.Op
 	tid := ""
+	if parent == "" && s.turn != nil && s.turn.ended && s.turn.item.Turn.State == harness.StateFailed {
+		// omp retries a failed request on its own: the reply that follows
+		// the failed one, with no user entry between, continues the work.
+		s.turn = &turn{files: map[string]bool{}, item: harness.Item{ID: "turn-" + id, Kind: harness.KindTurn, At: at,
+			Turn: &harness.TurnBody{State: harness.StateRunning, Started: at}}}
+		s.turn.item.TurnID = s.turn.item.ID
+		items = append(items, s.turn.item)
+	}
 	if parent == "" {
 		tid = s.turnID()
 		if p, mod := str(m, "provider"), str(m, "model"); mod != "" {
@@ -309,7 +375,8 @@ func (s *session) assistant(id, parent string, m map[string]any, at time.Time) (
 			Assistant: &harness.TextBody{Text: clip(t)}})
 	}
 	if parent != "" {
-		return items, ops
+		si, so := s.agentStopped(parent, str(m, "stopReason"), at)
+		return append(items, si...), append(ops, so...)
 	}
 	if u := obj(m["usage"]); u != nil {
 		s.usage = u

@@ -43,11 +43,23 @@ func TestParserFields(t *testing.T) {
 	}
 }
 
-func TestParserEventCap(t *testing.T) {
+// An event over the cap is dropped alone: the ones around it are read, and
+// the connection is not.
+func TestParserSkipsOversizedEvent(t *testing.T) {
 	big := "data: " + strings.Repeat("x", MaxEvent/2) + "\n"
-	p := NewParser(strings.NewReader(big + big + big + "\n"))
-	if _, err := p.Next(); err == nil {
-		t.Fatal("oversized event accepted")
+	oneLine := "data: " + strings.Repeat("y", MaxEvent+100) + "\n\n"
+	stream := "data: {\"a\":1}\n\n" + big + big + big + "\n" + oneLine + "id: 9\r\ndata: {\"b\":2}\r\n\r\n"
+	p := NewParser(strings.NewReader(stream))
+	ev, err := p.Next()
+	if err != nil || ev.Data != `{"a":1}` {
+		t.Fatalf("before: %+v %v", ev, err)
+	}
+	ev, err = p.Next()
+	if err != nil || ev.Data != `{"b":2}` || p.LastID != "9" {
+		t.Fatalf("after: %+v %v last %q", ev, err, p.LastID)
+	}
+	if p.Skipped != 2 {
+		t.Fatalf("skipped %d events", p.Skipped)
 	}
 }
 

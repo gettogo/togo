@@ -66,7 +66,12 @@ func (s *Session) message(id string, raw json.RawMessage, at time.Time) ([]harne
 	}
 	switch m.Role {
 	case "user":
-		items := s.startTurn(id, at)
+		var items []harness.Item
+		if s.turn == nil {
+			// A message that arrives inside a running turn (sent while Pi
+			// works) joins it; the turn and its tools carry on.
+			items = s.startTurn(id, at)
+		}
 		return append(items, harness.Item{ID: id, TurnID: s.turnID(), Kind: harness.KindUser, At: at,
 			User: &harness.UserBody{Text: x.Clip(text(blocks(m.Content))), Source: "unknown"}}), nil
 	case "assistant":

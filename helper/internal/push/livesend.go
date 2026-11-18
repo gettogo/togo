@@ -29,6 +29,7 @@ type deviceLive struct {
 	pending  *LiveState // an update held back by liveCoalesce
 	alert    bool       // the next update carries an alert, standing in for a push
 	alerted  bool       // an update with an alert went out this pump
+	fails    int        // updates in a row that did not reach the relay
 }
 
 // observe feeds the tracker. Muted sessions, and every session while the
@@ -167,7 +168,7 @@ func (s *Sender) pumpLiveAlert(ctx context.Context, alert bool) (alerted map[str
 				s.sendLive(ctx, d, dl, liveUpdate, cur, nil, now)
 			}
 		}
-		if dl.pending != nil && dl.token != "" && now.Sub(dl.lastAt) >= holdFor(dl.last, *dl.pending) {
+		if dl.pending != nil && dl.token != "" && now.Sub(dl.lastAt) >= holdFor(dl.last, *dl.pending)+liveRetryWait(dl.fails) {
 			s.sendLive(ctx, d, dl, liveUpdate, *dl.pending, nil, now)
 		}
 		if dl.alerted {
@@ -262,7 +263,11 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 	if st.Status == wire.LevelNeedsYou && st.Since > 0 {
 		// The buttons go with the answer window: past it the helper refuses the answer,
 		// and an asleep Mac sends no update to say so.
-		stale = min(stale, st.Since+int64(approval.DefaultTTL/time.Second))
+		until := st.Since + int64(approval.DefaultTTL/time.Second)
+		if st.context.Expires > 0 {
+			until = st.context.Expires
+		}
+		stale = min(stale, until)
 	}
 	cs := mask(st, d)
 	cs.Ctx = s.sealContext(d, st.context)
@@ -283,12 +288,17 @@ func (s *Sender) sendLive(ctx context.Context, d Device, dl *deviceLive, ev stri
 		dl.alert, dl.alerted = false, err == nil
 	}
 	if err == nil {
+		dl.fails = 0
 		return nil
 	}
 	s.logf("push: device %s live activity %s: %v", idHash(d.DeviceID), ev, err)
 	var refused *errStatus
 	if ev != liveStart && errors.As(err, &refused) && refused.deadToken {
 		dl.token, dl.startDue, dl.started = "", true, nil
+		return err
+	}
+	if ev == liveUpdate {
+		s.retryLive(d, dl, st)
 	}
 	return err
 }

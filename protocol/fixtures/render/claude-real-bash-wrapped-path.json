@@ -15,6 +15,7 @@
       "text": "touch a.txt"
     },
     "host": "studio",
+    "expires": 1793874600,
     "options": [
       {
         "n": 1,

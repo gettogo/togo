@@ -34,11 +34,18 @@ type Adapter struct {
 	Mission      map[string]Mission `yaml:"mission"`
 	// Images says how the harness takes pictures in a prompt.
 	Images *Images `yaml:"images"`
+	// Mentions is how the harness reads a file named after "@" in its
+	// input, where that differs from the bare path.
+	Mentions *Mentions `yaml:"mentions"`
 	// Status declares what the mission Status block offers.
 	Status *Status `yaml:"status"`
 	// Input says how to read the harness's input line off the screen, so
 	// typed text lands in an empty line and its Enter is seen to submit.
 	Input *Input `yaml:"input"`
+	// Ready is a regexp of a screen row that shows once the terminal can
+	// take a prompt (its composer's footer). A prompt is typed only after
+	// it shows: one typed while the agent starts is lost.
+	Ready string `yaml:"ready"`
 }
 
 // Input describes the input line of a harness's TUI.
@@ -60,6 +67,17 @@ type Input struct {
 // InputKeys are the keys an Input block may name.
 var InputKeys = map[string]bool{"Escape": true, "C-u": true, "C-a": true, "C-k": true, "End": true, "BSpace": true, "Tab": true}
 
+// MenuKeys move the cursor in a list the harness has drawn in its terminal.
+// They are sent only by the reader of such lists, which checks the screen
+// after each one.
+var MenuKeys = map[string]bool{"Up": true, "Down": true}
+
+// MenuChord reports a control chord a list's own hint line may offer
+// (ctrl+a as "C-a"). Ctrl-C and Ctrl-D are never among them.
+func MenuChord(key string) bool {
+	return len(key) == 3 && key[:2] == "C-" && key[2] >= 'a' && key[2] <= 'z' && key != "C-c" && key != "C-d"
+}
+
 // Status declares the Status block's inline actions, such as compact on
 // the context meter. They replace a confirm-only screen.
 type Status struct {
@@ -70,6 +88,20 @@ type Status struct {
 // per_path pastes each path on its own, together pastes them at once.
 type Images struct {
 	Insert string `yaml:"insert"`
+}
+
+// Mentions is how a harness reads a file named after "@" in its input,
+// taken from the harness's own parser. A bare mention ends at whitespace or
+// at any of BareStops, and the harness strips BareLeading from its start and
+// BareTrailing from its end. Quotes are the delimiters it accepts around a
+// whole path, in order of preference; inside them there is no escape, and
+// spaces at either end are dropped. A path is written bare when the harness
+// would read it back exactly, else in the first quotes that can hold it.
+type Mentions struct {
+	Quotes       []string `yaml:"quotes"`
+	BareStops    string   `yaml:"bare_stops"`
+	BareLeading  string   `yaml:"bare_leading"`
+	BareTrailing string   `yaml:"bare_trailing"`
 }
 
 // Match picks the sessions an adapter serves.
@@ -138,14 +170,53 @@ type Feed struct {
 	// Mapper names the Go mapper, e.g. claude.transcript.
 	Mapper    string `yaml:"mapper"`
 	Stability string `yaml:"stability"`
+	// History is where an event feed's past can be read. A stream tells
+	// only what happens from now on, so without it a chat opened after a
+	// helper restart, or moved to another conversation, shows nothing
+	// earlier.
+	History *History `yaml:"history"`
+}
+
+// History reads a conversation's past over the harness's HTTP API.
+type History struct {
+	// Path is the request path; {{.conversation}} is the conversation's id.
+	Path string `yaml:"path"`
+	// Items is jq over the answer that lists the past, oldest first.
+	Items string `yaml:"items"`
+	// As, when set, is the record type each listed element is wrapped in
+	// for the feed's mapper: {"type": As, "conversation": id, "data": element}.
+	// Without it the elements are the mapper's records as they are.
+	As string `yaml:"as"`
+	// Page, when set, reads older pages after the first, until the past is
+	// all read or a bound is met.
+	Page *HistoryPage `yaml:"page"`
+}
+
+// HistoryPage is how a history route is asked for the page before the one
+// just read. The cursor is the harness's own, passed back as it came.
+type HistoryPage struct {
+	// Cursor is jq over an answer giving the cursor of the next older
+	// page; null or empty means there is none.
+	Cursor string `yaml:"cursor"`
+	// Param is the query parameter that carries the cursor.
+	Param string `yaml:"param"`
+	// Omit lists query parameters of Path that are left out of a request
+	// with a cursor (a route may refuse them together).
+	Omit []string `yaml:"omit"`
+	// MaxPages bounds the pages read, the first included; zero means 20.
+	MaxPages int `yaml:"max_pages"`
 }
 
 // Source is a fetch-on-demand input for screens. One kind block is set.
 type Source struct {
 	Kinds `yaml:",inline"`
 	// Select is a jq expression applied to the raw result.
-	Select    string        `yaml:"select"`
-	Cache     time.Duration `yaml:"cache"`
+	Select string        `yaml:"select"`
+	Cache  time.Duration `yaml:"cache"`
+	// CacheRev names a state value the mapper changes when the harness
+	// says this data changed (a config reload). A copy cached under
+	// another value is read again instead of served until Cache runs out.
+	CacheRev  string        `yaml:"cache_rev"`
 	Timeout   time.Duration `yaml:"timeout"`
 	Stability string        `yaml:"stability"`
 	// Redact lists jq paths removed before anything else reads the data,
@@ -208,6 +279,11 @@ type File struct {
 	// folder): a file one session follows is never joined by another, and
 	// a new file goes first to a session still without one.
 	Exclusive bool `yaml:"exclusive"`
+	// Whole marks a followed glob over a folder that belongs to the
+	// session alone (omp's folder of subagent files for one conversation):
+	// every file in it is read from its start, also the ones that stopped
+	// changing before the helper began to watch.
+	Whole bool `yaml:"whole"`
 }
 
 // SQLite reads a harness's own database read-only through the system
@@ -242,6 +318,10 @@ type RPC struct {
 	Notifications []string `yaml:"notifications"`
 	// Child, when set, is a one-shot process speaking the RPC on stdio.
 	Child []string `yaml:"child"`
+	// ChildCarry lists the options of the session's own command line the
+	// child is started with too, so it answers as the running agent would
+	// (the same extensions and skills switched on or off).
+	ChildCarry *Carry `yaml:"child_carry"`
 	// Framing is how a child frames its messages: jsonrpc (JSON-RPC 2.0,
 	// the default) or typed ({"type": method, "id": n} commands answered
 	// by {"type": "response", "id": n, "success", "data"}, as omp's rpc
@@ -279,6 +359,11 @@ type Screen struct {
 	Map     map[string]string `yaml:"map"`
 	Filters []Filter          `yaml:"filters"`
 	Search  bool              `yaml:"search"`
+	// SearchMode "remote" has the app send what is typed in the search
+	// field as the screen's query value "search", for a source that can
+	// search more than it lists (a harness's own session search). Without
+	// it the app filters the listed items itself.
+	SearchMode string `yaml:"search_mode"`
 	// OnSelect, Submit and Actions name entries in Actions.
 	OnSelect string   `yaml:"on_select"`
 	Submit   string   `yaml:"submit"`
@@ -318,8 +403,15 @@ type SettingField struct {
 	Kind    string   `yaml:"kind"`
 	Value   string   `yaml:"value"` // jq over the screen's source
 	Options []string `yaml:"options"`
-	Help    string   `yaml:"help"`
-	Action  string   `yaml:"action"`
+	// OptionsFrom is jq over the screen's source that lists the choices
+	// that apply now (the effort levels the active model takes). A list
+	// replaces Options; an empty list means there is nothing to choose and
+	// None says why; no answer (the source failed, the model is not
+	// listed) keeps Options.
+	OptionsFrom string `yaml:"options_from"`
+	None        string `yaml:"none"`
+	Help        string `yaml:"help"`
+	Action      string `yaml:"action"`
 }
 
 // Action declares how a change is applied. Exactly one route block is set,
@@ -400,6 +492,19 @@ type Relaunch struct {
 	// keeps what the session already runs with (its mode, effort, model)
 	// without a branch for every combination.
 	Keep [][]string `yaml:"keep"`
+	// Carry names the options of the session's current command line that a
+	// restart keeps: the profile, the tools and folders it was started
+	// with. Only what is listed is kept, so a restart never repeats a
+	// prompt, a resume id or a one-off flag of the old command line.
+	Carry *Carry `yaml:"carry"`
+}
+
+// Carry lists the command-line options a relaunch keeps from the running
+// command: Values take one argument ("--model x" or "--model=x"), Flags
+// take none. An option the new command line already sets is not repeated.
+type Carry struct {
+	Values []string `yaml:"values"`
+	Flags  []string `yaml:"flags"`
 }
 
 // Write sets a key in a harness config file (json or toml), atomically.
@@ -427,14 +532,22 @@ type Verify struct {
 	// a failure that says what the harness shows instead, never "sent":
 	// for changes the user relies on at once (the model of the next turn).
 	Required bool `yaml:"required"`
+	// Otherwise is what a required verify that failed tells the user, in
+	// place of the general "did not take the change" line, when the adapter
+	// knows the usual reason.
+	Otherwise string `yaml:"otherwise"`
 }
 
 // Modes declares the mode chip.
 type Modes struct {
 	Choices []ModeChoice `yaml:"choices"`
-	Current string       `yaml:"current"` // a source name
-	Select  string       `yaml:"select"`
-	Set     string       `yaml:"set"` // an action name
+	// Source lists the modes live, as {id, name, description}, for a
+	// harness whose modes the user can add to. Choices are then what is
+	// offered while the source cannot be read.
+	Source  string `yaml:"source"`
+	Current string `yaml:"current"` // a source name
+	Select  string `yaml:"select"`
+	Set     string `yaml:"set"` // an action name
 	// Screen reads the mode off the pane for harnesses that report it
 	// nowhere else: the last line that matches a rule names the mode;
 	// with none, ScreenDefault (when set).
@@ -460,6 +573,21 @@ type Commands struct {
 	Source string          `yaml:"source"`
 	Select string          `yaml:"select"`
 	Static []StaticCommand `yaml:"static"`
+	// Intents says what each of the program's commands does when run, by
+	// command name, read from the program's source for the versions the
+	// adapter supports. A key "source:<kind>" covers every command of that
+	// source (skill, file, prompt) that has no entry of its own. They are
+	// used only with the program's own command list (Config.LiveCommands).
+	Intents map[string]Intent `yaml:"intents"`
+}
+
+// Intent is what a command does when run: see harness.CommandNative.
+type Intent struct {
+	Opens         string `yaml:"opens"`
+	OpensWithArgs string `yaml:"with_args"`
+	Args          string `yaml:"args"`
+	Destructive   bool   `yaml:"destructive"`
+	Screen        string `yaml:"screen"`
 }
 
 // StaticCommand is a slash command the adapter lists itself.

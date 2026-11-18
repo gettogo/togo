@@ -39,6 +39,7 @@ func TestParseRejects(t *testing.T) {
 		"unknown key":       {"search: true", "serach: true", "field serach not found"},
 		"typed non-slash":   {"text: '/model {{.id}}'", "text: 'model {{.id}}'", "slash command"},
 		"arrow keys":        {"type: { text: '/model {{.id}}', submit: true, when_idle: true }", "keys: { keys: [Down, Enter] }", `"Down" is not allowed`},
+		"cli feed":          {"statusline:\n      fields: [model.id]", "cli: { argv: [x] }", "cannot stream"},
 		"two kinds":         {"select: '.models[]'", "file: { path: x }\n    select: '.models[]'", "has 2 kinds"},
 		"unknown action":    {"on_select: switch_model", "on_select: nope", `unknown action "nope"`},
 		"unknown source":    {"source: models", "source: nope", `unknown source "nope"`},

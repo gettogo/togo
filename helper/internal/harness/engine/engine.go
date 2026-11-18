@@ -10,11 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gettogo/togo/helper/internal/gitx"
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/redact"
 	"github.com/gettogo/togo/helper/internal/harness/source"
-	"github.com/gettogo/togo/helper/internal/ports"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -35,59 +33,6 @@ type Approvals interface {
 // verify each key press of a mode cycle.
 type ScreenReader interface {
 	ReadScreen(text string) map[string]string
-}
-
-// Config holds the engine's collaborators. Nil fields turn the features
-// that need them off.
-type Config struct {
-	Sessions  Sessions
-	Typist    harness.Typist
-	Marker    harness.Marker
-	Redactor  harness.Redactor
-	Log       *Log
-	Approvals Approvals
-	// Screen returns the pane's visible text.
-	Screen func(ctx context.Context, id string) (string, error)
-	// NeedsYou tells the phone a session needs the user at the terminal:
-	// the typing guard found a dialog it will not type into.
-	NeedsYou func(id, title, body string)
-	// Done tells the phone a turn finished, with the reply's text, for
-	// adapters with no hook to say so: without it the pane watcher's
-	// "Done" is all the phone gets, with no body. Nil sends nothing.
-	Done func(id, title, body string)
-	// Status is the hub's status for a session (working, idle, ...).
-	Status func(id string) string
-	// Exit returns how the session's agent exited, nil when it runs or it
-	// is not known. It names the exit status in the chat's ended notice.
-	Exit func(id string) *wire.SessionExit
-	// Relaunch restarts the agent with argv in its pane.
-	Relaunch func(ctx context.Context, id string, argv []string) error
-	Git      func(ctx context.Context, dir string) (gitx.Status, error)
-	Ports    func(ctx context.Context, id string) ([]ports.Listener, error)
-	// PanePIDs lists the pane processes of a session's tmux session; with
-	// it a source can tell which files the session's own agent holds.
-	PanePIDs func(ctx context.Context, id string) ([]int, error)
-	// PaneTTY is the terminal device of a session's pane (/dev/ttys011);
-	// adapters whose agent records its session per terminal read it as
-	// the "tty" variable.
-	PaneTTY func(ctx context.Context, id string) (string, error)
-	// LoginPath is the PATH programs are looked up in.
-	LoginPath func(ctx context.Context) string
-	// LoginEnv is the login shell's environment; nil keeps the helper's.
-	LoginEnv func(ctx context.Context) []string
-	// Home is the user's home folder; AdapterDir holds user overrides;
-	// TogoHome holds the sockets picked for harness endpoints.
-	Home       string
-	AdapterDir string
-	TogoHome   string
-	Now        func() time.Time
-	NewID      func() string
-	// OnSummary is told when a session's mission summary changed,
-	// at most once a second per session.
-	OnSummary func(id string)
-	Logf      func(format string, args ...any)
-	// Scale multiplies verify windows and idle waits; tests shrink it.
-	Scale float64
 }
 
 // Engine implements harness.Engine.
@@ -111,6 +56,46 @@ type Engine struct {
 	// act runs an action for a permission answered from a notification;
 	// nil means Act. Tests replace it.
 	act func(context.Context, harness.ActionRequest) (harness.ActionResult, error)
+
+	// menus holds, per session, the terminal list a phone is driving.
+	menuMu sync.Mutex
+	menus  map[string]*terminalMenu
+	// leftOpen names, per session, a list the phone let go of without
+	// closing it. It is still on the harness's screen and has no owner:
+	// nothing is typed until the screen no longer shows it.
+	leftOpen map[string]string
+	// commanding counts, per session, the phone's terminal actions under
+	// way: what such an action opens is the phone's own screen.
+	commanding map[string]int
+	// leftRows are that list's row names, for a list with no title.
+	leftRows map[string][]string
+	// entered holds, per session, how to recognise what was entered into
+	// prompts (never the entries themselves), to keep them out of what is
+	// read from the terminal afterwards.
+	entered map[string]*enteredText
+	// lateWatches holds, per session, the watch for a list that opens
+	// after a command was answered with nothing to show.
+	lateWatches map[string]*lateListWatch
+	// quietDone records, per session, when a command for the phone last
+	// ended with nothing to show (session id -> time.Time). A harness can
+	// still open a list after that (a slow fetch); until some time has
+	// passed, the screen is looked at before anything is typed.
+	quietDone sync.Map
+	// menuKeyAt records, per session, when a key was last pressed in a
+	// list for the phone (session id -> time.Time). The pane changes under
+	// those keys, and that is not the agent working.
+	menuKeyAt sync.Map
+	// composers holds, per session, how the input line looked with the
+	// cursor in it before the last command was typed; awaiting names the
+	// sessions whose input line has not been seen again since something
+	// the phone could not show opened.
+	composers map[string]composerMark
+	awaiting  map[string]composerMark
+	// catalogs holds, per running session, the commands read from the
+	// harness's own "/" list.
+	catalogs map[*sess]*terminalCatalog
+	// heldWhy is the last reason logged for a held queued prompt, by session.
+	heldWhy sync.Map
 }
 
 var _ harness.Engine = (*Engine)(nil)
@@ -201,16 +186,21 @@ func (e *Engine) track(info session.Session) *sess {
 
 // Forget stops serving a session and drops its state.
 func (e *Engine) Forget(id string) {
+	e.forgetEntered(id)
 	e.mu.Lock()
 	s, ok := e.sessions[id]
 	delete(e.sessions, id)
 	e.mu.Unlock()
 	if ok {
 		s.stop()
+		e.menuMu.Lock()
+		delete(e.catalogs, s)
+		e.menuMu.Unlock()
 	}
 	e.log.Forget(id)
 	e.cache.forget(id)
 	source.Hooks.Forget(id)
+	e.forgetConversation(id)
 	unlock := e.endpointOps.lock(id)
 	e.retireEndpoint(id)
 	e.dropRelaunch(id)
@@ -263,6 +253,8 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 		return harness.Nop{}.Describe(ctx, id)
 	}
 	s.waitReady(ctx)
+	modes := e.modeList(ctx, s)
+	surface := e.cfg.SurfaceAvailable != nil && e.cfg.SurfaceAvailable(ctx, id)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a := s.ad
@@ -275,6 +267,12 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 	}
 	if d.Capabilities == nil {
 		d.Capabilities = []string{}
+	}
+	if surface && s.gateOK {
+		d.Capabilities = append(d.Capabilities, harness.CapSurface)
+	}
+	if e.cfg.StyledScreen != nil && e.cfg.Typist != nil && s.gateOK && harness.Has(d.Capabilities, harness.CapCommands) {
+		d.Capabilities = append(d.Capabilities, harness.CapTerminalNative)
 	}
 	if e.cfg.Approvals != nil && s.gateOK && !harness.Has(d.Capabilities, harness.CapNeedsApprovals) {
 		// The screen detector serves every agent: the chat shows its
@@ -298,9 +296,7 @@ func (e *Engine) Describe(ctx context.Context, id string) (harness.Descriptor, e
 		d.Screens = append(d.Screens, harness.ScreenRef{ID: name, Primitive: sc.Primitive, Title: sc.Title, Section: sc.Section})
 	}
 	if m := a.Modes; m != nil && !s.degraded[harness.CapMode] {
-		for _, c := range m.Choices {
-			d.Modes = append(d.Modes, harness.Choice{ID: c.ID, Label: c.Label, Detail: c.Detail})
-		}
+		d.Modes = modes
 		d.Mode = s.currentModeLocked()
 	}
 	return d, nil
@@ -491,4 +487,10 @@ func itoa(n int64) string {
 		n /= 10
 	}
 	return string(b)
+}
+
+// mapperFor builds a fresh mapper of the registered name for a session.
+func (e *Engine) mapperFor(name string, env harness.Env) harness.Mapper {
+	f, _ := harness.LookupMapper(name)
+	return f(env)
 }

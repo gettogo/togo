@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/mailbox"
 	"github.com/gettogo/togo/helper/internal/wire"
 	"time"
@@ -36,9 +37,27 @@ func (c *Components) runMailbox(ctx context.Context) {
 		Register:     c.Push.Devices().UpdateTokens,
 		ContextReady: c.Push.Devices().ContextReady,
 		// A dismissed or ended activity no longer stands in for a push.
-		EndLive:    c.Push.Devices().EndLiveActivity,
-		Logf:       c.logf,
-		Will:       c.Will,
+		EndLive: c.Push.Devices().EndLiveActivity,
+		Logf:    c.logf,
+		Will:    c.Will,
+		Answered: func(ctx context.Context, deviceID, requestID string, err error) {
+			if c.Sender == nil {
+				return
+			}
+			// Off the mailbox's read loop: the next answer must not wait
+			// for a push to go out.
+			result := approval.Outcome(err)
+			go func() {
+				rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+				defer cancel()
+				c.Sender.AnswerReceipt(rctx, deviceID, requestID, result)
+			}()
+		},
+		Returned: func() {
+			if c.Sender != nil {
+				c.Sender.ResendLive()
+			}
+		},
 		StopMarker: c.stopMarker,
 	})
 	if err != nil {

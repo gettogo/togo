@@ -1,6 +1,8 @@
 package claude
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -37,5 +39,22 @@ func TestTranscriptReportsContextWithoutStatusLine(t *testing.T) {
 func TestManualModeLineReadsAsDefault(t *testing.T) {
 	if got := ReadMode("❯ \n───\n  ⏸ manual mode on\n")["mode"]; got != "default" {
 		t.Fatalf("mode %q", got)
+	}
+}
+
+// On a [1m] session the status line knows the window and the transcript does
+// not: its 200k estimate (75 %) must not replace the status line's 15 %.
+func TestTranscriptLeavesContextToTheStatusLine(t *testing.T) {
+	e := harness.Env{SessionID: "s_ctx_1m", Cwd: "/HOME/proj"}
+	b, _ := os.ReadFile(filepath.Join("testdata", "statusline.json"))
+	if _, ops := newStatusline(e).Map(harness.Record{Data: b}); len(ops) != 1 || ops[0].Status.ContextPercent == nil {
+		t.Fatalf("status line ops %+v", ops)
+	}
+	m := newTranscript(e)
+	_, ops := m.Map(rec(`{"type":"assistant","uuid":"a1","timestamp":"2026-11-07T10:00:00Z","message":{"id":"m1","role":"assistant","model":"claude-opus-4-8","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":10,"cache_read_input_tokens":149990}}}`))
+	for _, op := range ops {
+		if op.Op == harness.OpStatus {
+			t.Fatalf("transcript reported context beside the status line: %+v", op.Status)
+		}
 	}
 }

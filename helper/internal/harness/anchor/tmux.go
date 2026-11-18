@@ -110,3 +110,32 @@ func (p TmuxPane) Screen(ctx context.Context, id string) (string, error) {
 	}
 	return p.run(ctx, "capture-pane", "-p", "-t", t)
 }
+
+// Cursor reports where the pane's cursor is (column and row, from 0) and
+// whether the program shows it. A program puts its cursor where typing
+// goes: in its input line, or in a dialog's field while one is open.
+func (p TmuxPane) Cursor(ctx context.Context, id string) (x, y int, visible bool, err error) {
+	t, err := target(id)
+	if err != nil {
+		return 0, 0, false, err
+	}
+	out, err := p.run(ctx, "display-message", "-p", "-t", t, "#{cursor_x} #{cursor_y} #{cursor_flag}")
+	if err != nil {
+		return 0, 0, false, err
+	}
+	var flag int
+	if _, err := fmt.Sscanf(strings.TrimSpace(out), "%d %d %d", &x, &y, &flag); err != nil {
+		return 0, 0, false, err
+	}
+	return x, y, flag == 1, nil
+}
+
+// StyledScreen captures the visible screen as text with its colour
+// sequences, for reading which row of a list is highlighted.
+func (p TmuxPane) StyledScreen(ctx context.Context, id string) (string, error) {
+	t, err := target(id)
+	if err != nil {
+		return "", err
+	}
+	return p.run(ctx, "capture-pane", "-e", "-p", "-t", t)
+}

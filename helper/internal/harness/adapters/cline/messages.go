@@ -2,6 +2,7 @@ package cline
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ type messages struct {
 	state    map[string]string
 	session  string
 	updated  string
-	sent     map[string]string // item id -> its JSON as last returned
+	sent     map[string]string // item id -> a hash of its JSON as last returned
 	idleAt   map[string]time.Time
 	lastTurn string
 	lastOpen bool
@@ -276,10 +277,29 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		}
 		m.lock(d.SessionID)
 		m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
+		m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+	} else if d.UpdatedAt != "" && d.UpdatedAt == m.updated && len(d.Messages) == len(m.lastMsgs) {
+		// The same document again (both feeds read each rewrite).
+		return nil, nil
 	}
 	m.updated = d.UpdatedAt
 	m.lastMsgs = d.Messages
 	return m.changed(m.render(d.Messages)), nil
+}
+
+// Relaunched follows the session a resume relaunch (`--id <id>`) opens:
+// the chat moves to it at once, not when Cline next rewrites its file.
+func (m *messages) Relaunched(argv []string, _ time.Time) []harness.Op {
+	id := argvID(argv)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id == "" || id == m.session {
+		return nil
+	}
+	m.lock(id)
+	m.updated, m.lastMsgs, m.lastTurn, m.lastOpen, m.lastAsking = "", nil, "", false, false
+	m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+	return nil
 }
 
 // changed keeps the items whose content differs from what was returned.
@@ -287,10 +307,12 @@ func (m *messages) changed(items []harness.Item) []harness.Item {
 	var out []harness.Item
 	for _, it := range items {
 		b, _ := json.Marshal(it)
-		if m.sent[it.ID] == string(b) {
+		sum := sha256.Sum256(b)
+		h := string(sum[:16])
+		if m.sent[it.ID] == h {
 			continue
 		}
-		m.sent[it.ID] = string(b)
+		m.sent[it.ID] = h
 		out = append(out, it)
 	}
 	return out
@@ -314,6 +336,7 @@ func (m *messages) render(msgs []message) []harness.Item {
 	open := false
 	tools := map[string]int{} // call id -> index in items
 	asks := map[string]int{}  // ask_question call id -> index in items
+	var latest time.Time      // the newest message of the open turn
 	closeTurn := func(state string, at time.Time) {
 		if !open {
 			return
@@ -347,6 +370,9 @@ func (m *messages) render(msgs []message) []harness.Item {
 			id = "cline-" + strconv.Itoa(n)
 		}
 		bs := blocks(msg.Content)
+		if open && at.After(latest) {
+			latest = at
+		}
 		switch msg.Role {
 		case "user":
 			var text []string
@@ -390,6 +416,7 @@ func (m *messages) render(msgs []message) []harness.Item {
 				continue
 			}
 			closeTurn(harness.StateOK, at)
+			latest = at
 			tid := id + ".turn"
 			turn = harness.Item{ID: tid, TurnID: tid, Kind: harness.KindTurn, At: at,
 				Turn: &harness.TurnBody{State: harness.StateRunning, Started: at}}
@@ -458,7 +485,14 @@ func (m *messages) render(msgs []message) []harness.Item {
 	}
 	asking := len(asks) > 0
 	if open {
-		if at, ok := m.idleAt[turn.ID]; ok && !asking {
+		at, idle := m.idleAt[turn.ID]
+		if idle && latest.After(at) {
+			// The turn went on after the pane was quiet (a permission
+			// prompt, a long tool): the idle close no longer holds.
+			delete(m.idleAt, turn.ID)
+			idle = false
+		}
+		if idle && !asking {
 			closeTurn(harness.StateOK, at)
 		} else {
 			items = append(items, turn)

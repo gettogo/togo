@@ -1,0 +1,65 @@
+{
+ "data": [
+  {
+   "id": "big-pickle",
+   "providerID": "opencode",
+   "type": "chat",
+   "name": "Big Pickle",
+   "variants": [],
+   "enabled": true
+  },
+  {
+   "id": "iceman-free",
+   "providerID": "opencode",
+   "type": "chat",
+   "name": "Iceman Free",
+   "variants": [],
+   "enabled": true
+  },
+  {
+   "id": "inkling-2-small-free",
+   "providerID": "opencode",
+   "type": "chat",
+   "name": "Inkling 2 Small Free",
+   "variants": [
+    {
+     "id": "none",
+     "settings": {
+      "reasoningEffort": "none"
+     }
+    },
+    {
+     "id": "minimal",
+     "settings": {
+      "reasoningEffort": "minimal"
+     }
+    },
+    {
+     "id": "low",
+     "settings": {
+      "reasoningEffort": "low"
+     }
+    },
+    {
+     "id": "medium",
+     "settings": {
+      "reasoningEffort": "medium"
+     }
+    },
+    {
+     "id": "high",
+     "settings": {
+      "reasoningEffort": "high"
+     }
+    },
+    {
+     "id": "max",
+     "settings": {
+      "reasoningEffort": "max"
+     }
+    }
+   ],
+   "enabled": true
+  }
+ ]
+}

@@ -297,3 +297,38 @@ func TestStatic(t *testing.T) {
 		t.Fatal(out, err)
 	}
 }
+
+// A glob over a folder that is the session's own (omp keeps one folder of
+// subagent files per conversation) is read whole: after a helper restart
+// every file in it is replayed, not only the newest. Read newest-only, the
+// agents whose files had stopped changing were never seen to finish.
+func TestJSONLWholeGlobReplaysEveryFile(t *testing.T) {
+	env, h := testEnv(t)
+	for i, name := range []string{"one.jsonl", "two.jsonl", "three.jsonl"} {
+		p := filepath.Join(h, name)
+		_ = os.WriteFile(p, []byte(`{"f":"`+name+`"}`+"\n"), 0o600)
+		at := time.Now().Add(-time.Duration(3-i) * time.Hour)
+		_ = os.Chtimes(p, at, at)
+	}
+	env.Vars["created"] = time.Now().UTC().Format(time.RFC3339) // all three are older than the session
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() {
+		_ = File{kind: "jsonl"}.Watch(ctx, sspec("t", map[string]any{"glob": "~/*.jsonl", "follow": true, "whole": true}), env, c.emit)
+	}()
+	got := c.wait(t, 3)
+	seen := map[string]bool{}
+	for _, g := range got {
+		seen[g] = true
+	}
+	for _, name := range []string{"one.jsonl", "two.jsonl", "three.jsonl"} {
+		if !seen[`{"f":"`+name+`"}`] {
+			t.Fatalf("%s was not replayed: %v", name, got)
+		}
+	}
+	_ = os.WriteFile(filepath.Join(h, "four.jsonl"), []byte(`{"f":"four"}`+"\n"), 0o600)
+	if got = c.wait(t, 4); got[3] != `{"f":"four"}` {
+		t.Fatalf("a new file = %v", got)
+	}
+}

@@ -18,6 +18,35 @@ func ValidVersion(v string) bool {
 // -1, 0 or 1. A string that is not a release version sorts before every
 // release version, and equal to another such string.
 func Compare(a, b string) int {
+	a, aheadA := describeBase(a)
+	b, aheadB := describeBase(b)
+	if c := compareBase(a, b); c != 0 {
+		return c
+	}
+	return compareInt(aheadA, aheadB)
+}
+
+// describeRE matches the suffix git describe adds to a build made after a
+// tag: -N-g<hash>, with an optional -dirty, or a bare -dirty.
+var describeRE = regexp.MustCompile(`^(.*?)(?:-([0-9]+)-g[0-9a-f]{7,40})?(-dirty)?$`)
+
+// describeBase strips a git describe suffix and returns the tag it names
+// and a rank for how far past that tag the build is. Such a build is newer
+// than its tag, not an older pre-release of it.
+func describeBase(v string) (string, int) {
+	m := describeRE.FindStringSubmatch(v)
+	if m == nil || (m[2] == "" && m[3] == "") || !ValidVersion(m[1]) {
+		return v, 0
+	}
+	ahead, _ := strconv.Atoi(m[2])
+	rank := ahead*2 + 1
+	if m[3] != "" {
+		rank++
+	}
+	return m[1], rank
+}
+
+func compareBase(a, b string) int {
 	va, vb := ValidVersion(a), ValidVersion(b)
 	switch {
 	case !va && !vb:

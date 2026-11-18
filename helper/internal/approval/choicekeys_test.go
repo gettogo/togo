@@ -289,3 +289,32 @@ func TestAnswerChoiceWaitsForAFreshDialogToTakeKeys(t *testing.T) {
 		t.Fatalf("closed %v, keys %v", sim.closed, sim.sent)
 	}
 }
+
+// followOnChoice shows another question as soon as the dialog closes.
+type followOnChoice struct{ *choiceSim }
+
+func (f followOnChoice) CapturePane(ctx context.Context, tgt string) (string, error) {
+	f.mu.Lock()
+	closed := f.closed
+	f.mu.Unlock()
+	if closed {
+		return newChoiceSim(simQ{"Anything else?", false, []string{"No", "Yes"}}).CapturePane(ctx, tgt)
+	}
+	return f.choiceSim.CapturePane(ctx, tgt)
+}
+
+func TestAnswerChoiceIsDoneWhenAnotherQuestionFollowsTheReview(t *testing.T) {
+	fastAsk(t)
+	sim := followOnChoice{newChoiceSim(
+		simQ{"Which areas should the new feature touch?", true, []string{"Backend", "Frontend"}},
+		simQ{"How should the feature ship?", false, []string{"Feature flag", "Direct release"}},
+	)}
+	st := New(Config{Tmux: sim, Pub: &fakePub{}})
+	err := st.AnswerChoice(context.Background(), sess, []AskAnswer{
+		{Prompt: "Which areas should the new feature touch?", Multi: true, Labels: []string{"Backend"}},
+		{Prompt: "How should the feature ship?", Labels: []string{"Direct release"}},
+	})
+	if err != nil {
+		t.Fatalf("answer applied, but: %v", err)
+	}
+}

@@ -26,7 +26,13 @@ const (
 // switches, an interrupt, then prompts in a second session).
 func recorded2(t *testing.T) []harness.Record {
 	t.Helper()
-	b, err := os.ReadFile("testdata/v2/events.sse")
+	return recordedSSE(t, "testdata/v2/events.sse")
+}
+
+// recordedSSE reads a recorded /api/event stream as the sse runner would.
+func recordedSSE(t *testing.T, path string) []harness.Record {
+	t.Helper()
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,5 +228,42 @@ func TestReconnectForgetsWorking(t *testing.T) {
 	m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(`{"type":"` + httpsrc.Reconnected + `"}`)})
 	if st := m.State(); st["working"] != "false" || st["idle"] != "true" {
 		t.Fatalf("after the reconnect: %v", st)
+	}
+}
+
+// Seen live on 2.2.5, 2.3.0 and 1.19.5: after /new or a fork in the terminal
+// a prompt posted to the session API went to the session left behind, and
+// the terminal stayed blank. Nothing reports which session the TUI shows,
+// so 2.x has no API send: prompts are typed into the session on screen.
+func TestPromptsAreTypedNotPostedToASessionID(t *testing.T) {
+	a, err := spec.Parse(AdapterFile2())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := a.Actions["send"]; ok {
+		t.Error("the adapter posts prompts to a session id it cannot confirm is on screen")
+	}
+	// Released apps mirror a typed / line into the terminal when send.api is
+	// absent, past the helper's send checks: the capability stays.
+	if !harness.Has(a.Capabilities, harness.CapSendAPI) {
+		t.Error("send.api is gone: released apps would mirror / lines into the terminal")
+	}
+}
+
+// A prompt in another top-level session means the TUI moved there. The
+// mapper names it as the conversation, so the chat starts over on it.
+func TestPromptInAnotherSessionNamesTheConversation(t *testing.T) {
+	m := NewEvents2(harness.Env{Cwd: "/w"})
+	enq := func(session, inbox, text string) {
+		raw := `{"type":"session.inbox.enqueued","data":{"sessionID":"` + session + `","inboxID":"` + inbox + `","item":{"type":"user","payload":{"text":"` + text + `"}}}}`
+		m.Map(harness.Record{Source: "events", At: time.Now(), Data: json.RawMessage(raw)})
+	}
+	enq("ses_a", "msg_1", "first")
+	if st := m.State(); st["harness_session"] != "ses_a" || st["conversation"] != "ses_a" {
+		t.Fatalf("after the first prompt: %v", st)
+	}
+	enq("ses_b", "msg_2", "after /new")
+	if st := m.State(); st["harness_session"] != "ses_b" || st["conversation"] != "ses_b" {
+		t.Fatalf("after a prompt in the new session: %v", st)
 	}
 }

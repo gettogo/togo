@@ -45,3 +45,32 @@ func TestGooseFollowsItsOwnResume(t *testing.T) {
 		t.Fatalf("session %q, want b", got)
 	}
 }
+
+// Two Goose sessions in one folder: the older conversation gets a message
+// while this Togo session's own row has none yet. The row made before this
+// session started is not ours.
+func TestGooseDoesNotAdoptAnOlderConversation(t *testing.T) {
+	m := newDB(harness.Env{Cwd: "/w/proj", Vars: map[string]string{"created": "2026-11-12T10:00:00Z"}})
+	older := map[string]string{"id": "old", "working_dir": "/w/proj", "goose_mode": "auto", "created_at": "2026-11-12 09:00:00", "updated_at": "2026-11-12 10:05:00"}
+	ours := map[string]string{"id": "ours", "working_dir": "/w/proj", "goose_mode": "auto", "created_at": "2026-11-12 10:00:05", "updated_at": "2026-11-12 10:00:05"}
+	m.Map(row(t, ours))
+	m.Map(row(t, older))
+	if got := m.State()["harness_session"]; got != "ours" {
+		t.Fatalf("followed %q", got)
+	}
+}
+
+// A resumed conversation was last touched before this Togo session began,
+// so the sessions feed never lists it: the chat moves to it at once.
+func TestGooseResumeMovesTheChatBeforeTheRowIsListed(t *testing.T) {
+	m := newDB(harness.Env{Cwd: "/w/proj"})
+	m.Map(row(t, sess("a", "2026-11-12 10:00:00")))
+	m.Relaunched([]string{"goose", "session", "--resume", "--session-id", "b"}, time.Now())
+	if got := m.State()["harness_session"]; got != "b" {
+		t.Fatalf("session %q, want b", got)
+	}
+	fresh := newDB(harness.Env{Cwd: "/w/proj", Argv: []string{"goose", "session", "--resume", "--session-id", "b"}})
+	if got := fresh.State()["harness_session"]; got != "b" {
+		t.Fatalf("at launch %q, want b", got)
+	}
+}

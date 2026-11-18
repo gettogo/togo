@@ -28,6 +28,11 @@ type claimWatch struct {
 	files   int
 }
 
+// droppedAskEvery is how long a file the session left is not asked about
+// again while it does not change: a lookup of open files costs a process
+// listing.
+func droppedAskEvery() time.Duration { return 10 * globEvery }
+
 // maxHeldCandidates bounds the files asked about when a session has none.
 const maxHeldCandidates = 20
 
@@ -98,16 +103,12 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 	claims.Unlock()
 	tails := map[string]*tail{}
 	dropped := map[string]bool{} // files left for a newer one; not taken back without evidence
-	defer func() {
-		claims.Lock()
-		delete(claims.watchers[pattern], id)
-		for p := range tails {
-			if claims.owner[p] == id {
-				delete(claims.owner, p)
-			}
-		}
-		claims.Unlock()
-	}()
+	type asked struct {
+		at    time.Time
+		mtime time.Time
+	}
+	askedDropped := map[string]asked{} // when a dropped file was last put to the process view
+	defer unregisterWatch(pattern, id, me, tails)
 	var lastGlob time.Time
 	every := globEvery
 	return pollLoop(ctx, func() error {
@@ -151,6 +152,14 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 				// With no file yet, an agent that was already writing before
 				// the watch began (a helper restart) is found by who holds it.
 				known := env.Procs != nil && len(tails) == 0 && i < maxHeldCandidates
+				if dropped[m.path] && !rem {
+					// A file left behind stays newer than the watch for ever;
+					// ask about it again only when it changed or after a while.
+					if a, ok := askedDropped[m.path]; ok && !m.mtime.After(a.mtime) && time.Since(a.at) < droppedAskEvery() {
+						continue
+					}
+					askedDropped[m.path] = asked{time.Now(), m.mtime}
+				}
 				if known || pick || rem {
 					cands = append(cands, cand{m, pick, rem})
 					paths = append(paths, m.path)
@@ -234,7 +243,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 						// merely is newer qualifies only when no other agent
 						// of the kind runs in the folder.
 						inWindow := bornAfter(m.born, created)
-						if !c.pick || !(inWindow || (m.mtime.After(started) && !ambiguous())) || !claimOwn(pattern, id, m.path) {
+						if !c.pick || !(inWindow || (m.mtime.After(started) && !ambiguous())) || !latestFileless(pattern, id, m.born, created) || !claimOwn(pattern, id, m.path) {
 							continue
 						}
 						take(m)
@@ -252,6 +261,22 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 	})
 }
 
+// unregisterWatch removes a finished watcher's entry and claims. The entry
+// goes only if it is still this watcher's: a newer watcher with the same
+// session id may have replaced it, and must keep its own.
+func unregisterWatch(pattern, id string, me *claimWatch, tails map[string]*tail) {
+	claims.Lock()
+	defer claims.Unlock()
+	if claims.watchers[pattern][id] == me {
+		delete(claims.watchers[pattern], id)
+	}
+	for p := range tails {
+		if claims.owner[p] == id {
+			delete(claims.owner, p)
+		}
+	}
+}
+
 // claimOwn records that session id follows path on the strength of its
 // own process holding it. It fails only if another session already does.
 func claimOwn(pattern, id, path string) bool {
@@ -262,7 +287,32 @@ func claimOwn(pattern, id, path string) bool {
 	}
 	if _, ok := claims.owner[path]; !ok {
 		claims.owner[path] = id
-		claims.watchers[pattern][id].files++
+		if w := claims.watchers[pattern][id]; w != nil {
+			w.files++
+		}
+	}
+	return true
+}
+
+// latestFileless reports whether session id is the watcher that most
+// plausibly started the unheld file born at born: among the watchers of the
+// pattern that still have no file and began no later than the file, the
+// latest. Two sessions started within bornWindow of each other both
+// qualify by time alone; the file belongs to the later one, whichever polls
+// first.
+func latestFileless(pattern, id string, born, created time.Time) bool {
+	if born.IsZero() {
+		return true
+	}
+	claims.Lock()
+	defer claims.Unlock()
+	for other, w := range claims.watchers[pattern] {
+		if other == id || w.files > 0 || w.created.IsZero() || !w.created.After(created) {
+			continue
+		}
+		if !w.created.After(born.Add(2 * time.Second)) {
+			return false
+		}
 	}
 	return true
 }
@@ -286,6 +336,9 @@ func claim(pattern, id, path string, empty bool) bool {
 		return o == id
 	}
 	me := claims.watchers[pattern][id]
+	if me == nil {
+		return false
+	}
 	for other, w := range claims.watchers[pattern] {
 		if other == id || w.files > 0 {
 			continue

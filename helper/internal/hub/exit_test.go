@@ -187,3 +187,26 @@ func TestKilledRunExitAfterAdapterRelaunchIgnored(t *testing.T) {
 		t.Fatal("the killed run's exit ended the session")
 	}
 }
+
+// An adapter relaunch that fails starts nothing: an ended session stays
+// ended and can be relaunched, and a live one takes exit reports again.
+func TestFailedAdapterRelaunchPutsTheExitBack(t *testing.T) {
+	h := hub.New(&session.Service{Tmux: tmuxtest.New(t)}, nil)
+	h.SetExit(exitID, wire.StatusFailed, &wire.SessionExit{Reason: wire.ExitReasonUsageLimit})
+	undo := h.Relaunched(exitID)
+	if h.Ended(exitID) {
+		t.Fatal("still ended while the relaunch runs")
+	}
+	undo()
+	if !h.Ended(exitID) {
+		t.Fatal("the failed relaunch left an ended session looking alive")
+	}
+
+	const live = "s_bbbbbbbbbb"
+	undo = h.Relaunched(live)
+	undo()
+	h.SetExit(live, wire.StatusEnded, &wire.SessionExit{Code: new(int), Reason: wire.ExitReasonExit})
+	if !h.Ended(live) {
+		t.Fatal("exit of the agent that kept running was dropped")
+	}
+}

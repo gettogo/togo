@@ -38,6 +38,7 @@ const (
 type Hub interface {
 	OnEvent(fn func(wire.Event))
 	ForegroundSubscribers() int
+	ForegroundDevices() (devices map[string]bool, unnamed bool)
 }
 
 // SessionInfo is what the Sender needs to know about a session.
@@ -60,6 +61,11 @@ type Message struct {
 	// silently: a phone's Live Activity stands in for its own alert, so
 	// nothing is mirrored to the Watch.
 	watchAlert bool
+	// skip names devices the push does not go to: their app is on screen.
+	skip map[string]bool
+	// only, when set, limits the push to these devices: the ones skipped
+	// when it first went out.
+	only map[string]bool
 }
 
 // Sender turns hub events into sealed relay pushes for every live paired
@@ -109,6 +115,7 @@ type Sender struct {
 	held        heldPushes
 	exits       map[string]string // session id -> the exit last announced
 	requests    requestSeen       // needs_you pushed or closed, per request id
+	retries     map[string]int    // request id -> needs_you sends that reached no device
 
 	liveMu           sync.Mutex
 	liveDev          map[string]*deviceLive
@@ -254,6 +261,9 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 			p.Body = detect.CleanLine(detect.DropKeyHints(*a.Detail))
 		}
 		p.RequestID = a.RequestID
+		if a.ExpiresAt != nil {
+			p.Expires = a.ExpiresAt.Unix()
+		}
 		p.Options = a.Options
 		p.Subject = a.Subject
 		if s := a.Subject; s != nil && s.Kind == wire.SubjectFile && s.Validate() == nil {
@@ -334,14 +344,21 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 	if p.Kind != wire.PushClear && (info.Muted || (s.Muted != nil && s.Muted())) {
 		return Message{}, false
 	}
-	if p.Kind != wire.PushClear && s.Hub.ForegroundSubscribers() > 0 {
-		if p.Kind == wire.PushNeedsYou {
+	if p.Kind != wire.PushClear {
+		all, skip := s.front()
+		if p.Kind == wire.PushNeedsYou && (all || len(skip) > 0) {
+			// A device that drops off keeps its lease for a while: it is
+			// looked at again, alone when the others get the push now.
 			held := m
+			held.only = skip
 			held.Plaintext.Title = truncate(p.Title, wire.MaxTitle)
 			held.Plaintext.Body = truncate(p.Body, wire.MaxBody)
 			s.held.hold(held, foregroundRecheck, s.releaseHeld)
 		}
-		return Message{}, false
+		if all {
+			return Message{}, false
+		}
+		m.skip = skip
 	}
 	if p.Kind != wire.PushNeedsYou && p.Kind != wire.PushClear && !s.admit(sid, now) {
 		return Message{}, false
@@ -417,7 +434,7 @@ func (s *Sender) deliver(ctx context.Context, m Message, want func(Device) bool)
 	}
 	var live []Device
 	for _, d := range devices {
-		if d.Dead || !watchWants(d, m.Plaintext.Kind) || !want(d) {
+		if d.Dead || !watchWants(d, m.Plaintext.Kind) || !want(d) || m.skip[d.DeviceID] || (m.only != nil && !m.only[d.DeviceID]) {
 			continue
 		}
 		live = append(live, d)

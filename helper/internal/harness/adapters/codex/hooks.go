@@ -47,7 +47,10 @@ func (h *Hooks) State() map[string]string {
 		// While the app-server feed is live it owns the turn: its
 		// turn/completed ends an interrupted turn, after which no Stop
 		// hook comes, and turn/interrupt needs its turn id.
-		if live && (k == "working" || k == "idle" || k == "turn") {
+		// The thread and model it follows are the feed's too: a hook's
+		// session id can be a subagent's, and its model is stale after
+		// /model at the desk.
+		if live && (k == "working" || k == "idle" || k == "turn" || k == "harness_session" || k == "model") {
 			continue
 		}
 		out[k] = v

@@ -13,7 +13,21 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// cmdTimeout bounds each ps or lsof call: lsof can block for good on a dead
+// network mount, and the poll loop that asked would block with it.
+var cmdTimeout = 5 * time.Second
+
+// run is exec.Command(...).Output() under cmdTimeout.
+func run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, cmdTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.WaitDelay = time.Second
+	return cmd.Output()
+}
 
 // Session is the process view of one tmux session. Panes lists the pane
 // processes; everything below them is the session's.
@@ -31,7 +45,7 @@ func (s Session) Tree(ctx context.Context) []int {
 	if err != nil || len(roots) == 0 {
 		return nil
 	}
-	out, err := exec.CommandContext(ctx, "ps", "-A", "-o", "pid=,ppid=").Output()
+	out, err := run(ctx, "ps", "-A", "-o", "pid=,ppid=")
 	if err != nil {
 		return nil
 	}
@@ -52,7 +66,7 @@ func (s Session) Others(ctx context.Context, commands []string, cwd string) (boo
 	if len(tree) == 0 {
 		return false, errors.New("procs: session tree unknown")
 	}
-	out, err := exec.CommandContext(ctx, "ps", "-A", "-o", "pid=,command=").Output()
+	out, err := run(ctx, "ps", "-A", "-o", "pid=,command=")
 	if err != nil {
 		return false, err
 	}
@@ -116,11 +130,50 @@ func MatchCommands(out string, commands []string) []int {
 		prog := filepath.Base(f[1])
 		if want[prog] {
 			pids = append(pids, pid)
-		} else if interpreters[prog] && len(f) > 2 && want[filepath.Base(f[2])] {
+		} else if interpreters[prog] && scriptIs(f[2:], want) {
 			pids = append(pids, pid)
 		}
 	}
 	return pids
+}
+
+// scriptIs reports whether the script an interpreter runs is one of want:
+// one of the first two arguments that are not flags, so `node --flag
+// /path/pi`, `node --require x.js /path/pi` and `python -m kimi` match.
+func scriptIs(args []string, want map[string]bool) bool {
+	seen := 0
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		if want[filepath.Base(a)] {
+			return true
+		}
+		if seen++; seen == 2 {
+			break
+		}
+	}
+	return false
+}
+
+// unescapeLsof decodes the \xNN escapes lsof prints for bytes outside
+// ASCII when it runs in the C locale.
+func unescapeLsof(s []byte) string {
+	if !bytes.Contains(s, []byte(`\x`)) {
+		return string(s)
+	}
+	out := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+3 < len(s) && s[i+1] == 'x' {
+			if v, err := strconv.ParseUint(string(s[i+2:i+4]), 16, 8); err == nil {
+				out = append(out, byte(v))
+				i += 3
+				continue
+			}
+		}
+		out = append(out, s[i])
+	}
+	return string(out)
 }
 
 // workingDirs returns the current directories of pids: /proc/<pid>/cwd on
@@ -139,14 +192,14 @@ func workingDirs(ctx context.Context, pids []int) ([]string, error) {
 	for i, p := range pids {
 		list[i] = strconv.Itoa(p)
 	}
-	out, err := exec.CommandContext(ctx, "lsof", "-nP", "-a", "-d", "cwd", "-Fn", "-p", strings.Join(list, ",")).Output()
+	out, err := run(ctx, "lsof", "-nP", "-a", "-d", "cwd", "-Fn", "-p", strings.Join(list, ","))
 	var exit *exec.ExitError
 	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
 		return nil, err
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		if len(line) > 1 && line[0] == 'n' {
-			dirs = append(dirs, line[1:])
+			dirs = append(dirs, unescapeLsof([]byte(line[1:])))
 		}
 	}
 	return dirs, nil
@@ -239,7 +292,7 @@ func lsofHolders(ctx context.Context, real map[string]string) (map[string][]int,
 	for r := range real {
 		args = append(args, r)
 	}
-	out, err := exec.CommandContext(ctx, "lsof", args...).Output()
+	out, err := run(ctx, "lsof", args...)
 	var exit *exec.ExitError
 	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
 		return nil, err
@@ -259,7 +312,7 @@ func ParseLsof(out []byte, real map[string]string) map[string][]int {
 		case 'p':
 			pid, _ = strconv.Atoi(string(line[1:]))
 		case 'n':
-			if asked, ok := real[string(line[1:])]; ok && pid > 0 {
+			if asked, ok := real[unescapeLsof(line[1:])]; ok && pid > 0 {
 				res[asked] = appendUnique(res[asked], pid)
 			}
 		}

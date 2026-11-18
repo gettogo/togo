@@ -132,6 +132,7 @@ Description=Togo helper daemon
 ExecStart="/opt/a\"b%%c$$d/togo" daemon
 Environment="TOGO_HOME=`+filepath.Join(s.Home, ".togo")+`"
 Restart=on-failure
+KillMode=process
 
 [Install]
 WantedBy=default.target
@@ -304,5 +305,46 @@ func TestServiceManaged(t *testing.T) {
 	}
 	if s.Managed(ctx) {
 		t.Error("managed after uninstall")
+	}
+}
+
+// A unit written by an older helper is replaced, and systemd told to read
+// it again, without restarting the service; a current unit, a service that
+// is not installed and launchd are left alone.
+func TestRefreshReplacesAnOlderUnitWithoutRestarting(t *testing.T) {
+	s, r := newTestService(t, Systemd)
+	if err := s.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.mutating(); len(got) != 0 {
+		t.Fatalf("not installed: commands %q, want none", got)
+	}
+	old := "[Unit]\nDescription=Togo helper daemon\n\n[Service]\nExecStart=\"/x/togo\" daemon\nRestart=on-failure\n\n[Install]\nWantedBy=default.target\n"
+	if err := os.MkdirAll(filepath.Dir(s.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.Path(), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	now, _ := os.ReadFile(s.Path())
+	if !strings.Contains(string(now), "\nKillMode=process\n") {
+		t.Errorf("the older unit was not replaced:\n%s", now)
+	}
+	want := [][]string{{"systemctl", "--user", "daemon-reload"}}
+	if got := r.mutating(); !slices.EqualFunc(got, want, slices.Equal) {
+		t.Errorf("commands = %q, want %q (no restart)", got, want)
+	}
+	if err := s.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.mutating(); len(got) != 1 {
+		t.Errorf("a current unit was written again: %q", got)
+	}
+	l, lr := newTestService(t, Launchd)
+	if err := l.Refresh(context.Background()); err != nil || len(lr.mutating()) != 0 {
+		t.Errorf("launchd: %v %q", err, lr.mutating())
 	}
 }

@@ -36,6 +36,22 @@ const (
 	CapHostInfo  = "hostinfo.v1"
 	// CapDoneSilent: push.pair takes doneSilent.
 	CapDoneSilent = "donesilent.v1"
+	// CapExpiry: a needs_you push and the Live Activity context say when
+	// the request stops taking answers.
+	CapExpiry = "expiry.v1"
+	// CapForegroundDevice: events.subscribe takes deviceId, and only that
+	// device is left out of pushes while its app is on screen.
+	CapForegroundDevice = "fgdevice.v1"
+	// CapReceipt: push.pair takes answerReceipts, and a device that set it
+	// is told what became of each answer it sends through the relay.
+	CapReceipt = "receipt.v1"
+	// CapAgentsLive: the agents section's running rows can be trusted while
+	// the main turn is idle. A helper that says so reads a session's
+	// subagent files again after it restarts, so an agent that finished
+	// earlier is not left "running"; before it, such rows could stay for
+	// good, and the app shows its "agents are running" line only while a
+	// turn works.
+	CapAgentsLive = "agents.live.v1"
 )
 
 // App-facing methods.
@@ -121,6 +137,12 @@ const (
 	ByDesk  = "desk"
 	ByPhone = "phone"
 )
+
+// RefusedUnconfirmed is the -32008 reason of an approval.answer whose keys
+// were sent while the prompt stayed on screen: whether the program took the
+// answer is not known. It is not a conflict (-32006), which clients read as
+// "answered elsewhere" and drop the request for; the request stays open.
+const RefusedUnconfirmed = "unconfirmed"
 
 // Conflict reasons for refused git writes, carried in -32006 data. Nothing
 // in the repository changed when one is returned, except for partial (a
@@ -575,6 +597,8 @@ type PairParams struct {
 	// The device's notification service applies it to pushes; the host
 	// applies it to the Live Activity update that stands in for one.
 	DoneSilent bool `json:"doneSilent,omitempty"`
+	// AnswerReceipts says the device understands answer pushes.
+	AnswerReceipts bool `json:"answerReceipts,omitempty"`
 	// SSHKey is the public key the device signs in with over SSH; Device
 	// stores it under the same name.
 	SSHKey string `json:"sshKey,omitempty"`

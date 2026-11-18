@@ -2,7 +2,10 @@ package harness
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -16,7 +19,62 @@ var registry = struct {
 	files   map[string][]byte
 	mappers map[string]MapperFactory
 	runners map[string]Runner
-}{files: map[string][]byte{}, mappers: map[string]MapperFactory{}, runners: map[string]Runner{}}
+	roots   map[string]RootsFunc
+}{files: map[string][]byte{}, mappers: map[string]MapperFactory{}, runners: map[string]Runner{}, roots: map[string]RootsFunc{}}
+
+// RootsFunc names the folders an agent keeps its data in for one session,
+// as template variables: an agent's storage root can be moved with its own
+// environment variables or a profile, so "~/.agent" is only its default.
+// Each value is an absolute folder; sources may read under it.
+type RootsFunc func(env Env) map[string]string
+
+// RegisterRoots adds the storage roots of an adapter (its id in the
+// adapter file).
+func RegisterRoots(adapter string, f RootsFunc) {
+	registry.Lock()
+	defer registry.Unlock()
+	if _, dup := registry.roots[adapter]; dup {
+		panic(fmt.Sprintf("harness: roots of %q registered twice", adapter))
+	}
+	registry.roots[adapter] = f
+}
+
+// ApplyRoots sets the adapter's storage roots on env: each becomes a
+// template variable and a folder sources may read under. An adapter
+// without roots leaves env as it is.
+func ApplyRoots(adapter string, env *Env) {
+	registry.Lock()
+	f := registry.roots[adapter]
+	registry.Unlock()
+	if f == nil {
+		return
+	}
+	for name, dir := range f(*env) {
+		if name == "" || !filepath.IsAbs(dir) {
+			continue
+		}
+		if env.Vars == nil {
+			env.Vars = map[string]string{}
+		}
+		env.Vars[name] = dir
+		env.Roots = append(env.Roots, dir)
+	}
+}
+
+// Getenv reads name from the session's login environment, falling back to
+// the helper's own when the session has none.
+func (e Env) Getenv(name string) (string, bool) {
+	if e.Environ == nil {
+		return os.LookupEnv(name)
+	}
+	value, ok := "", false
+	for _, kv := range e.Environ {
+		if k, v, cut := strings.Cut(kv, "="); cut && k == name {
+			value, ok = v, true // the last one wins, as in a process
+		}
+	}
+	return value, ok
+}
 
 // RegisterAdapterFile adds a built-in adapter file (usually go:embed) under
 // its adapter id.

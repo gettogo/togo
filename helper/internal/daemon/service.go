@@ -123,6 +123,39 @@ func (s Service) Install(ctx context.Context) error {
 	return nil
 }
 
+// Refresh rewrites an installed systemd unit whose text is no longer what
+// this helper writes, and has systemd read it again, without restarting
+// the service. A helper restart runs it first, so a unit written by an
+// older helper (which let systemd end the sessions with the daemon) is
+// replaced before the daemon stops. Nothing is done for launchd, for a
+// service that is not installed, or when the unit is already current.
+func (s Service) Refresh(ctx context.Context) error {
+	if s.Manager != Systemd {
+		return nil
+	}
+	have, err := os.ReadFile(s.Path())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	want, err := s.render()
+	if err != nil {
+		return err
+	}
+	if string(have) == string(want) {
+		return nil
+	}
+	if err := writeFile0644(s.Path(), want); err != nil {
+		return err
+	}
+	if err := s.Run(ctx, []string{"systemctl", "--user", "daemon-reload"}); err != nil {
+		return fmt.Errorf("systemctl daemon-reload: %w", err)
+	}
+	return nil
+}
+
 // Uninstall stops the job and removes the service file. It touches no
 // other file, and returns nil when the service was never installed. A
 // service left under a retired label is removed too.
@@ -285,6 +318,12 @@ func renderPlist(exe, togoHome, logPath string) ([]byte, error) {
 `), nil
 }
 
+// renderUnit writes the systemd unit. KillMode=process: the tmux server and
+// the agents the daemon starts live in the unit's control group, and by
+// default systemd kills the whole group when the unit stops or restarts,
+// which would end every session whenever the helper restarts or updates.
+// With process only the daemon is stopped; the sessions keep running and
+// the next daemon finds them.
 func renderUnit(exe, togoHome string) string {
 	return `[Unit]
 Description=Togo helper daemon
@@ -293,6 +332,7 @@ Description=Togo helper daemon
 ExecStart=` + systemdQuote(exe) + ` daemon
 Environment=` + systemdQuote("TOGO_HOME="+togoHome) + `
 Restart=on-failure
+KillMode=process
 
 [Install]
 WantedBy=default.target

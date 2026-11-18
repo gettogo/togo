@@ -39,13 +39,13 @@ var shellInitSnippets = map[string]string{
 	"zsh":  posixSnippet,
 	"bash": posixSnippet,
 	"fish": `if status is-interactive; and test -z "$TMUX"; and test "$TOGO_SHELL_INIT" = 1; and command -sq togo
-    exec togo new shell --dir "$PWD"
+    togo new shell --dir "$PWD"; and exit
 end
 `,
 }
 
 const posixSnippet = `if [[ $- == *i* && -z ${TMUX-} && ${TOGO_SHELL_INIT-} == 1 ]] && command -v togo >/dev/null 2>&1; then
-  exec togo new shell --dir "$PWD"
+  togo new shell --dir "$PWD" && exit
 fi
 `
 

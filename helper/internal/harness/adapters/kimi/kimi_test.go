@@ -93,17 +93,20 @@ func TestRecordedSession(t *testing.T) {
 	if k[harness.KindUser] != 2 || k[harness.KindTool] < 30 || k[harness.KindThinking] == 0 || k[harness.KindAssistant] == 0 || k[harness.KindPlan] == 0 {
 		t.Fatalf("kinds %v", k)
 	}
-	var bgDone, planRows bool
+	var bgDone, bgRunning, planRows bool
 	for _, op := range out.ops {
-		if op.Section == harness.SectionBackground && op.Row.State == harness.RowDone {
+		if op.Section == harness.SectionBackground && op.Row.State == harness.StateOK {
 			bgDone = true
+		}
+		if op.Section == harness.SectionBackground && op.Row.State == harness.StateRunning {
+			bgRunning = true // the summary counts only run states
 		}
 		if op.Op == harness.OpReplace && op.Section == harness.SectionPlan && len(op.Rows) > 3 {
 			planRows = true
 		}
 	}
-	if !bgDone || !planRows {
-		t.Fatalf("background done %v, plan rows %v", bgDone, planRows)
+	if !bgDone || !bgRunning || !planRows {
+		t.Fatalf("background done %v, running %v, plan rows %v", bgDone, bgRunning, planRows)
 	}
 	for _, it := range out.items {
 		if it.Kind == harness.KindTool && it.Tool.Category == "" {
@@ -215,5 +218,47 @@ func TestPlanModeTogglesInPlace(t *testing.T) {
 	}
 	if r := pick("default", "yolo"); r.Relaunch == nil {
 		t.Errorf("yolo -> default = %+v", r)
+	}
+}
+
+// A background Agent that finishes while Kimi is idle: its notice starts a
+// turn (turn.prompt, not turn.steer), and the row must still end.
+func TestBackgroundAgentDoneByAPromptTurn(t *testing.T) {
+	m := NewWire(harness.Env{})
+	out := replay(t, m, []string{
+		`{"type":"turn.prompt","input":[{"type":"text","text":"audit it"}],"origin":{"kind":"user"},"promptId":"msg_1","turnId":0}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.call","toolCallId":"tool_a","name":"Agent","args":{"description":"Audit the gem","subagent_type":"explore"},"display":{"kind":"agent_call"}}}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.result","toolCallId":"tool_a","result":{"output":"task_id: agent-86r\nstatus: running\nagent_id: agent-0"}}}`,
+		`{"type":"context.append_loop_event","event":{"type":"step.end","finishReason":"end_turn"}}`,
+		`{"type":"turn.prompt","input":[{"type":"text","text":"<notification/>"}],"origin":{"kind":"background_task","taskId":"agent-86r","status":"completed"},"turnId":1}`,
+	})
+	if a := out.items["agent-tool_a"]; a.Agent == nil || a.Agent.State != harness.StateOK || a.Agent.Ended == nil {
+		t.Fatalf("agent %+v", a.Agent)
+	}
+}
+
+// task.started can announce a background Agent's task before the Agent
+// call's result names it; the agent then owns the task id, and the
+// Background row task.started made must not be left running.
+func TestAgentTaskReplacesItsBackgroundRow(t *testing.T) {
+	m := NewWire(harness.Env{})
+	out := replay(t, m, []string{
+		`{"type":"turn.prompt","input":[{"type":"text","text":"audit it"}],"origin":{"kind":"user"},"promptId":"msg_1","turnId":0}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.call","toolCallId":"tool_a","name":"Agent","args":{"description":"Audit the gem","subagent_type":"explore"},"display":{"kind":"agent_call"}}}`,
+		`{"type":"task.started","info":{"taskId":"agent-86r","description":"Audit the gem","startedAt":1789999634362},"time":1789999634362}`,
+		`{"type":"context.append_loop_event","event":{"type":"tool.result","toolCallId":"tool_a","result":{"output":"task_id: agent-86r\nstatus: running\nagent_id: agent-0"}}}`,
+	})
+	bg := out.items["bg-agent-86r"]
+	if bg.Background == nil || bg.Background.State == harness.StateRunning {
+		t.Fatalf("background item left running: %+v", bg.Background)
+	}
+	last := map[string]string{}
+	for _, op := range out.ops {
+		if op.Row != nil {
+			last[op.Section+"/"+op.Row.ID] = op.Row.State
+		}
+	}
+	if last["background/agent-86r"] == harness.StateRunning {
+		t.Fatalf("background row left running: %v", last)
 	}
 }

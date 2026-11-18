@@ -216,6 +216,17 @@ type QuestionBody struct {
 	Deny    string `json:"-"`
 }
 
+// MarshalJSON writes an absent question list as [], never null: the app
+// reads the list as required and drops an item that has null there.
+func (q QuestionBody) MarshalJSON() ([]byte, error) {
+	type plain QuestionBody
+	p := plain(q)
+	if p.Questions == nil {
+		p.Questions = []Question{}
+	}
+	return json.Marshal(p)
+}
+
 // Question is one question of a Confirm, in an item or a screen.
 type Question struct {
 	ID        string   `json:"id"`
@@ -224,6 +235,42 @@ type Question struct {
 	Options   []Choice `json:"options"`
 	Multi     bool     `json:"multi"`
 	AllowText bool     `json:"allowText"`
+	// Required says whether the form can be submitted without an answer
+	// to this question. Nil is a question from a source that does not say:
+	// an app then keeps its old rule, which asks for an answer to every
+	// question. A form source that knows sets true or false.
+	Required *bool `json:"required,omitempty"`
+	// Default is the answer the harness starts with: option ids, or one
+	// text value.
+	Default []string `json:"default,omitempty"`
+	// When limits the question to a state of another one. A question that
+	// does not apply is not shown, validated or sent; an app that does not
+	// know When shows every question, so whoever answers for the harness
+	// drops the answers of questions that do not apply (Applies).
+	When *QuestionWhen `json:"when,omitempty"`
+}
+
+// QuestionWhen says a question applies only while the answer of Question
+// includes one of Equals. A boolean answers "true" or "false".
+type QuestionWhen struct {
+	Question string   `json:"question"`
+	Equals   []string `json:"equals"`
+}
+
+// Applies reports whether q is part of the form given the answers so far
+// (by question id). A question without a condition always is.
+func (q Question) Applies(answers map[string][]string) bool {
+	if q.When == nil {
+		return true
+	}
+	for _, got := range answers[q.When.Question] {
+		for _, want := range q.When.Equals {
+			if got == want {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // MarshalJSON sends a question without options as an empty list, never

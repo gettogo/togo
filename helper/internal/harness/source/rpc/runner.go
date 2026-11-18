@@ -154,8 +154,16 @@ func (r *Runner) fetchConn(ctx context.Context, endpoint string) (*Conn, error) 
 		return nil, err
 	}
 	r.mu.Lock()
-	if old := r.pool[endpoint]; old != nil && old != c {
-		old.Close()
+	if cur := r.pool[endpoint]; cur != nil {
+		select {
+		case <-cur.Done():
+		default:
+			// Another caller dialled at the same time and won: use its
+			// connection, which may already be in a call, and drop ours.
+			r.mu.Unlock()
+			c.Close()
+			return cur, nil
+		}
 	}
 	r.pool[endpoint] = c
 	r.mu.Unlock()

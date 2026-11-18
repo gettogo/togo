@@ -29,6 +29,10 @@ type gateResult struct {
 	version string
 	ok      bool
 	reason  string
+	// newer is a version past the range's upper bound but in the same major
+	// version: a release the adapter was not checked against. Harnesses
+	// ship often and mostly stay compatible, so the adapter still serves it.
+	newer bool
 	// transient is a failure to run the version command (a timeout under
 	// load, a PATH not yet read from the login shell) rather than an answer:
 	// it is not cached and the session asks again.
@@ -37,7 +41,7 @@ type gateResult struct {
 	err error
 }
 
-// check returns the harness version and whether it is inside the range.
+// check returns the harness version and whether the adapter serves it.
 func (g *gate) check(ctx context.Context, a *adapter, env harness.Env) gateResult {
 	argv := a.Harness.Version
 	if len(argv) == 0 {
@@ -105,18 +109,44 @@ func judgeVersion(out, pattern, rng string) gateResult {
 	if err != nil {
 		return gateResult{version: v, reason: "the version was not recognised"}
 	}
+	// A lower bound always holds: older releases are known not to fit. An
+	// upper bound is how far the adapter was checked. Past it but still in
+	// the major version the range starts in, the harness is served anyway.
+	// A new major version is not: OpenCode 2 dropped a launch flag 1.x
+	// needed, and every session started with it exited at once.
+	newer := false
 	for _, c := range cs {
-		if !c.holds(ver) {
-			return gateResult{version: v, reason: "version " + v + " is outside " + rng}
+		if c.holds(ver) {
+			continue
 		}
+		if !c.upper() {
+			return gateResult{version: v, reason: "version " + v + " is older than this adapter supports (" + rng + ")"}
+		}
+		if !sameMajor(ver, cs) {
+			return gateResult{version: v, reason: "version " + v + " is a newer major version than this adapter supports (" + rng + ")"}
+		}
+		newer = true
 	}
-	return gateResult{version: v, ok: true}
+	return gateResult{version: v, ok: true, newer: newer}
 }
 
 type constraint struct {
 	op  string
 	ver []int
 }
+
+// sameMajor reports whether v is in the major version a range starts in.
+func sameMajor(v []int, cs []constraint) bool {
+	for _, c := range cs {
+		if !c.upper() {
+			return len(v) > 0 && len(c.ver) > 0 && v[0] == c.ver[0]
+		}
+	}
+	return false
+}
+
+// upper reports a constraint that bounds the version from above.
+func (c constraint) upper() bool { return c.op == "<" || c.op == "<=" }
 
 func (c constraint) holds(v []int) bool {
 	cmp := compareVersions(v, c.ver)

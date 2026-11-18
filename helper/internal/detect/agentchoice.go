@@ -339,6 +339,11 @@ func matchAgentChoice(screen string) (Prompt, bool) {
 	if c.Review || c.Typing || len(c.Options) == 1 && c.TextRow == 0 {
 		return Prompt{Kind: KindWaiting, Title: c.Prompt, Keys: map[int][]string{}, ReadOnly: true}, true
 	}
+	if !c.Digits && c.Cursor < 0 {
+		// Rows nothing points at: arrow keys counted from no row would
+		// pick the wrong one.
+		return Prompt{}, false
+	}
 	p := Prompt{Kind: KindQuestion, Title: c.Prompt, Keys: map[int][]string{}}
 	// Kimi's single question still ends on its review page, which Enter
 	// confirms; a batch needs every question answered first.
