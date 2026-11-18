@@ -124,6 +124,19 @@ import UIKit
         #expect(pending.isEmpty)
     }
 
+    @Test(arguments: [UIKeyboardHIDUsage.keyboardReturnOrEnter, .keypadEnter])
+    func hardwareShiftReturnUsesTheSameNewlineAsTheKeyBar(_ key: UIKeyboardHIDUsage) async {
+        let h = EngineHarness()
+        let shifted = h.engine.handleChord(characters: "\r", ignoring: "\r", modifiers: .shift,
+                                          keyCode: key.rawValue, isHeld: { false })
+        #expect(shifted)
+        #expect(await waitUntil { !h.input.isEmpty })
+        #expect(h.joinedInput == Data([0x1b, 0x0d]))
+        let plain = h.engine.handleChord(characters: "\r", ignoring: "\r", modifiers: [],
+                                        keyCode: key.rawValue, isHeld: { false })
+        #expect(!plain)
+    }
+
     @Test func handledChordSendsAndRepeatsUntilFocusLeaves() async {
         let h = EngineHarness()
         let handled = h.engine.handleChord(characters: "\u{3}", ignoring: "c", modifiers: .control, keyCode: 6, isHeld: { true })

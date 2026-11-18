@@ -102,9 +102,9 @@ struct ConfirmPrimitive: View {
                         .foregroundStyle(Color.togoSnow)
                         .accessibilityAddTraits(confirm.questions.isEmpty ? .isHeader : [])
                 }
-                ForEach(Array(confirm.questions.enumerated()), id: \.element.id) { index, question in
+                ForEach(Array(model.visibleQuestions.enumerated()), id: \.element.id) { index, question in
                     ConfirmQuestionView(
-                        question: question, index: index, count: confirm.questions.count, model: model
+                        question: question, index: index, count: model.visibleQuestions.count, model: model
                     )
                 }
                 status

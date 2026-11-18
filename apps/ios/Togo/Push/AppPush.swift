@@ -20,6 +20,11 @@ import WidgetKit
     private let pairings: PairingStore
     private let pending: PendingStore
     private let keys: any DeviceKeyStore
+    /// The same identity used by push.pair; no separate installation or window identifier.
+    var foregroundDeviceID: @Sendable () -> String? {
+        let keys = self.keys
+        return { try? keys.deviceID() }
+    }
     private let source = SettingsSource()
     private var actions: NotificationActionHandler?
     private var clear: ClearHandler?
@@ -134,6 +139,9 @@ import WidgetKit
             received: { host, id in
                 do { try await receipts.send(hostID: host, requestID: id) }
                 catch { Logger(subsystem: "app.togo", category: "push").error("Request-data receipt failed; normal notification remains available") }
+            },
+            answerReceived: { event in
+                await AnswerReceiptActivities.refresh(event, pending: pending)
             }
         ))
         AppDelegate.registrar = registrar
@@ -142,7 +150,7 @@ import WidgetKit
         router.onAction = { response in
             let link = await actions.handle(
                 actionIdentifier: response.actionIdentifier, userInfo: response.userInfo, target: response.link,
-                text: response.userText
+                text: response.userText, deliveredAt: response.deliveredAt
             )
             if let link { activeStore()?.open(link) }
         }
@@ -204,7 +212,7 @@ import WidgetKit
         pairing.onPairingsChanged = { [weak watch] in watch?.sendPairings($0) }
         watch.sendPairings(pairings.all())
         watchFeed = Task { [weak watch] in
-            let feed = Observations { WatchFeed(activeStore()?.controlCenter ?? ControlCenterState()) }
+            let feed = Observations { WatchFeed.ready(activeStore()?.controlCenter) }
             // A change of status or requests goes at once; a session's activity line alone at
             // most every few seconds, so a busy agent does not keep the Watch link awake.
             let gate = WatchFeedGate()
@@ -213,7 +221,12 @@ import WidgetKit
                 gate.didSend(next, at: .now)
                 watch?.publish(sessions: next.sessions, requests: pending.all(), textRequests: next.textRequests)
             }
-            for await next in feed {
+            for await update in feed {
+                guard let next = update else {
+                    trailing?.cancel()
+                    trailing = nil
+                    continue
+                }
                 switch gate.offer(next, now: .now) {
                 case .skip:
                     break

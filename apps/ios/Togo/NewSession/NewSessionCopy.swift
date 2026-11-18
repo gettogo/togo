@@ -6,7 +6,7 @@ enum NewSessionCopy {
     static let machinePrompt = String(localized: "new.machine.prompt", defaultValue: "Where should it run?")
     static let folderTitle = String(localized: "new.folder.title", defaultValue: "Folder")
     static let agentTitle = String(localized: "new.agent.title", defaultValue: "Agent")
-    static let plainTitle = String(localized: "new.plain.title", defaultValue: "New session")
+    static let plainTitle = String(localized: "new.plain.title", defaultValue: "New Session")
 
     static let helperMissing = String(localized: "new.machine.helperMissing", defaultValue: "Helper not installed")
     static let connecting = String(localized: "new.machine.connecting", defaultValue: "Connecting")
@@ -22,19 +22,19 @@ enum NewSessionCopy {
         String(localized: "new.machine.offline", defaultValue: "Offline, \(reason.lowercased())")
     }
 
-    static let recentHeading = String(localized: "new.folder.recent", defaultValue: "Recent folders")
+    static let recentHeading = String(localized: "new.folder.recent", defaultValue: "Recent Folders")
     static let recentLoading = String(localized: "new.folder.recentLoading", defaultValue: "Loading recent folders")
     static let recentEmpty = String(localized: "new.folder.recentEmpty", defaultValue: "No recent folders yet")
     static let removeRecent = String(localized: "new.folder.removeRecent", defaultValue: "Remove from Recent")
-    static let otherHeading = String(localized: "new.folder.other", defaultValue: "Other folders")
+    static let otherHeading = String(localized: "new.folder.other", defaultValue: "Other Folders")
     static let home = String(localized: "new.folder.home", defaultValue: "Home")
     static let browse = String(localized: "new.folder.browse", defaultValue: "Browse")
     static let browseLoading = String(localized: "new.folder.browseLoading", defaultValue: "Opening folder")
     static let browseEmpty = String(localized: "new.folder.browseEmpty", defaultValue: "No folders here")
-    static let useFolder = String(localized: "new.folder.use", defaultValue: "Use this folder")
-    static let showHidden = String(localized: "new.folder.showHidden", defaultValue: "Show hidden folders")
-    static let up = String(localized: "new.folder.up", defaultValue: "Parent folder")
-    static let retry = String(localized: "new.retry", defaultValue: "Try again")
+    static let useFolder = String(localized: "new.folder.use", defaultValue: "Use This Folder")
+    static let showHidden = String(localized: "new.folder.showHidden", defaultValue: "Show Hidden Folders")
+    static let up = String(localized: "new.folder.up", defaultValue: "Parent Folder")
+    static let retry = String(localized: "new.retry", defaultValue: "Try Again")
 
     static let plainBody = String(localized: "new.plain.body", defaultValue: "A shell in your home folder that keeps running.")
     static let plainStart = String(localized: "new.plain.start", defaultValue: "Start")
@@ -62,7 +62,7 @@ enum NewSessionCopy {
     static let flagsInvisible = String(
         localized: "new.agent.flags.invisible", defaultValue: "Flags can't contain invisible characters."
     )
-    static let rememberFolder = String(localized: "new.agent.remember", defaultValue: "Remember for this folder")
+    static let rememberFolder = String(localized: "new.agent.remember", defaultValue: "Remember for This Folder")
     static func addFavorite(_ agent: String) -> String {
         String(localized: "new.agent.favorite.add.named", defaultValue: "Favorite \(agent)")
     }
@@ -70,7 +70,7 @@ enum NewSessionCopy {
         String(localized: "new.agent.favorite.remove.named", defaultValue: "Unfavorite \(agent)")
     }
     static let favoritesHeading = String(localized: "new.agent.favorites", defaultValue: "Favorites")
-    static let otherAgentsHeading = String(localized: "new.agent.others", defaultValue: "Other agents")
+    static let otherAgentsHeading = String(localized: "new.agent.others", defaultValue: "Other Agents")
     static let notInstalledHeading = String(localized: "new.agent.missing", defaultValue: "Not installed")
     static func notInstalledCount(_ count: Int) -> String {
         String(localized: "new.agent.missing.count", defaultValue: "\(count) agents")
@@ -83,5 +83,5 @@ enum NewSessionCopy {
     static func full(_ machine: String) -> String {
         String(localized: "new.error.full", defaultValue: "\(machine) has 99 sessions. Close one first.")
     }
-    static let thisMachine = String(localized: "new.thisMachine", defaultValue: "This machine")
+    static let thisMachine = String(localized: "new.thisMachine", defaultValue: "This Machine")
 }

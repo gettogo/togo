@@ -15,7 +15,7 @@ struct DebugSessionsView: View {
                 Section { Text(error).foregroundStyle(.red) }
             }
             Section {
-                Button("New Claude session") { Task { await create() } }.disabled(loading)
+                Button("New Claude Session") { Task { await create() } }.disabled(loading)
             }
             Section("Sessions") {
                 if sessions.isEmpty, !loading {

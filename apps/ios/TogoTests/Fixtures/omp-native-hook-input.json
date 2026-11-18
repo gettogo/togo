@@ -1,0 +1,141 @@
+{
+  "id": "s",
+  "k": "col",
+  "p": {
+    "role": "omp.overlay.hook-input"
+  },
+  "c": [
+    {
+      "id": "s.head",
+      "k": "col",
+      "p": {
+        "gap": "xs",
+        "role": "omp.hook-input.head"
+      },
+      "c": [
+        {
+          "id": "s.head/line",
+          "k": "row",
+          "p": {
+            "align": "baseline",
+            "gap": "md"
+          },
+          "c": [
+            {
+              "id": "s.head/line/title",
+              "k": "text",
+              "p": {
+                "grow": 1,
+                "role": "omp.hook-input.title",
+                "spans": [
+                  {
+                    "t": "Neutral entry check"
+                  }
+                ],
+                "wrap": "word"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s.field",
+      "k": "col",
+      "p": {
+        "role": "omp.hook-input.field"
+      },
+      "c": [
+        {
+          "id": "t",
+          "k": "col",
+          "p": {
+            "gap": "md",
+            "role": "omp.form"
+          },
+          "c": [
+            {
+              "id": "u",
+              "k": "col",
+              "p": {
+                "gap": "sm",
+                "role": "omp.form.field"
+              },
+              "c": [
+                {
+                  "id": "v",
+                  "k": "input",
+                  "p": {
+                    "cursor": 0,
+                    "placeholder": "Enter neutral text",
+                    "prompt": "> ",
+                    "sendable": false,
+                    "text": ""
+                  }
+                },
+                {
+                  "id": "w",
+                  "k": "text",
+                  "p": {
+                    "hidden": true,
+                    "text": ""
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s.actions",
+      "k": "row",
+      "p": {
+        "align": "center",
+        "gap": "sm",
+        "role": "omp.actions"
+      },
+      "c": [
+        {
+          "id": "s.actions/0",
+          "k": "spacer",
+          "p": {
+            "grow": 1
+          }
+        },
+        {
+          "id": "s.actions/cancel",
+          "k": "button",
+          "p": {
+            "actions": {
+              "click": "cancel"
+            },
+            "keys": [
+              "escape"
+            ],
+            "role": "omp.btn",
+            "text": "Cancel",
+            "title": "Cancel  esc"
+          }
+        },
+        {
+          "id": "s.actions/submit",
+          "k": "button",
+          "p": {
+            "actions": {
+              "click": "submit"
+            },
+            "keys": [
+              "enter"
+            ],
+            "role": "omp.btn",
+            "text": "Submit",
+            "title": "Submit  \u23ce",
+            "tone": "accent",
+            "variant": "primary"
+          }
+        }
+      ]
+    }
+  ]
+}

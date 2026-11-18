@@ -158,7 +158,10 @@ import UIKit
                     restart(tab, store: listing(id)?.store ?? windows[0].store, userStarted: true)
                 }
             } else {
-                start(tab, services: services, userStarted: !attachedBefore.contains(id))
+                let requested = windows.contains { window in
+                    window.store.workspace.tabs.contains { $0.id == id && !$0.restored }
+                }
+                start(tab, services: services, userStarted: requested && !attachedBefore.contains(id))
             }
         }
         placeTerminals(pinned: pinned)
@@ -284,11 +287,11 @@ import UIKit
             guard let store else { return }
             switch key.kind {
             case .answer:
-                guard let card = PromptKeys.card(for: id.sessionID, in: store.controlCenter.requests),
+                guard let card = PromptKeys.card(for: id.sessionID, hostID: id.hostID, in: store.controlCenter.requests),
                       let decision = PromptKeys.decision(for: key, card: card) else { return }
                 Task { await store.answer(card.id, decision) }
             case .more:
-                // The prompt bar shows the whole request once the terminal lets the keyboard go.
+                guard store.showRequest(for: id) else { return }
                 handle?.keys?.overlay?.press(.hideKeyboard)
             case .stroke(let stroke):
                 handle?.sendKeys([stroke])
@@ -301,6 +304,7 @@ import UIKit
         guard let entry = entries.removeValue(forKey: id) else { return }
         if !keepHost { hosts[id] = nil }
         phases[id] = nil
+        for window in windows { window.store.setLink(.connecting, for: id) }
         entry.feed.cancel()
         entry.handle.stop()
     }
@@ -323,7 +327,7 @@ struct TerminalSlot: View {
         input.verticalBar = barVertical
         input.keep = store?.keptKeys.contains(tab) ?? false
         if let store {
-            input.promptKeys = PromptKeys.plan(for: PromptKeys.card(for: tab.sessionID, in: store.controlCenter.requests))
+            input.promptKeys = PromptKeys.plan(for: PromptKeys.card(for: tab.sessionID, hostID: tab.hostID, in: store.controlCenter.requests))
         }
         return input
     }

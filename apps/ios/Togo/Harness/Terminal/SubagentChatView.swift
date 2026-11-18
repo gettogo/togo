@@ -94,7 +94,7 @@ struct SubagentChatView: View {
             }
             if let summary = thread.agent?.summary, !summary.isEmpty {
                 // The summary is status: it is simply there, never carried by the arrival transaction.
-                MarkdownText(text: summary)
+                MarkdownText(text: summary, isStreaming: thread.state == .running)
                     .foregroundStyle(Color.togoSnow)
                     .transaction { $0.animation = nil }
             }
@@ -124,7 +124,7 @@ struct SubagentChatView: View {
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
-                ReplyRow(text: text.text)
+                ReplyRow(text: text.text, partial: text.partial)
                     .environment(\.selectableTextActions, textMenu(item))
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(ChatCopy.spokenReply(RichMarkdown.spoken(text.text)))

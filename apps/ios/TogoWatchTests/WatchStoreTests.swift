@@ -23,6 +23,22 @@ private final class Clock: Sendable {
 }
 
 @MainActor struct WatchStoreTests {
+    @Test func readOnlyWaitingHasNoYesOrNoAndSendsNeither() async {
+        let model = store()
+        var request = push(.needsYou, "r_readonly")
+        request.options = []
+        request.allowText = false
+        model.ingest(request, hostId: "h_studio")
+        let pendingRequest = pending.request("r_readonly")!
+        #expect(!WatchStore.canApprove(pendingRequest))
+        #expect(!WatchStore.canDeny(pendingRequest))
+        await model.answer("r_readonly", "approve")
+        await model.answer("r_readonly", "deny")
+        await model.answerFromNotification(hostId: "h_studio", requestId: "r_readonly", decision: "deny")
+        #expect(sender.decisions.isEmpty)
+        #expect(pending.request("r_readonly")?.answered == nil)
+    }
+
     private let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     private let sender = FakeSender()
     private let clock = Clock()
@@ -80,6 +96,19 @@ private final class Clock: Sendable {
         #expect(store.requests.map(\.requestId) == ["r_1"])
     }
 
+    @Test func missingRecordDoesNotInventAnAnswer() {
+        let store = store()
+        #expect(store.state(of: "r_missing") == .unavailable)
+        #expect(!store.state(of: "r_missing").isActionable)
+        store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
+        clock.advance(601)
+        store.apply(context: context(closed: [], at: clock.date))
+        #expect(store.state(of: "r_1") == .expired)
+        clock.advance(PendingStore.retention)
+        store.apply(context: context(closed: [], at: clock.date))
+        #expect(store.state(of: "r_1") == .unavailable)
+    }
+
     @Test func clearRemovesRequest() {
         let store = store()
         store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
@@ -129,9 +158,9 @@ private final class Clock: Sendable {
         store.ingest(push(.needsYou, "r_2"), hostId: "h_studio")
         await store.answer("r_1", "approve")
         #expect(sender.decisions == ["approve"])
-        #expect(store.outcome("r_1") == .approved)
+        #expect(store.outcome("r_1") == .sent)
         #expect(store.requests.map(\.requestId) == ["r_2"])
-        #expect(pending.request("r_1")?.answered == .approved)
+        #expect(pending.request("r_1")?.answered == .sent)
 
         // One answer per request, whatever is tapped next.
         await store.answer("r_1", "deny")
@@ -144,7 +173,7 @@ private final class Clock: Sendable {
         #expect(store.requests.map(\.requestId) == ["r_2"])
         sender.fails.withLock { $0 = false }
         await store.answer("r_2", "deny")
-        #expect(store.outcome("r_2") == .denied)
+        #expect(store.outcome("r_2") == .sent)
         #expect(sender.decisions == ["approve", "deny"])
         #expect(store.requests.isEmpty)
 
@@ -205,7 +234,7 @@ private final class Clock: Sendable {
         await store.answerFromNotification(hostId: "h_unknown", requestId: "r_10", decision: "deny")
         await store.answerFromNotification(hostId: "h_studio", requestId: "r_11", decision: "option:2")
         #expect(sender.decisions == ["approve"])
-        #expect(pending.request("r_9")?.answered == .approved)
+        #expect(pending.request("r_9")?.answered == .sent)
         #expect(pending.request("r_10")?.answered == nil)
     }
 
@@ -222,10 +251,10 @@ private final class Clock: Sendable {
         await store.answer("r_cleared", "deny")
         #expect(sender.decisions.isEmpty)
 
-        // Answered by another process on this Watch, such as a notification action.
+        // A legacy relay-only record from another process has no helper confirmation.
         _ = pending.claim("r_other", hostId: "h_studio")
         pending.mark("r_other", .approved)
-        #expect(store.state(of: "r_other") == .answered)
+        #expect(store.state(of: "r_other") == .sent)
         await store.answer("r_other", "deny")
         #expect(sender.decisions.isEmpty)
 
@@ -242,7 +271,7 @@ private final class Clock: Sendable {
         #expect(pending.request("r_late")?.answered == nil)
     }
 
-    @Test func approvedOnlyAfterTheRelayAccepts() async {
+    @Test func sentOnlyAfterTheRelayAccepts() async {
         let store = store()
         store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
         sender.fails.withLock { $0 = true }
@@ -251,7 +280,7 @@ private final class Clock: Sendable {
         #expect(pending.request("r_1")?.answered == nil)
         sender.fails.withLock { $0 = false }
         await store.answer("r_1", "approve")
-        #expect(store.state(of: "r_1") == .approved)
+        #expect(store.state(of: "r_1") == .sent)
     }
 
     /// The app stopped mid-send (watchOS ended it in the background, or it crashed): its claim
@@ -270,7 +299,7 @@ private final class Clock: Sendable {
         #expect(pending.request("r_mirrored") == nil)
         await relaunched.answer("r_1", "approve")
         #expect(sender.decisions == ["approve"])
-        #expect(relaunched.state(of: "r_1") == .approved)
+        #expect(relaunched.state(of: "r_1") == .sent)
     }
 
     /// A failed send for a request the Watch never got a push for must not leave a blank
@@ -301,7 +330,7 @@ private final class Clock: Sendable {
         let store = store()
         let delivered = clock.date
         store.ingest(push(.needsYou, "r_1"), hostId: "h_studio")
-        clock.advance(601)
+        clock.advance(PendingStore.retention + 1)
         store.apply(context: context(closed: [], at: clock.date))
         #expect(pending.request("r_1") == nil)
 
@@ -353,5 +382,29 @@ private final class Clock: Sendable {
         #expect(store.outcome("r_mirrored") == .notSetUp)
         #expect(store.failureNotice("r_mirrored") == WatchCopy.notSetUp(machine: nil))
         #expect(WatchCopy.notSetUp(machine: "Studio") == "Not set up for Studio. Open Togo on iPhone.")
+    }
+}
+
+extension WatchStoreTests {
+    @Test(arguments: ["applied", "answered", "expired", "prompt_gone", "unconfirmed", "failed"])
+    func aHelperReceiptReplacesOnlyTheSentState(_ result: String) async {
+        let model = store()
+        model.ingest(push(.needsYou, "r_receipt"), hostId: "h_studio")
+        await model.answer("r_receipt", "approve")
+        #expect(model.state(of: "r_receipt") == .sent)
+        var receipt = push(.answer, "r_receipt", sentAgo: 0)
+        receipt.result = result
+        model.ingest(receipt, hostId: "h_studio")
+        let expected: WatchStore.RequestState = switch result {
+        case "applied": .answered
+        case "answered": .answeredElsewhere
+        case "expired": .expired
+        case "prompt_gone": .closed
+        case "unconfirmed": .unconfirmed
+        default: .notApplied
+        }
+        #expect(model.state(of: "r_receipt") == expected)
+        await model.answer("r_receipt", "approve")
+        #expect(sender.decisions.count == 1)
     }
 }

@@ -13,11 +13,14 @@ extension PickerPrimitive {
     // MARK: Actions
 
     func tap(_ item: PickerModel.Item) {
+        guard !searchBlocked else { return }
         switch model.tap(item, in: picker) {
         case .assign(let id):
             if let ref = itemActions.first(where: { $0.id == id }) { assign(ref, item) }
         case .select:
             select(item)
+        case .details:
+            focused = item
         case .none:
             break
         }
@@ -26,6 +29,7 @@ extension PickerPrimitive {
     /// Selects through `ActionGate`: a restart asks while the agent works, and runs with Undo
     /// while it is idle. Landing closes the host; failing keeps the list with the reason.
     func select(_ item: PickerModel.Item) {
+        guard !searchBlocked else { return }
         failure = nil
         failedItem = nil
         let change = PickerModel.change(selecting: item, in: picker, setting: title)
@@ -45,6 +49,7 @@ extension PickerPrimitive {
     }
 
     func assign(_ ref: HarnessActionRef, _ item: PickerModel.Item) {
+        guard !searchBlocked else { return }
         setPicking(nil)
         Task { await actions.trigger(ref, target: item.id, args: PickerModel.args(for: item), place: .toast, context: context) }
     }
@@ -55,6 +60,7 @@ extension PickerPrimitive {
     /// to push on, the picker stays up and the page comes as a sheet over it. Closing the
     /// picker here would take that sheet down with it.
     func setUp(_ item: PickerModel.Item, with ref: HarnessActionRef, value: String?) {
+        guard !searchBlocked else { return }
         var args = PickerModel.args(for: item)
         if let value { args["value"] = .string(value) }
         let actions = actions

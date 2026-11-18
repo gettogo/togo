@@ -70,16 +70,19 @@ struct DictationSettingsView: View {
     @State private var confirmingClear = false
     let settings: AppSettings
     let update: (AppSettings) -> Void
+    let currentSettings: (() -> AppSettings)?
     private let insertOverride: ((String) -> Void)?
 
     /// `insert` stands in for the window's store, for previews and snapshots.
     init(
         settings: AppSettings, update: @escaping (AppSettings) -> Void,
+        currentSettings: (() -> AppSettings)? = nil,
         model: DictationSettingsModel = DictationSettingsModel(), engine: WhisperSettingsModel = WhisperSettingsModel(),
         insert: ((String) -> Void)? = nil
     ) {
         self.settings = settings
         self.update = update
+        self.currentSettings = currentSettings
         _model = State(initialValue: model)
         _engine = State(initialValue: engine)
         insertOverride = insert
@@ -139,6 +142,7 @@ struct DictationSettingsView: View {
         }
         .onChange(of: settings, initial: true) {
             engine.settings = settings
+            engine.currentSettings = currentSettings
             SpeechEngines.select(settings)
         }
         .task(id: [settings.dictationLocale, settings.dictationEngine.rawValue, settings.whisperModel]) {

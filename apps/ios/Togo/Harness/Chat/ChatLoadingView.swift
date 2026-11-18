@@ -14,7 +14,7 @@ enum ChatLoadingState: Equatable {
     }
 
     @MainActor static func hasContent(_ store: HarnessSessionStore) -> Bool {
-        !store.rows.isEmpty || !store.queue.isEmpty || store.liveWork != nil
+        !store.rows.isEmpty || !store.queue.isEmpty || store.liveWork != nil || store.interaction != nil
     }
 
     var isProgress: Bool { self == .reading || self == .reconnecting }
@@ -23,12 +23,19 @@ enum ChatLoadingState: Equatable {
 struct ChatLoadingView: View {
     let state: ChatLoadingState
     var inline = false
+    var hostID: UUID?
 
     var body: some View {
         Group {
             switch state {
             case .reading, .reconnecting:
-                ProgressView(state == .reading ? ChatCopy.reading : ChatCopy.reconnecting)
+                ProgressView {
+                    if let hostID, let progress = ConnectionProgress.shared.summary(for: hostID, purpose: .requests) {
+                        ConnectionProgressLabel(summary: progress)
+                    } else {
+                        Text(state == .reading ? ChatCopy.reading : ChatCopy.reconnecting)
+                    }
+                }
                     .controlSize(inline ? .small : .regular)
                     .font(inline ? .footnote : .body)
                     .multilineTextAlignment(.center)

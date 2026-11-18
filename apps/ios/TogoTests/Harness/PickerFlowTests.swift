@@ -19,6 +19,25 @@ import TogoKit
         #expect(model.tap(picker.items[0], in: picker) == .none)
     }
 
+    @Test func previewPickerKeepsContextOperationsSeparateFromModelRoles() throws {
+        let item = HarnessScreen.Picker.Item(id: "session-a", title: "A conversation",
+            preview: .init(body: .init(kind: "kv", kv: [.init(label: "Status", value: "done")]),
+                           sections: [.init(title: "Conversation", body: .init(kind: "markdown", text: "A neutral prompt\n\nA neutral answer"))]))
+        let browser = HarnessScreen.Picker(items: [item], searchable: true, onSelect: "resume", onSelectLabel: "Resume",
+            contextActions: [.init(id: "rename", label: "Rename"), .init(id: "delete", label: "Delete", role: .destructive)],
+            selectionBehavior: "preview")
+        let model = PickerModel(browser)
+        #expect(model.tap(item, in: browser) == .details)
+        #expect(browser.itemActions == nil)
+        #expect(browser.contextActions?.map(\.label) == ["Rename", "Delete"])
+        #expect(item.preview?.sections?.first?.title == "Conversation")
+        let data = try JSONEncoder().encode(browser)
+        #expect(try JSONDecoder().decode(HarnessScreen.Picker.self, from: data) == browser)
+        // Existing model pickers still commit on tap, and a selected value stays put.
+        #expect(PickerModel(picker).tap(picker.items[1], in: picker) == .select)
+        #expect(PickerModel(picker).tap(picker.items[0], in: picker) == .none)
+    }
+
     @Test func closesPerResult() {
         func closes(_ outcome: HarnessActionResult.Outcome) -> Bool {
             PickerModel.closes(HarnessActionResult(result: outcome))

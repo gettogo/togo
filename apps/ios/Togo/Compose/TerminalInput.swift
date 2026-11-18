@@ -9,7 +9,7 @@ import UIKit
 enum ComposeCopy {
     static let send = String(localized: "compose.send", defaultValue: "Send")
     static let dismiss = String(localized: "compose.dismiss", defaultValue: "Dismiss")
-    static let tryAgain = String(localized: "compose.tryAgain", defaultValue: "Try again")
+    static let tryAgain = String(localized: "compose.tryAgain", defaultValue: "Try Again")
     static let sendingImage = String(localized: "compose.sendingImage", defaultValue: "Sending image")
     static let uploadFailed = String(localized: "compose.uploadFailed", defaultValue: "Couldn't send the image.")
     static let tooLarge = String(localized: "compose.tooLarge", defaultValue: "This image is too large to send.")
@@ -31,6 +31,7 @@ enum ComposeCopy {
 /// Enter, so the session's own prompt holds the words until the user sends them there.
 @Observable @MainActor final class TerminalInputModel {
     let images: ImagePasteFlow
+    private(set) var retired = false
     /// Nil when there is nothing to listen with.
     private(set) var dictation: DictationModel?
     @ObservationIgnored private let paste: @MainActor (String) -> Void
@@ -51,11 +52,26 @@ enum ComposeCopy {
     /// words carry (a recogniser's "new line", a trailing return) becomes a space, and
     /// words that are only space type nothing.
     func type(_ words: String) {
+        guard !retired else { return }
         let clean = String(PasteText.sanitize(words).map { $0.isNewline ? " " : $0 })
             .trimmingCharacters(in: .whitespaces)
         guard !clean.isEmpty else { return }
         paste(clean)
     }
+
+    /// A closed tab can no longer receive a late image or dictation result.
+    func retire() {
+        retired = true
+        images.dismiss()
+        dictation?.relinquish()
+    }
+
+    static func prune(_ tools: inout [TabID: TerminalInputModel], keeping tabs: Set<TabID>) {
+        for id in tools.keys where !tabs.contains(id) {
+            tools.removeValue(forKey: id)?.retire()
+        }
+    }
+
 }
 
 /// What a terminal's dictation speaks with.

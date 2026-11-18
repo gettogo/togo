@@ -17,11 +17,13 @@ struct TogoLiveActivity: Widget {
             )
                 .activityBackgroundTint(Color.togoInk)
                 .activitySystemActionForegroundColor(Color.togoSnow)
-                .widgetURL(LiveCopy.link(bib: context.state.bib, machine: machine))
+                .widgetURL(LiveCopy.link(bib: context.state.bib, machine: machine,
+                    hostID: LiveCopy.machineID(hostId: context.attributes.hostId, pairings: LiveCopy.sharedPairings())))
         } dynamicIsland: { context in
             let card = LiveContextSource.card(context.state, hostId: context.attributes.hostId, stale: context.isStale)
             let machine = LiveCopy.machineName(hostId: context.attributes.hostId, pairings: LiveCopy.sharedPairings())
-            let link = LiveCopy.link(bib: context.state.bib, machine: machine)
+            let link = LiveCopy.link(bib: context.state.bib, machine: machine,
+                hostID: LiveCopy.machineID(hostId: context.attributes.hostId, pairings: LiveCopy.sharedPairings()))
             return DynamicIsland {
                 // One header row: the mark, title and state lead, the clock trails. Both drop
                 // below the camera together when the title will not fit beside it.

@@ -25,7 +25,15 @@ enum Load<T: Equatable>: Equatable {
     /// The most sessions a machine holds: bibs run from 01 to 99.
     static let sessionLimit = 99
 
-    private(set) var machines: [Machine]
+    private let initialMachines: [Machine]
+    @ObservationIgnored private let machinesNow: (@MainActor () -> [MachineSection])?
+    var machines: [Machine] {
+        guard let machinesNow else { return initialMachines }
+        let rows = machinesNow()
+        return rows.isEmpty ? Self.choices(from: services.hosts) : rows.map(Self.choice(from:))
+    }
+    /// An explicit plain-agent choice must not acquire a preset as library/capabilities load.
+    @ObservationIgnored private var registryChosen = false
     var step: Step {
         didSet {
             // Leaving the folder step drops any listing still on its way.
@@ -68,15 +76,17 @@ enum Load<T: Equatable>: Equatable {
 
     init(
         services: any AppServices, hostID: HostID?, machines: [MachineSection] = [],
+        machinesNow: (@MainActor () -> [MachineSection])? = nil,
         library: AgentLibrary = .inMemory(),
         open: @escaping (HostID, String, String?) -> Void = { _, _, _ in }
     ) {
         self.services = services
+        self.machinesNow = machinesNow
         self.library = library
         self.open = open
         favoritesAtOpen = library.favorites
         let choices = machines.isEmpty ? Self.choices(from: services.hosts) : machines.map(Self.choice(from:))
-        self.machines = choices
+        initialMachines = choices
         let preselected = hostID ?? (choices.count == 1 ? choices[0].id : nil)
         self.hostID = preselected
         skipsMachineStep = preselected != nil
@@ -130,7 +140,8 @@ enum Load<T: Equatable>: Equatable {
     func toggleFavorite(_ agent: String) { library.toggleFavorite(agent) }
 
     var selectedAgent: AgentInfo? {
-        offeredAgents.first { $0.id == agentID && $0.installed } ?? offeredAgents.first { $0.installed }
+        let selected = offeredAgents.first { $0.id == agentID && $0.installed }
+        return registryChosen ? selected : selected ?? offeredAgents.first { $0.installed }
     }
 
     var presets: [AgentPreset] { library.presets }
@@ -177,11 +188,12 @@ enum Load<T: Equatable>: Equatable {
     var canStart: Bool {
         guard !creating else { return false }
         if helperMissing { return true }
-        guard !presetMissing else { return false }
+        guard !presetMissing, flagsAvailable || flags.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         return (selectedPreset != nil || selectedAgent != nil) && flagsError == nil
     }
 
     func choose(agent id: String) {
+        registryChosen = true
         agentID = id
         presetID = nil
         flags = ""
@@ -190,6 +202,7 @@ enum Load<T: Equatable>: Equatable {
 
     /// Fills the flags with the preset's own; edits apply to this start only.
     func choose(preset: AgentPreset) {
+        registryChosen = false
         presetID = preset.id
         flags = ArgsParser.join(preset.args)
         rememberFolder = isRemembered(preset)
@@ -292,6 +305,7 @@ enum Load<T: Equatable>: Equatable {
     }
 
     private func clearPreset() {
+        registryChosen = false
         presetID = nil
         flags = ""
         rememberFolder = false
@@ -305,8 +319,11 @@ enum Load<T: Equatable>: Equatable {
         guard self.hostID == hostID, self.cwd == cwd else { return }
         rememberedPreset = id
         let wanted = [requestedPresetID, id].lazy.compactMap { self.library.preset($0) }.first { self.canUse($0) }
-        if presetID == nil, let preset = wanted { choose(preset: preset) }
+        if presetID == nil, !registryChosen, flags.isEmpty, let preset = wanted { choose(preset: preset) }
     }
+
+    /// A requested preset may arrive after the sheet, or need launch support that just loaded.
+    func refreshPresetEligibility() async { await applyRemembered() }
 
     func loadAgents() async {
         guard let hostID else { return }

@@ -14,7 +14,7 @@ public struct PlainTmuxSource: SessionSource {
     /// record saved without it can switch to the helper. It runs at most once per connection.
     public init(record: HostRecord, env: SessionEnvironment, helperFound: (@Sendable (String) -> Void)? = nil) {
         self.init(host: record.profile.name, now: { Date() }, helperFound: helperFound) {
-            let connection = env.connection(for: record.profile)
+            let connection = env.connection(for: record.profile, purpose: .monitor)
             do {
                 try await connection.connect()
             } catch {
@@ -156,6 +156,12 @@ public enum PlainTmux {
     /// The name is `$1`, so it reaches tmux as one argument whatever it contains.
     public static func attachArgv(name: String, tmuxCandidates: [String] = standardTmuxPaths) -> [String] {
         script(candidates: tmuxCandidates, #"if [ -n "$t" ]; then exec "$t" attach-session -t "=$1"; fi; exec "${SHELL:-/bin/sh}" -l"#, name)
+    }
+
+    /// No tmux still permits the plain-shell fallback. With tmux, a missing session must
+    /// end the tab rather than starting another attach that exits immediately.
+    static func sessionProbeArgv(name: String) -> [String] {
+        script(#"if [ -n "$t" ]; then exec "$t" has-session -t "=$1"; fi; exit 0"#, name)
     }
 
     /// Creates a detached session. `cwd` is `$2` and only used when not empty.

@@ -3,6 +3,8 @@ import Foundation
 /// Session capabilities a harness adapter advertises in `harness.describe`. The app shows a
 /// layer, a mission control section or a control only when its flag is present.
 public enum HarnessCapability {
+    public static let terminalNative = "terminal.native"
+    public static let surface = "surface"
     public static let chat = "chat"
     public static let chatStream = "chat.stream"
     public static let history = "chat.history"
@@ -367,10 +369,11 @@ public struct HarnessCompletion: Codable, Hashable, Sendable {
     /// A native home opened instead of typing: `status`, `changes` or a screen id.
     public var opens: String?
     public var choices: [Choice]?
+    public var native: NativeCommandMetadata?
 
     public init(insert: String, title: String, detail: String? = nil, hint: String? = nil, screen: String? = nil,
                 kind: Kind? = nil, role: HarnessActionRef.Role? = nil, action: String? = nil, opens: String? = nil,
-                choices: [Choice]? = nil) {
+                choices: [Choice]? = nil, native: NativeCommandMetadata? = nil) {
         self.insert = insert
         self.title = title
         self.detail = detail
@@ -381,6 +384,7 @@ public struct HarnessCompletion: Codable, Hashable, Sendable {
         self.action = action
         self.opens = opens
         self.choices = choices
+        self.native = native
     }
 }
 
@@ -421,6 +425,10 @@ public struct HarnessNotification: Codable, Hashable, Sendable {
         public init(rawValue: String) { self.rawValue = rawValue }
         public static let items: Self = "items"
         public static let mission: Self = "mission"
+        /// The running program's command catalog changed; read completions again.
+        public static let commands: Self = "commands"
+        /// A submitted native operation has a late menu ready to attach.
+        public static let menu: Self = "menu"
         /// Open the session again: the adapter or epoch changed, or the connection fell behind.
         public static let reset: Self = "reset"
     }
@@ -432,9 +440,10 @@ public struct HarnessNotification: Codable, Hashable, Sendable {
     public var items: [HarnessItem]?
     public var mission: HarnessDelta?
     public var reason: String?
+    public var requestId: String?
 
     public init(sessionId: String, kind: Kind, ts: WireDate, epoch: String, items: [HarnessItem]? = nil,
-                mission: HarnessDelta? = nil, reason: String? = nil) {
+                mission: HarnessDelta? = nil, reason: String? = nil, requestId: String? = nil) {
         self.sessionId = sessionId
         self.kind = kind
         self.ts = ts
@@ -442,9 +451,10 @@ public struct HarnessNotification: Codable, Hashable, Sendable {
         self.items = items
         self.mission = mission
         self.reason = reason
+        self.requestId = requestId
     }
 
-    private enum CodingKeys: String, CodingKey { case sessionId, kind, ts, epoch, items, mission, reason }
+    private enum CodingKeys: String, CodingKey { case sessionId, kind, ts, epoch, items, mission, reason, requestId }
 
     /// Items decode one by one, as in an open result: one item this client cannot read is
     /// skipped instead of dropping the whole notification, and with it the items beside it
@@ -458,5 +468,6 @@ public struct HarnessNotification: Codable, Hashable, Sendable {
         items = try c.decodeIfPresent(LenientItems.self, forKey: .items)?.items
         mission = try c.decodeIfPresent(HarnessDelta.self, forKey: .mission)
         reason = try c.decodeIfPresent(String.self, forKey: .reason)
+        requestId = try? c.decode(String.self, forKey: .requestId)
     }
 }

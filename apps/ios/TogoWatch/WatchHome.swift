@@ -44,6 +44,10 @@ enum WatchHome {
     /// How long an answered request stays on the page, so its result and haptic land before
     /// the next request takes its place.
     static let holdAfterAnswer: Duration = .milliseconds(1200)
+    /// Receipt delivery may lag the relay acknowledgement. Never hold the queue forever.
+    static func answerHold(expectsReceipt: Bool) -> Duration {
+        expectsReceipt ? .seconds(10) : holdAfterAnswer
+    }
     /// How long a request's buttons wait after it shows, so a second tap meant for the one
     /// before cannot answer it.
     static let armDelay: Duration = .milliseconds(500)

@@ -11,6 +11,7 @@ import TogoPush
 enum LiveStatus: Equatable {
     case needsYou, working, done, ended, failed, offline, other, expired, notUpdated
     case sending, sent, sendFailed, answeredElsewhere
+    case applied, closed, unconfirmed, notApplied
 
     init(_ raw: String, stale: Bool = false, feedback: LiveAnswerFeedback? = nil) {
         if stale {
@@ -23,6 +24,11 @@ enum LiveStatus: Equatable {
             case .sent: self = .sent
             case .failed: self = .sendFailed
             case .answeredElsewhere: self = .answeredElsewhere
+            case .applied: self = .applied
+            case .expired: self = .expired
+            case .closed: self = .closed
+            case .unconfirmed: self = .unconfirmed
+            case .notApplied: self = .notApplied
             }
             return
         }
@@ -51,7 +57,11 @@ enum LiveStatus: Equatable {
         case .sending: String(localized: "live.answer.sending", defaultValue: "Sending")
         case .sent: String(localized: "live.answer.sent", defaultValue: "Answer sent")
         case .sendFailed: String(localized: "live.answer.failed", defaultValue: "Could not send")
-        case .answeredElsewhere: String(localized: "live.answer.elsewhere", defaultValue: "Answered elsewhere")
+        case .answeredElsewhere: String(localized: "live.answer.already", defaultValue: "Already answered")
+        case .applied: String(localized: "live.answer.applied", defaultValue: "Answer applied")
+        case .closed: String(localized: "live.answer.closed", defaultValue: "No longer waiting")
+        case .unconfirmed: String(localized: "live.answer.unconfirmed", defaultValue: "Answer not confirmed")
+        case .notApplied: String(localized: "live.answer.notApplied", defaultValue: "Could not apply answer")
         }
     }
 
@@ -115,6 +125,10 @@ enum LiveCopy {
         pairings?.pairing(hostId: hostId)?.machineName ?? unknownMachine
     }
 
+    static func machineID(hostId: String, pairings: PairingStore?) -> UUID? {
+        pairings?.pairing(hostId: hostId)?.appHostID
+    }
+
     /// The pairings the app shares with its extensions; nil without the app group.
     static func sharedPairings() -> PairingStore? {
         SharedGroup.storeDirectory(SharedGroup.ios).map(PairingStore.init(directory:))
@@ -122,12 +136,14 @@ enum LiveCopy {
 
     /// `togo://session/<bib>?host=<machine>`: the link a tap opens, the same one notifications
     /// carry, so the app lands on the session that is asking.
-    static func link(bib: String?, machine: String?) -> URL? {
+    static func link(bib: String?, machine: String?, hostID: UUID? = nil, sessionID: String? = nil) -> URL? {
         guard let bib, !bib.isEmpty, var parts = URLComponents(string: "togo://session/") else { return nil }
         parts.path = "/" + bib
-        if let machine, !machine.isEmpty, machine != unknownMachine {
-            parts.queryItems = [URLQueryItem(name: "host", value: machine)]
-        }
+        var items: [URLQueryItem] = []
+        if let machine, !machine.isEmpty, machine != unknownMachine { items.append(URLQueryItem(name: "host", value: machine)) }
+        if let hostID { items.append(URLQueryItem(name: "hostID", value: hostID.uuidString)) }
+        if let sessionID, !sessionID.isEmpty { items.append(URLQueryItem(name: "sessionID", value: sessionID)) }
+        if !items.isEmpty { parts.queryItems = items }
         return parts.url
     }
 

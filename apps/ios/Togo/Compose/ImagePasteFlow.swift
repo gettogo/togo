@@ -60,7 +60,9 @@ struct PendingImage: Identifiable, Equatable {
     typealias Upload = @MainActor (_ name: String, _ data: Data) async throws -> String
     typealias Load = @MainActor () async throws -> Data?
 
-    let support: ImageSupport
+    private let initialSupport: ImageSupport
+    private let supportNow: (@MainActor () -> ImageSupport)?
+    var support: ImageSupport { supportNow?() ?? initialSupport }
     private(set) var phase: Phase
     private let upload: Upload
     private let paste: @MainActor (String) -> Void
@@ -69,12 +71,16 @@ struct PendingImage: Identifiable, Equatable {
     private var pending: ImageShrinker.Encoded?
     /// How the last picked photo was fetched, so Try again can fetch it again.
     private var loader: Load?
+    /// New input or dismissal revokes every callback from the previous attempt.
+    private var operation = UUID()
 
     init(
         support: ImageSupport, phase: Phase = .idle, upload: @escaping Upload,
-        paste: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init
+        paste: @escaping @MainActor (String) -> Void, now: @escaping () -> Date = Date.init,
+        supportNow: (@MainActor () -> ImageSupport)? = nil
     ) {
-        self.support = support
+        initialSupport = support
+        self.supportNow = supportNow
         self.phase = phase
         self.upload = upload
         self.paste = paste
@@ -102,8 +108,15 @@ struct PendingImage: Identifiable, Equatable {
     }
 
     func begin(_ data: Data) async {
-        guard canBegin else { return }
-        guard let preview = await Self.preview(data) else {
+        guard !Task.isCancelled, canBegin else { return }
+        let current = startOperation()
+        await annotate(data, operation: current)
+    }
+
+    private func annotate(_ data: Data, operation current: UUID) async {
+        let preview = await Self.preview(data)
+        guard continuing(current) else { return }
+        guard let preview else {
             phase = .unreadable
             return
         }
@@ -112,35 +125,42 @@ struct PendingImage: Identifiable, Equatable {
 
     /// A picked photo can fail to arrive, for example when its iCloud original cannot download.
     func load(_ fetch: @escaping Load) async {
-        guard canBegin else { return }
+        guard !Task.isCancelled, canBegin else { return }
+        let current = startOperation()
         loader = fetch
-        guard let data = try? await fetch() else {
+        let data = try? await fetch()
+        guard continuing(current) else { return }
+        guard let data else {
             phase = .loadFailed
             return
         }
         loader = nil
-        await begin(data)
+        await annotate(data, operation: current)
     }
 
     /// `annotated` is the preview with marks drawn on it, or nil when nothing was drawn.
     func send(annotated: UIImage?) async {
-        guard case .annotating(let image) = phase else { return }
+        guard !Task.isCancelled, case .annotating(let image) = phase else { return }
+        let current = operation
         phase = .uploading
         let source: ShrinkSource = if let marked = annotated?.cgImage { .image(marked) } else { .data(image.original) }
-        guard let encoded = await Self.shrink(source) else {
+        let encoded = await Self.shrink(source)
+        guard continuing(current) else { return }
+        guard let encoded else {
             phase = .tooLarge
             return
         }
         pending = encoded
-        await deliver(encoded)
+        await deliver(encoded, operation: current)
     }
 
     func retry() async {
+        guard !Task.isCancelled else { return }
         switch phase {
         case .failed:
             guard let pending else { return }
             phase = .uploading
-            await deliver(pending)
+            await deliver(pending, operation: operation)
         case .loadFailed:
             guard let loader else { return }
             phase = .idle
@@ -161,9 +181,26 @@ struct PendingImage: Identifiable, Equatable {
     }
 
     func dismiss() {
+        operation = UUID()
         pending = nil
         loader = nil
         phase = .idle
+    }
+
+    private func startOperation() -> UUID {
+        operation = UUID()
+        pending = nil
+        loader = nil
+        return operation
+    }
+
+    private func continuing(_ current: UUID) -> Bool {
+        guard operation == current else { return false }
+        guard !Task.isCancelled else {
+            dismiss()
+            return false
+        }
+        return true
     }
 
     private var canBegin: Bool {
@@ -180,13 +217,15 @@ struct PendingImage: Identifiable, Equatable {
         }
     }
 
-    private func deliver(_ encoded: ImageShrinker.Encoded) async {
+    private func deliver(_ encoded: ImageShrinker.Encoded, operation current: UUID) async {
         do {
             let path = try await upload(fileName(encoded.fileExtension), encoded.data)
+            guard continuing(current) else { return }
             // Quoted so a path with spaces stays one word; the space lets the user keep typing.
             paste(shellQuote([path]) + " ")
-            confirmSent()
+            confirmSent(operation: current)
         } catch {
+            guard continuing(current) else { return }
             phase = .failed(detail: ServiceErrors.message(error))
         }
     }
@@ -196,7 +235,7 @@ struct PendingImage: Identifiable, Equatable {
 
     /// The picture went: a success haptic, VoiceOver hears it, and the status says so for a
     /// moment before it closes, so a path appearing in the terminal is never a surprise.
-    private func confirmSent() {
+    private func confirmSent(operation current: UUID) {
         pending = nil
         loader = nil
         phase = .sent
@@ -204,7 +243,7 @@ struct PendingImage: Identifiable, Equatable {
         AccessibilityNotification.Announcement(ComposeCopy.imageSent).post()
         Task { [weak self] in
             try? await Task.sleep(for: Self.sentHold)
-            guard let self, self.phase == .sent else { return }
+            guard let self, self.operation == current, self.phase == .sent else { return }
             self.phase = .idle
         }
     }

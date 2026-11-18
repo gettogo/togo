@@ -38,6 +38,7 @@ import UIKit
     enum Segment: Equatable {
         case text([MarkdownBlocks.Block])
         case code(String)
+        case richCode(MarkdownFence)
         case table(MarkdownTable)
     }
 
@@ -47,6 +48,8 @@ import UIKit
             switch block {
             case .code(_, let code):
                 out.append(.code(code))
+            case .richCode(let fence):
+                out.append(.richCode(fence))
             case .table(let table):
                 out.append(.table(table))
             case .prose, .heading:
@@ -110,6 +113,7 @@ import UIKit
             case .prose(let prose): piece = hangingListItems(attributed(ChatLinks.markdown(prose), style: .prose, traits: traits))
             case .heading(let heading): piece = attributed(ChatLinks.markdown(heading), style: .heading, traits: traits)
             case .code(_, let code): piece = attributed(ChatLinks.plain(code), style: .code, traits: traits)
+            case .richCode(let fence): piece = attributed(ChatLinks.plain(fence.source), style: .code, traits: traits)
             case .table(let table): piece = attributed(AttributedString(table.tabSeparated()), style: .prose, traits: traits)
             }
             if index > 0 {

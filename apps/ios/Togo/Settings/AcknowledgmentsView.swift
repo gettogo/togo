@@ -21,6 +21,7 @@ struct Acknowledgment: Identifiable, Equatable, Sendable {
         Acknowledgment(id: "togo", name: "Togo", license: gpl),
         Acknowledgment(id: "mosh", name: "Mosh", license: gpl),
         Acknowledgment(id: "togo-helper", name: "Togo helper and relay", license: "MIT"),
+        Acknowledgment(id: "mermaid", name: "Mermaid", license: "MIT"),
         Acknowledgment(id: "bigint", name: "BigInt", license: "MIT"),
         Acknowledgment(id: "citadel", name: "Citadel", license: "MIT", modified: true),
         Acknowledgment(id: "protobuf", name: "Protocol Buffers", license: "BSD 3-Clause"),

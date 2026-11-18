@@ -177,6 +177,35 @@ struct ImportHostsTests {
         #expect(saved.records.map(\.profile.name) == ["fine"])
     }
 
+    @Test(arguments: ["reset", "review", "load", "toggle"])
+    func saveCannotBeResetOrReplacedWhileSuspended(_ operation: String) async throws {
+        let saved = SavedImports()
+        var waiting: CheckedContinuation<Void, any Error>?
+        let model = ImportHostsModel(existing: { saved.records }, deviceKeyID: { "k" }, save: { record in
+            try await withCheckedThrowingContinuation { waiting = $0 }
+            saved.records.append(record)
+        })
+        model.text = "Host a\n HostName a.example.com\n User sam\n"
+        model.review()
+        let task = Task { await model.importTicked() }
+        for _ in 0..<100 where waiting == nil { try? await Task.sleep(for: .milliseconds(10)) }
+        let release = try #require(waiting)
+        switch operation {
+        case "reset": model.startOver()
+        case "review": model.text = "Host b\n HostName b.example.com\n User sam\n"; model.review()
+        case "load": _ = model.loadFile(Data("Host b\n HostName b.example.com\n User sam\n".utf8))
+        default: model.toggle("a")
+        }
+        #expect(model.rows.map(\.id) == ["a"])
+        #expect(model.tickedCount == 1 && model.reviewed)
+        // On the broken path, abort the fake save instead of deliberately crashing the runner.
+        if model.rows.map(\.id) == ["a"] { release.resume() }
+        else { release.resume(throwing: CancellationError()) }
+        await task.value
+        #expect(saved.records.count == 1)
+        #expect(model.finished && !model.saving)
+    }
+
     @Test func retryAfterPartialFailureNeverDuplicates() async {
         let saved = SavedImports()
         var calls = 0

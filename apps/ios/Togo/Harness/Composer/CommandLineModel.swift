@@ -6,20 +6,6 @@ import TogoKit
 /// The smart command line's state: the draft, the / and @ menus, history and favourites, the
 /// mode chip and the prompts queued while the agent works.
 @MainActor @Observable final class CommandLineModel {
-    /// What the menu above the field lists.
-    enum Menu: Equatable {
-        case none
-        case commands([HarnessCompletion])
-        case files([HarnessCompletion])
-
-        var items: [HarnessCompletion] {
-            switch self {
-            case .none: []
-            case .commands(let items), .files(let items): items
-            }
-        }
-    }
-
     static let debounce: Duration = .milliseconds(150)
 
     var draft = "" {
@@ -51,6 +37,7 @@ import TogoKit
     private(set) var paletteFailed = false
     /// Every command, for the palette; loaded when it opens.
     private(set) var palette: [HarnessCompletion] = []
+    @ObservationIgnored var paletteRevision: UUID?
     /// What the palette's search starts with when it opens: a choice command typed in full.
     var paletteSeed: String?
     private(set) var sending = false
@@ -74,7 +61,7 @@ import TogoKit
     private(set) var pendingQueued: [HarnessItem] = []
     /// A mode this phone set, with the mode it replaced: it holds until the session reports
     /// another mode than that one.
-    private var modeOverride: (id: String, over: String)?
+    var modeOverride: (id: String, over: String, revision: UInt64)?
     private var historyIndex: Int?
     /// The last Send's words, so a late dictation result does not put them back (`SentEcho`).
     @ObservationIgnored private var sentEcho: SentEcho?
@@ -103,7 +90,8 @@ import TogoKit
     /// The mode chip's current mode id.
     var mode: String {
         let reported = routes.mode()
-        guard let modeOverride, modeOverride.over == reported else { return reported }
+        guard let modeOverride, modeOverride.over == reported,
+              modeOverride.revision == routes.modeRevision() else { return reported }
         return modeOverride.id
     }
     var modes: [HarnessChoice] { routes.modes() }
@@ -121,7 +109,7 @@ import TogoKit
         StateChip.title(rows: sessionRows, status: status, modeLabel: modeLabel, describing: routes.describing())
     }
     var showsStateChip: Bool { !sessionRows.isEmpty }
-    var canInterrupt: Bool { working && routes.has(HarnessCapability.interrupt) }
+    var canInterrupt: Bool { working && routes.has(HarnessCapability.interrupt) && routes.canInterruptNow() }
     var scope: String { routes.scope() }
 
     /// Queued prompts, oldest first: the conversation's, then this phone's not yet shown there.
@@ -164,6 +152,7 @@ import TogoKit
         }
         guard let trigger = CommandLineLogic.trigger(in: draft), allows(trigger) else {
             menu = .none
+            clearFileCompletionFailure()
             return
         }
         if let cache, cache.kind == trigger.kind, trigger.query.lowercased().hasPrefix(cache.query.lowercased()) {
@@ -175,9 +164,15 @@ import TogoKit
         do {
             items = try await routes.complete(trigger.kind, trigger.query)
         } catch {
+            guard !Task.isCancelled, CommandLineLogic.trigger(in: draft) == trigger else { return }
+            if showFileCompletionFailure(error, for: trigger) {
+                cache = nil
+                menu = .none
+            }
             return
         }
         guard !Task.isCancelled, CommandLineLogic.trigger(in: draft) == trigger else { return }
+        if case .file = trigger { clearFileCompletionFailure() }
         cache = (trigger.kind, trigger.query, items)
         show(items, for: trigger)
     }
@@ -203,6 +198,7 @@ import TogoKit
     func closeMenu() {
         menu = .none
         highlight = 0
+        clearFileCompletionFailure()
     }
 
     /// The menu's close control (and a tap outside it): the menu goes, and a bare "@" that
@@ -269,6 +265,13 @@ import TogoKit
     /// it); false when it opened its screen or went to the field; true when the caller should
     /// `perform` it.
     private func takeFromMenu(_ completion: HarnessCompletion, typed: Bool) -> Bool? {
+        if opensOriginalScreen(completion), completion.native?.args != "required" {
+            closeMenu()
+            cache = nil
+            draft = ""
+            pendingArgs = nil
+            return true
+        }
         let dispatch = typed ? CommandKind.dispatch(completion) : CommandKind.picking(completion)
         if case .choose = dispatch { return nil }
         closeMenu()
@@ -316,11 +319,16 @@ import TogoKit
     /// Loads every command for the palette.
     func loadPalette() async {
         guard routes.has(HarnessCapability.commands) else { return }
+        let revision = store.commandRevision
         paletteFailed = false
         do {
-            palette = try await routes.complete(.command, "")
+            let commands = try await routes.complete(.command, "")
+            guard revision == store.commandRevision else { return }
+            palette = commands
+            paletteRevision = revision
             store.commandList = palette
         } catch {
+            guard revision == store.commandRevision else { return }
             Self.log.error("command list failed: \(String(describing: error), privacy: .public)")
             // A spinner that never ends reads as a hang: say so and offer to try again.
             paletteFailed = palette.isEmpty
@@ -426,6 +434,7 @@ import TogoKit
     private func send(_ text: String, mode: HarnessSendParams.Mode, images: [String] = []) async throws {
         let sent: HarnessItem?
         if images.isEmpty {
+            if try await sendNativeCommand(text) { return }
             sent = try await routes.send(text, mode)
         } else {
             guard let sendImages = routes.sendImages else { throw HarnessUnavailable() }
@@ -477,43 +486,6 @@ import TogoKit
         } catch {
             notice = ComposerCopy.notCancelled
         }
-    }
-
-    /// Sets the mode through `ActionGate`: a mode change that restarts the agent asks while it
-    /// works. The chip keeps the new mode until the session reports another.
-    func setMode(_ id: String) async {
-        guard id != mode, let choice = modes.first(where: { $0.id == id }) else { return }
-        let previous = modes.first { $0.id == mode }
-        let over = routes.mode()
-        let change = GatedChange(
-            action: "set_mode", args: ["id": .string(id)], confirm: nil, setting: PrimitiveCopy.mode, value: choice.label,
-            previous: previous.map { ($0.label, ["id": .string($0.id)]) }
-        )
-        await gate.change(change, context: gateContext) { [weak self] result in
-            guard let self else { return }
-            switch result?.result {
-            case .failed?, .fallback?, nil:
-                if result != nil { self.notice = result?.message ?? ComposerCopy.modeNotChanged }
-            default:
-                self.modeOverride = (id, over)
-                self.notice = nil
-                self.paletteOpen = false
-            }
-        }
-    }
-
-    /// The mode after the current one, wrapping: Shift+Tab steps through the modes as it does
-    /// at the desk. nil when the session has no modes to step through.
-    var nextMode: String? {
-        guard showsModeChip, modes.count > 1 else { return nil }
-        let index = modes.firstIndex { $0.id == mode } ?? -1
-        return modes[(index + 1) % modes.count].id
-    }
-
-    /// Shift+Tab in the field: the next mode, through the chip's own verified path.
-    func cycleMode() async {
-        guard let next = nextMode else { return }
-        await setMode(next)
     }
 
     func clearNotice() {

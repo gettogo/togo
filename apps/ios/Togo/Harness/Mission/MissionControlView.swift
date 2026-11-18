@@ -31,43 +31,47 @@ struct MissionControlView: View {
     var showChat: (String?) -> Void = { _ in }
 
     private var sections: [HarnessSection] {
-        MissionLayout.sections(store.mission.mission, capabilities: store.descriptor.map { Set($0.capabilities) })
+        MissionLayout.presentedSections(store.mission.mission, descriptor: store.descriptor)
     }
 
     var body: some View {
         // Rows and sections arriving or leaving move in one `resize` transaction (`IdentityKeyed`);
         // text inside them updates in place. The first render is a cut.
         IdentityKeyed(sections, key: MissionLayout.shape) { sections in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 26) {
-                    ForEach(sections) { section in
-                        VStack(alignment: .leading, spacing: 10) {
-                            MissionSectionHeader(kind: section.kind, count: count(section))
-                            content(section)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 26) {
+                        ForEach(sections) { section in
+                            VStack(alignment: .leading, spacing: 10) {
+                                MissionSectionHeader(
+                                    kind: section.kind,
+                                    count: MissionLayout.headerCount(section, summary: store.mission.summary)
+                                )
+                                content(section)
+                            }
+                            .id(section.kind.rawValue)
+                            // motion: preventing a jump — a section that arrives fades in where the
+                            // sections below glided to make room; nothing rises.
+                            .transition(Motion.arrive(reduce: reduceMotion))
                         }
-                        .id(section.kind.rawValue)
-                        // motion: preventing a jump — a section that arrives fades in where the
-                        // sections below glided to make room; nothing rises.
-                        .transition(Motion.arrive(reduce: reduceMotion))
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-                .padding(.bottom, 24)
+                .overlay { placeholder(empty: sections.isEmpty) }
+                .task(id: store.missionSection.map { $0.rawValue + sections.map(\.id).joined(separator: ",") }) {
+                    guard let target = store.missionSection, sections.contains(where: { $0.kind == target }) else { return }
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    proxy.scrollTo(target.rawValue, anchor: .top)
+                    store.missionSection = nil
+                }
             }
-            .overlay { placeholder(empty: sections.isEmpty) }
         }
         .background(Color.togoInk)
         .navigationTitle(MissionCopy.title)
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func count(_ section: HarnessSection) -> Int {
-        switch section.kind {
-        case .needs: max(section.rows.count, store.mission.summary.needsYou)
-        case .plan: 0
-        default: section.rows.count
-        }
     }
 
     // MARK: Sections
@@ -120,7 +124,7 @@ struct MissionControlView: View {
             let displayed = kind == .agents ? AgentLabel.resolved(row, in: store.timeline) : row
             let target = MissionLayout.target(for: row, in: kind)
             Button { open(row, kind: kind) } label: {
-                MissionRowView(row: displayed, opens: target != nil, openLabel: target.map(openLabel))
+                MissionRowView(row: displayed, opens: target != nil, openLabel: target.map(openLabel), showsActivity: kind == .agents)
             }
             .buttonStyle(.plain)
             .disabled(target == nil)
@@ -273,6 +277,7 @@ struct MissionControlStack: View {
         }
         // A screen's sign-in pushes here, never a sheet over this one.
         .environment(\.pushSignIn, PushSignIn { path.append(.signIn($0)) })
+        .onChange(of: store.missionSection) { _, section in if section != nil { path = [] } }
         // Links in rows, cards and screens go through the chat's router, as in the chat.
         .environment(\.openURL, OpenURLAction { actions.open($0) })
     }
@@ -286,10 +291,14 @@ struct MissionControlStack: View {
         }
     }
 
+    func subagentView(_ id: String) -> SubagentChatView {
+        SubagentChatView(store: store, agentID: id, actions: actions)
+    }
+
     @ViewBuilder private func destination(_ route: MissionRoute) -> some View {
         switch route {
         case .agent(let id):
-            SubagentChatView(store: store, agentID: id)
+            subagentView(id)
                 .background(Color.togoInk)
         case .job(let row):
             // The live tail, and Open terminal when the process has a pane of its own; the host

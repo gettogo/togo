@@ -54,7 +54,7 @@ struct CommandPaletteView: View {
                 model.paletteSeed = nil
             }
         }
-        .task { await model.loadPalette() }
+        .task(id: model.store.commandRevision) { await model.loadPalette() }
         // The dialog a command asks with shows here while the palette is up.
         .actionConfirmation(Binding(get: { model.gate.asking }, set: { model.gate.asking = $0 }))
     }
@@ -77,7 +77,7 @@ struct CommandPaletteView: View {
         let all = CommandLineLogic.filter(model.palette, query: bare).filter { !folded.contains(CommandKind.line($0)) }
         let session = rows.filter { row in
             bare.isEmpty || row.title.localizedCaseInsensitiveContains(bare)
-                || (row.command.map { CommandKind.line($0).localizedCaseInsensitiveContains(bare) } ?? false)
+                || (row.command.map { !CommandLineLogic.filter([$0], query: bare).isEmpty } ?? false)
         }
         let favourites = model.memory.favourites(model.scope)
         let recents = model.memory.recentCommands(model.scope)
@@ -135,7 +135,7 @@ struct CommandPaletteView: View {
     private func section(_ title: String, _ items: [HarnessCompletion]) -> some View {
         Section {
             ForEach(items, id: \.self) { item in
-                PaletteCommandRow(model: model, item: item, screenTitle: screenTitle) { open($0) }
+                PaletteCommandRow(model: model, item: item, screenTitle: screenTitle, query: bare) { open($0) }
                     .listRowInsets(EdgeInsets())
                     .groupedRows()
                     .swipeActions(edge: .leading) {
@@ -163,6 +163,7 @@ private struct PaletteCommandRow: View {
     let model: CommandLineModel
     let item: HarnessCompletion
     let screenTitle: (String) -> String
+    var query = ""
     let push: (String) -> Void
 
     var body: some View {
@@ -207,7 +208,7 @@ private struct PaletteCommandRow: View {
     }
 
     private func row(value: String?) -> some View {
-        CommandRow(item: item, file: false, highlighted: false, favourite: model.isFavourite(item), value: value)
+        CommandRow(item: item, file: false, highlighted: false, favourite: model.isFavourite(item), value: value ?? item.native?.state, alias: CommandLineLogic.matchingAlias(item, query: query))
     }
 }
 

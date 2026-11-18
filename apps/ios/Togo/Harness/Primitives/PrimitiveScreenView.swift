@@ -79,22 +79,41 @@ struct ScreenChrome: ViewModifier {
             // A background state: instant, in the bar, not a band over the content.
             .navigationSubtitle(PrimitiveScreenLogic.subtitle(screen) ?? "")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(PrimitiveCopy.terminal, systemImage: "terminal") { context.showTerminal() }
+                if context.showsTerminal {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(PrimitiveCopy.terminal, systemImage: "terminal") { context.showTerminal() }
+                    }
                 }
-                if !screen.actions.isEmpty {
+                if let primary = screen.actions.first(where: { $0.role == .primary }) {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button {
+                            Task { await actions.trigger(primary, place: .label, context: context) }
+                        } label: {
+                            OutcomeLabel(title: primary.label, outcome: actions.outcome(primary.id), busy: actions.isRunning(primary.id))
+                        }
+                        .disabled(actions.isRunning(primary.id))
+                    }
+                }
+                let secondary = screen.actions.filter { $0.role != .primary }
+                if !secondary.isEmpty {
                     ToolbarItemGroup(placement: .bottomBar) {
-                        ForEach(screen.actions) { ref in
-                            Button(role: ref.role == .destructive ? .destructive : nil) {
-                                Task { await actions.trigger(ref, place: .label, context: context) }
-                            } label: {
-                                Label {
-                                    OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id))
-                                } icon: {
-                                    Image(systemName: PrimitiveActionSymbol.of(ref))
+                        ForEach(secondary) { ref in
+                            if ref.id.hasPrefix("native.") {
+                                SourceActionButton(ref: ref, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id)) {
+                                    Task { await actions.trigger(ref, place: .label, context: context) }
                                 }
+                            } else {
+                                Button(role: ref.role == .destructive ? .destructive : nil) {
+                                    Task { await actions.trigger(ref, place: .label, context: context) }
+                                } label: {
+                                    Label {
+                                        OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id), busy: actions.isRunning(ref.id))
+                                    } icon: {
+                                        Image(systemName: PrimitiveActionSymbol.of(ref))
+                                    }
+                                }
+                                .disabled(actions.isRunning(ref.id))
                             }
-                            .disabled(actions.isRunning(ref.id))
                         }
                     }
                 }

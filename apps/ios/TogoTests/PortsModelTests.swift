@@ -7,6 +7,7 @@ import TogoKit
 @MainActor private final class PortServices: ReviewServices {
     var list = ReviewFixtures.ports
     var forwardFailure: (any Error)?
+    var beforeForward: (() async -> Void)?
     private(set) var portCalls = 0
     private(set) var forwardCalls: [Int] = []
     private(set) var stopped: [Int] = []
@@ -28,6 +29,7 @@ import TogoKit
 
     func forward(_ s: ReviewSubject, port: ListeningPort) async throws -> ForwardInfo {
         forwardCalls.append(port.port)
+        await beforeForward?()
         if let forwardFailure { throw forwardFailure }
         let local = local(port.port)
         // Deliberately not 127.0.0.1: the model builds the address it loads itself.
@@ -288,9 +290,40 @@ import TogoKit
         #expect(model.previewURL == nil)
     }
 
-    @Test func idleStopsForwards() async {
+    @Test func visiblePreviewSurvivesIdleWhileCopiedLinksExpire() async {
         let model = model(idle: .milliseconds(60))
         await model.open(node)
+        let other = ListeningPort(port: 3001, address: "127.0.0.1", pid: 0, command: "node")
+        await model.copyLink(other)
+        await eventually { services.stopped.contains(50_001) }
+        #expect(services.stopped == [50_001])
+        #expect(model.preview?.remote == node.port)
+        #expect(model.localPort(node.port) == 50_000)
+        model.disappear()
+    }
+
+    @Test func overlappingOpenAndCopyShareTheOpeningForward() async {
+        let model = model()
+        var waiters: [CheckedContinuation<Void, Never>] = []
+        services.beforeForward = { await withCheckedContinuation { waiters.append($0) } }
+        let first = Task { await model.open(node) }
+        await eventually { !waiters.isEmpty }
+        var secondStarted = false
+        let second = Task { secondStarted = true; await model.copyLink(node) }
+        await eventually { secondStarted }
+        #expect(services.forwardCalls == [node.port])
+        for waiter in waiters { waiter.resume() }
+        await first.value
+        await second.value
+        #expect(services.forwardCalls == [node.port])
+        #expect(services.stopped.isEmpty)
+        #expect(model.preview?.remote == node.port)
+        model.disappear()
+    }
+
+    @Test func idleStopsCopiedForwards() async {
+        let model = model(idle: .milliseconds(60))
+        await model.copyLink(node)
         await eventually { !services.stopped.isEmpty }
         #expect(services.stopped == [50_000])
         #expect(model.previewURL == nil)
@@ -300,7 +333,7 @@ import TogoKit
 
     @Test func activityPostponesIdleStop() async {
         let model = model(idle: .milliseconds(150))
-        await model.open(node)
+        await model.copyLink(node)
         for _ in 0..<4 {
             try? await Task.sleep(for: .milliseconds(60))
             model.touch()

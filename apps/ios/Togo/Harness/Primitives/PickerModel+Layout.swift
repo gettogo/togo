@@ -4,6 +4,10 @@ import TogoKit
 /// What a Picker shows where, apart from the views: which filters the groups already cover,
 /// the sidebar's order, and what each row says. Pure, so it is tested without a view.
 extension PickerModel {
+    private static func isCatalog(_ picker: HarnessScreen.Picker) -> Bool {
+        groupNames(picker).count > 1 && picker.onSelect != "terminal.select" && !picker.onSelect.hasPrefix("native.")
+    }
+
     /// Choice filters that say the same as the groups: every item's facet for the filter
     /// pairs with exactly one group and back (omp's provider filter and its provider groups,
     /// Kilo's provider id and its provider names). The sidebar or the sections already show
@@ -52,8 +56,23 @@ extension PickerModel {
     /// shown for a catalog in groups, where the id is the selector the agent takes. Session ids
     /// in an ungrouped Resume list are noise and stay on the detail.
     static func selector(of item: Item, in picker: HarnessScreen.Picker) -> String? {
-        guard groupNames(picker).count > 1, item.id != item.title else { return nil }
+        guard isCatalog(picker), item.id != item.title else { return nil }
+        // Structured references identify an action target, not a readable
+        // model name. Keep the exact id for selection without printing JSON.
+        if let value = try? JSONDecoder().decode(JSONValue.self, from: Data(item.id.utf8)) {
+            switch value {
+            case .object, .array: return nil
+            default: break
+            }
+        }
         return item.id
+    }
+
+    /// A filtered list is not an empty workspace. The program's empty-folder
+    /// sentence is useful only before a search or filter narrows the list.
+    func emptyTitle(_ picker: HarnessScreen.Picker) -> String {
+        if hasNarrowing { return PrimitiveCopy.noMatches }
+        return picker.items.isEmpty ? picker.presentation?.emptyText ?? PrimitiveCopy.nothingHere : PrimitiveCopy.nothingHere
     }
 
     /// The short facts a row shows as chips: in a catalog the subtitle ("64K context"), the
@@ -66,9 +85,15 @@ extension PickerModel {
                   !chips.contains(where: { $0.caseInsensitiveCompare(text) == .orderedSame }) else { return }
             chips.append(text)
         }
-        let catalog = groupNames(picker).count > 1
+        let catalog = isCatalog(picker)
         if catalog { add(item.subtitle) }
-        add(item.badge)
+        // Some sources retain the single badge alongside richer annotations.
+        // The annotation already renders it, including in the spoken label.
+        let annotatedBadge = (item.appearance?.badges ?? []).contains { badge in
+            badge.text.trimmingCharacters(in: .whitespaces)
+                .caseInsensitiveCompare(item.badge?.trimmingCharacters(in: .whitespaces) ?? "") == .orderedSame
+        }
+        if !annotatedBadge { add(item.badge) }
         let roles = Set((picker.itemActions ?? []).map(\.id))
         for filter in picker.filters ?? [] where filter.kind == "toggle" && !roles.contains(filter.id) {
             if isTrue(item.facets?[filter.id]) { add(filter.label) }
@@ -78,7 +103,7 @@ extension PickerModel {
 
     /// The subtitle as a line of text, where it is not already a chip.
     static func subtitleLine(of item: Item, in picker: HarnessScreen.Picker) -> String? {
-        guard groupNames(picker).count <= 1, let subtitle = item.subtitle, !subtitle.isEmpty else { return nil }
+        guard !isCatalog(picker), let subtitle = item.subtitle, !subtitle.isEmpty else { return nil }
         return subtitle
     }
 }

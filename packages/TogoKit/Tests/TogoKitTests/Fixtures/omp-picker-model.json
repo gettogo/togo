@@ -1,0 +1,379 @@
+{
+ "id": "n",
+ "k": "picker",
+ "p": {
+  "actions": [
+   {
+    "id": "assign",
+    "keys": [
+     "enter"
+    ],
+    "label": "Assign role",
+    "primary": true
+   },
+   {
+    "end": true,
+    "id": "close",
+    "keys": [
+     "esc"
+    ],
+    "label": "Close"
+   }
+  ],
+  "columns": [
+   {
+    "format": "num",
+    "head": "Int",
+    "id": "int",
+    "priority": 1
+   },
+   {
+    "format": "num",
+    "head": "t/s",
+    "id": "speed",
+    "priority": 2
+   },
+   {
+    "format": "num",
+    "head": "Ctx",
+    "id": "ctx",
+    "priority": 4
+   },
+   {
+    "format": "price",
+    "head": "$/M",
+    "id": "price",
+    "priority": 3
+   }
+  ],
+  "cursor": 0,
+  "empty": "No models available in this scope",
+  "focus": "scopes",
+  "icon": "cpu",
+  "items": [
+   {
+    "badges": [
+     {
+      "text": "free",
+      "tone": "success"
+     }
+    ],
+    "chips": [
+     {
+      "auto": true,
+      "on": false,
+      "text": "web"
+     }
+    ],
+    "facts": {
+     "price": "free"
+    },
+    "id": "web/parallel",
+    "label": "web/parallel",
+    "mark": {
+     "icon": "provider:web",
+     "seed": "web",
+     "text": "We"
+    },
+    "mono": true
+   },
+   {
+    "badges": [
+     {
+      "text": "free",
+      "tone": "success"
+     }
+    ],
+    "chips": [
+     {
+      "auto": true,
+      "on": false,
+      "text": "speech"
+     }
+    ],
+    "facts": {
+     "price": "free"
+    },
+    "id": "local/kokoro",
+    "label": "local/kokoro",
+    "mark": {
+     "icon": "provider:local",
+     "seed": "local",
+     "text": "Lo"
+    },
+    "mono": true
+   },
+   {
+    "badges": [
+     {
+      "text": "free",
+      "tone": "success"
+     }
+    ],
+    "chips": [
+     {
+      "auto": true,
+      "on": false,
+      "text": "dictation"
+     }
+    ],
+    "facts": {
+     "price": "free"
+    },
+    "id": "local/parakeet-tdt-0.6b-v3",
+    "label": "local/parakeet-tdt-0.6b-v3",
+    "mark": {
+     "icon": "provider:local",
+     "seed": "local",
+     "text": "Lo"
+    },
+    "mono": true
+   },
+   {
+    "badges": [
+     {
+      "text": "free",
+      "tone": "success"
+     }
+    ],
+    "facts": {
+     "ctx": 8192,
+     "price": "free"
+    },
+    "id": "apple/on-device",
+    "label": "apple/on-device",
+    "mark": {
+     "icon": "provider:apple",
+     "seed": "apple",
+     "text": "Ap"
+    },
+    "mono": true
+   }
+  ],
+  "layout": "rows",
+  "noun": "models",
+  "order": [
+   {
+    "count": 3,
+    "group": "recent",
+    "label": "Recent"
+   },
+   "web/parallel",
+   "local/kokoro",
+   "local/parakeet-tdt-0.6b-v3",
+   {
+    "count": 1,
+    "group": "provider:apple:0",
+    "label": "apple"
+   },
+   "apple/on-device",
+   {
+    "count": 12,
+    "group": "provider:local:1",
+    "label": "local"
+   }
+  ],
+  "placeholder": "Search models…",
+  "preview": "side",
+  "query": "",
+  "scope": "all",
+  "scopes": [
+   {
+    "count": 16,
+    "icon": "sparkles",
+    "id": "roles",
+    "label": "Roles"
+   },
+   {
+    "count": 40,
+    "icon": "list",
+    "id": "all",
+    "label": "All models"
+   },
+   {
+    "count": 1,
+    "dot": "success",
+    "group": "Providers",
+    "id": "provider:apple",
+    "label": "apple",
+    "mark": {
+     "icon": "provider:apple",
+     "seed": "apple",
+     "text": "Ap"
+    }
+   }
+  ],
+  "selected": "web/parallel",
+  "size": "lg",
+  "state": "ready",
+  "tab": "all",
+  "tabs": [
+   {
+    "count": 40,
+    "id": "all",
+    "label": "All"
+   },
+   {
+    "count": 1,
+    "id": "chat",
+    "label": "Chat"
+   },
+   {
+    "count": 8,
+    "id": "tiny",
+    "label": "Tiny"
+   },
+   {
+    "count": 0,
+    "id": "image",
+    "label": "Image"
+   },
+   {
+    "count": 1,
+    "id": "tts",
+    "label": "TTS"
+   },
+   {
+    "count": 5,
+    "id": "stt",
+    "label": "STT"
+   },
+   {
+    "count": 25,
+    "id": "search",
+    "label": "Search"
+   },
+   {
+    "count": 0,
+    "id": "judge",
+    "label": "Judge"
+   },
+   {
+    "count": 0,
+    "id": "embedding",
+    "label": "Embedding"
+   },
+   {
+    "count": 0,
+    "id": "rerank",
+    "label": "Rerank"
+   },
+   {
+    "count": 0,
+    "id": "video",
+    "label": "Video"
+   }
+  ],
+  "title": "Models",
+  "total": 40
+ },
+ "c": [
+  {
+   "id": "n.0",
+   "k": "text",
+   "p": {
+    "role": "omp.picker.title",
+    "text": "Parallel"
+   }
+  },
+  {
+   "id": "n.1",
+   "k": "text",
+   "p": {
+    "actions": {
+     "click": "copy"
+    },
+    "spans": [
+     {
+      "s": "mono",
+      "t": "web/parallel"
+     }
+    ],
+    "title": "Copy model id",
+    "truncate": "middle"
+   }
+  },
+  {
+   "id": "n.2",
+   "k": "kv",
+   "p": {
+    "items": [
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Compacts at"
+       }
+      ],
+      "v": [
+       {
+        "s": "mono",
+        "t": "off"
+       },
+       {
+        "s": "dim",
+        "t": " · default"
+       }
+      ]
+     },
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Price"
+       }
+      ],
+      "v": [
+       {
+        "s": "mono",
+        "t": "free"
+       }
+      ]
+     },
+     {
+      "k": [
+       {
+        "s": "muted",
+        "t": "Input"
+       }
+      ],
+      "v": [
+       {
+        "s": "mono",
+        "t": "text"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "n.3",
+   "k": "section",
+   "p": {
+    "head": "Roles"
+   },
+   "c": [
+    {
+     "id": "n.3/0",
+     "k": "row",
+     "p": {
+      "gap": "xs",
+      "wrap": true
+     },
+     "c": [
+      {
+       "id": "n.3/0/0",
+       "k": "badge",
+       "p": {
+        "text": "web",
+        "title": "Web search (auto-selected)",
+        "tone": "muted"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

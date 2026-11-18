@@ -75,13 +75,13 @@ import TogoPush
         let session = try #require(IntentSamples.snapshot.sessions.first { $0.bib == "02" })
         let entity = SessionEntity(session)
         #expect(entity.machine == "Build box")
-        #expect(entity.deepLink == .session(bib: "02", host: "Build box"))
+        #expect(entity.deepLink == .session(bib: "02", host: "Build box", hostID: Samples.build))
 
         let links = hub()
         let intent = OpenSessionIntent()
         intent.session = entity
         _ = try await intent.perform()
-        #expect(links.sent == [.session(bib: "02", host: "Build box")])
+        #expect(links.sent == [.session(bib: "02", host: "Build box", hostID: Samples.build)])
         #expect(OpenSessionIntent.openAppWhenRun)
     }
 
@@ -102,7 +102,7 @@ import TogoPush
         intent.folder = "  /Users/sam/src/app \n"
         intent.agent = AgentPresetEntity(preset)
         _ = try await intent.perform()
-        let link = DeepLink.newSession(host: "Studio", folder: "/Users/sam/src/app", preset: preset.id)
+        let link = DeepLink.newSession(host: "Studio", folder: "/Users/sam/src/app", preset: preset.id, hostID: Samples.studio)
         #expect(links.sent == [link])
         #expect(NewSessionIntent.openAppWhenRun)
 

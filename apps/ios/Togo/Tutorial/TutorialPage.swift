@@ -10,12 +10,12 @@ enum TutorialPage: Int, CaseIterable, Sendable {
     /// answered from a notification there.
     func title(liveActivities: Bool = true) -> String {
         switch self {
-        case .welcome: String(localized: "tutorial.chat.title", defaultValue: "Chat with your agents")
+        case .welcome: String(localized: "tutorial.chat.title", defaultValue: "Chat with Your Agents")
         case .approvals where !liveActivities:
-            String(localized: "tutorial.approvals.title.notification", defaultValue: "Answer from a notification")
+            String(localized: "tutorial.approvals.title.notification", defaultValue: "Answer from a Notification")
         case .approvals: String(localized: "tutorial.approvals.title", defaultValue: "Answer from the Lock Screen")
-        case .sessions: String(localized: "tutorial.sessions.title", defaultValue: "Start agents, review their work")
-        case .setup: String(localized: "tutorial.setup.title.machine", defaultValue: "Set up your machine")
+        case .sessions: String(localized: "tutorial.sessions.title", defaultValue: "Start Agents, Review Their Work")
+        case .setup: String(localized: "tutorial.setup.title.machine", defaultValue: "Set Up Your Machine")
         }
     }
 
@@ -164,8 +164,8 @@ struct TutorialMore<Content: View>: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(expanded
-                        ? String(localized: "tutorial.more.hide", defaultValue: "Show less")
-                        : String(localized: "tutorial.more.show", defaultValue: "Learn more"))
+                        ? String(localized: "tutorial.more.hide", defaultValue: "Show Less")
+                        : String(localized: "tutorial.more.show", defaultValue: "Learn More"))
                         .contentTransition(.interpolate)
                     Image(systemName: "chevron.down")
                         .font(.footnote.weight(.semibold))
@@ -205,7 +205,7 @@ struct WelcomePage: View {
             ChatDemo()
             TutorialMore(expanded: expanded) {
                 TutorialPoint(
-                    String(localized: "tutorial.chat.terminal.title", defaultValue: "The terminal is one tap away"),
+                    String(localized: "tutorial.chat.terminal.title", defaultValue: "The Terminal Is One Tap Away"),
                     systemImage: "terminal",
                     String(
                         localized: "tutorial.chat.terminal.detail",
@@ -213,7 +213,7 @@ struct WelcomePage: View {
                     )
                 )
                 TutorialPoint(
-                    String(localized: "tutorial.chat.running.title", defaultValue: "Agents keep running"),
+                    String(localized: "tutorial.chat.running.title", defaultValue: "Agents Keep Running"),
                     systemImage: "rectangle.split.3x1",
                     String(
                         localized: "tutorial.chat.running.detail",
@@ -221,7 +221,7 @@ struct WelcomePage: View {
                     )
                 )
                 TutorialPoint(
-                    String(localized: "tutorial.chat.fallback.title", defaultValue: "Some sessions open as a terminal"),
+                    String(localized: "tutorial.chat.fallback.title", defaultValue: "Some Sessions Open as a Terminal"),
                     systemImage: "rectangle.on.rectangle",
                     String(
                         localized: "tutorial.chat.fallback.detail",
@@ -251,7 +251,7 @@ struct ApprovalsPage: View {
             }
             TutorialMore(expanded: expanded) {
                 TutorialPoint(
-                    String(localized: "tutorial.approvals.notification.title", defaultValue: "In a notification"),
+                    String(localized: "tutorial.approvals.notification.title", defaultValue: "In a Notification"),
                     systemImage: "bell",
                     String(
                         localized: "tutorial.approvals.notification.detail",
@@ -269,7 +269,7 @@ struct ApprovalsPage: View {
                     )
                 }
                 TutorialPoint(
-                    String(localized: "tutorial.approvals.unlock.title", defaultValue: "Approve asks you to unlock first"),
+                    String(localized: "tutorial.approvals.unlock.title", defaultValue: "Approve Asks You to Unlock First"),
                     systemImage: "lock",
                     String(
                         localized: "tutorial.approvals.unlock.detail",
@@ -277,7 +277,7 @@ struct ApprovalsPage: View {
                     )
                 )
                 TutorialPoint(
-                    String(localized: "tutorial.approvals.relay.title", defaultValue: "What the relay sees"),
+                    String(localized: "tutorial.approvals.relay.title", defaultValue: "What the Relay Sees"),
                     systemImage: "arrow.left.arrow.right",
                     liveActivitiesAvailable
                         ? String(
@@ -302,7 +302,7 @@ struct SessionsPage: View {
             AgentMarks()
             VStack(alignment: .leading, spacing: 20) {
                 TutorialPoint(
-                    String(localized: "tutorial.sessions.start.title", defaultValue: "Start a session"),
+                    String(localized: "tutorial.sessions.start.title", defaultValue: "Start a Session"),
                     systemImage: "plus.bubble",
                     String(
                         localized: "tutorial.sessions.start.detail",
@@ -310,7 +310,7 @@ struct SessionsPage: View {
                     )
                 )
                 TutorialPoint(
-                    String(localized: "tutorial.sessions.review.title", defaultValue: "Review changes"),
+                    String(localized: "tutorial.sessions.review.title", defaultValue: "Review Changes"),
                     systemImage: "plus.forwardslash.minus",
                     String(
                         localized: "tutorial.sessions.review.detail",

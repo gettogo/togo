@@ -121,7 +121,7 @@ import TogoKit
         let confirmation = model.pendingConfirmation
         #expect(confirmation?.title == "Undo the rename?")
         #expect(confirmation?.message == "src/db.ts comes back and src/store.ts is removed.")
-        #expect(confirmation?.button == "Undo rename")
+        #expect(confirmation?.button == "Undo Rename")
         #expect(confirmation?.files == ["src/store.ts"])
         // The old path comes back, so it goes with what the user saw.
         #expect(confirmation?.selection.seen["src/db.ts"] == GitSeen(status: "R.", fingerprint: nil))

@@ -20,6 +20,7 @@ struct SmartCommandLine: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.loopsPaused) private var loopsPaused
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .body) private var sendDiameter: CGFloat = 34
     @Bindable var model: CommandLineModel
     /// Where a screen's non-screen open targets go, such as a diff or a URL.
     var onOpen: (HarnessOpen) -> Void = { _ in }
@@ -36,7 +37,6 @@ struct SmartCommandLine: View {
     }
 
     private func fades(_ part: ComposerParts.Part) -> Double { leaving.contains(part) ? 0 : 1 }
-
     /// Follows the model: arrivals and changes in one `resize` transaction; anything leaving
     /// conceals first, then the bar shrinks to what the model shows by then.
     private func follow(_ parts: ComposerParts) {
@@ -143,7 +143,6 @@ struct SmartCommandLine: View {
                 Text(ComposerCopy.queuedCount(shown.queued))
                     .font(.footnote)
                     .foregroundStyle(Color.togoMute)
-                    // The queued count is an event: it rolls, downward as prompts go.
                     .countChange(Double(shown.queued))
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -167,8 +166,7 @@ struct SmartCommandLine: View {
                 // How long the notice stays is the model's hold; its leaving is choreographed.
                 .task(id: notice) {
                     guard !loopsPaused else { return }
-                    try? await Task.sleep(for: .seconds(model.noticeAction == nil ? 5 : 8))
-                    model.clearNotice()
+                    await model.expireNotice(notice)
                 }
             }
             if let undo = shown.undo {
@@ -264,9 +262,9 @@ struct SmartCommandLine: View {
                 .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
                 .font(.body.weight(.bold))
                 .foregroundStyle(Color.togoInk)
-                .frame(width: 34, height: 34)
+                .frame(width: sendDiameter, height: sendDiameter)
                 .background(Color.togoSnow, in: .circle)
-                .frame(width: 44, height: 44)
+                .frame(width: max(44, sendDiameter + 10), height: max(44, sendDiameter + 10))
                 .contentShape(.circle)
         }
         .buttonStyle(.plain)

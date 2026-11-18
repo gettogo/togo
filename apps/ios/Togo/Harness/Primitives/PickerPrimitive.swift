@@ -12,7 +12,11 @@ import TogoKit
 struct PickerPrimitive: View {
     @Environment(\.browseLayout) var layout
     @Environment(\.accessibilityReduceMotion) var reduceMotion
-    let picker: HarnessScreen.Picker
+    let initialPicker: HarnessScreen.Picker
+    var picker: HarnessScreen.Picker {
+        if initialPicker.query == model.query { return initialPicker }
+        return initialPicker.searchMode == "remote" && !searchConflict ? remote.result ?? initialPicker : initialPicker
+    }
     /// The screen's title, for the chat's line: "Model Sonnet".
     var title = ""
     let context: PrimitiveContext
@@ -27,16 +31,32 @@ struct PickerPrimitive: View {
     @State var failure: String?
     /// The item whose selection failed, for Try again.
     @State var failedItem: PickerModel.Item?
+    @State private var remote = RemotePickerSearch()
+    @State private var searchRetry = 0
+    @State private var searchConflict = false
+    @State private var observedSourceQuery: String?
+
+    private struct Search: Equatable {
+        var query: String
+        var source: HarnessScreen.Picker
+        var retry: Int
+    }
+
+    var searchBlocked: Bool {
+        initialPicker.searchMode == "remote" && !remote.isCurrent(query: model.query, source: initialPicker)
+    }
 
     init(picker: HarnessScreen.Picker, title: String = "", context: PrimitiveContext, chrome: ScreenChrome?) {
-        self.picker = picker
+        self.initialPicker = picker
         self.title = title
         self.context = context
         self.chrome = chrome
         _model = State(initialValue: PickerModel(picker))
+        _observedSourceQuery = State(initialValue: picker.query)
     }
 
     var itemActions: [HarnessActionRef] { picker.itemActions ?? [] }
+    var contextActions: [HarnessActionRef] { picker.contextActions ?? [] }
     var splits: Bool { layout == .split && chrome != nil && PickerModel.groupNames(picker).count > 1 }
 
     var body: some View {
@@ -51,11 +71,27 @@ struct PickerPrimitive: View {
             }
         }
         .primitiveActions(actions, context: context)
+        .task(id: Search(query: model.query, source: initialPicker, retry: searchRetry)) {
+            // Reconcile before any remote write. View change callbacks have no
+            // ordering guarantee relative to this task when the desk searches.
+            if observedSourceQuery != initialPicker.query {
+                searchConflict = model.synchronizeQuery(initialPicker.query, previous: observedSourceQuery)
+                observedSourceQuery = initialPicker.query
+            }
+            guard initialPicker.searchMode == "remote", !searchConflict else { return }
+            await remote.load(query: model.query, source: initialPicker, read: context.searchScreen)
+        }
+        .onChange(of: model.query) { _, query in
+            if query == initialPicker.query { searchConflict = false }
+        }
+        .onChange(of: picker.items.map(\.id)) { _, ids in
+            if let focused, !ids.contains(focused.id) { self.focused = nil }
+        }
     }
 
     private var stack: some View {
         list(split: false)
-            .modifier(PickerSearch(enabled: picker.searchable, query: $model.query, count: picker.items.count))
+            .modifier(PickerSearch(enabled: picker.searchable, query: $model.query, count: picker.items.count, prompt: picker.presentation?.searchPrompt))
             .toolbar {
                 if !PickerModel.menuFilters(picker, sidebar: false).isEmpty {
                     ToolbarItem(placement: .primaryAction) { filterMenu(sidebar: false) }
@@ -67,9 +103,16 @@ struct PickerPrimitive: View {
 
     func detail(_ item: PickerModel.Item) -> some View {
         PickerItemDetail(
-            item: item, picker: picker, actions: actions, context: context,
+            item: picker.items.first(where: { $0.id == item.id }) ?? item, picker: picker, actions: actions, context: context,
             onSelect: { select(item) }, onAssign: { assign($0, item) }
         )
+        .disabled(searchBlocked)
+        .task(id: item.id) {
+            guard let preview = context.preview else { return }
+            do { try await preview(item.id) }
+            catch is CancellationError {}
+            catch { failure = PrimitiveCopy.noAnswer }
+        }
     }
 
     /// Waiting for an item to give a role changes the list's footer in a `resize` transaction
@@ -85,6 +128,40 @@ struct PickerPrimitive: View {
         let groups = model.groups(picker)
         let setup = model.setupItems(picker)
         return List(selection: split ? listSelection : nil) {
+            if searchConflict {
+                Section {
+                    Text(String(localized: "picker.searchChanged", defaultValue: "Search changed in Terminal. Your text is kept here."))
+                        .foregroundStyle(PrimitiveTint.warn)
+                    Button(String(localized: "picker.useSourceSearch", defaultValue: "Use Search from Terminal")) {
+                        model.query = initialPicker.query ?? ""
+                        searchConflict = false
+                        searchRetry += 1
+                    }
+                    Button(String(localized: "picker.applySearch", defaultValue: "Apply My Search")) {
+                        searchConflict = false
+                        searchRetry += 1
+                    }
+                }
+            }
+            if let presentation = picker.presentation,
+               presentation.subtitle?.isEmpty == false || presentation.message?.isEmpty == false || presentation.state == "loading" {
+                Section {
+                    if let subtitle = presentation.subtitle { Text(verbatim: subtitle).foregroundStyle(Color.togoMute) }
+                    if let message = presentation.message { Text(verbatim: message).foregroundStyle(Color.togoMute) }
+                    if presentation.state == "loading" { ProgressView(PrimitiveCopy.loading) }
+                }
+            }
+            if initialPicker.searchMode == "remote", searchBlocked, !searchConflict {
+                if remote.failed {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(PrimitiveCopy.noAnswer).foregroundStyle(PrimitiveTint.fail)
+                        Button(PrimitiveCopy.tryAgain) { searchRetry += 1 }
+                    }
+                } else {
+                    HStack { ProgressView(); Text(PrimitiveCopy.loading) }
+                        .accessibilityElement(children: .combine)
+                }
+            }
             if let failure {
                 // Errors land at once, at the list that failed (motion principles v2 §2).
                 VStack(alignment: .leading, spacing: 8) {
@@ -108,7 +185,7 @@ struct PickerPrimitive: View {
             ForEach(groups) { group in
                 Section {
                     if split || model.isExpanded(group, alone: groups.count == 1) {
-                        ForEach(group.items) { item in row(item, split: split) }
+                        ForEach(group.items) { item in row(item, split: split).disabled(searchBlocked) }
                     }
                 } header: {
                     if groups.count > 1 || group.name != nil {
@@ -124,12 +201,32 @@ struct PickerPrimitive: View {
                     toggle: { model.toggle(id: PickerModel.setupID) },
                     run: { item, value in setUp(item, with: action, value: value) }
                 )
+                .disabled(searchBlocked)
+            }
+            if picker.presentation?.state == "partial", picker.presentation?.moreAction != nil || context.showsTerminal {
+                Section {
+                    if let more = picker.presentation?.moreAction {
+                        Button {
+                            Task { await actions.trigger(more, context: context) }
+                        } label: {
+                            HStack {
+                                Text(PrimitiveCopy.showMore)
+                                Spacer()
+                                if actions.isRunning(more.id) { ProgressView().controlSize(.small) }
+                            }
+                        }
+                        .disabled(actions.isBusy || searchBlocked)
+                        .accessibilityValue(actions.isRunning(more.id) ? PrimitiveCopy.loadingMore : "")
+                    } else if context.showsTerminal {
+                        Button(PrimitiveCopy.openTerminal) { context.showTerminal() }
+                    }
+                }
             }
         }
         .groupedList()
         .overlay {
             // Search results never animate (motion v2 §2): "No matches" is simply there.
-            if groups.isEmpty, setup.isEmpty { empty }
+            if groups.isEmpty, setup.isEmpty, !searchBlocked, picker.presentation?.state != "loading" { empty }
         }
     }
 
@@ -155,7 +252,7 @@ struct PickerPrimitive: View {
             item: item, picker: picker, selected: item.id == picker.selected,
             held: PickerModel.held(by: item, actions: itemActions),
             running: actions.isRunning(picker.onSelect, target: item.id)
-                || itemActions.contains { actions.isRunning($0.id, target: item.id) }
+                || (itemActions + contextActions).contains { actions.isRunning($0.id, target: item.id) }
         )
         Group {
             if split {
@@ -172,22 +269,25 @@ struct PickerPrimitive: View {
         .contextMenu { menu(for: item) }
         .swipeActions(edge: .trailing) {
             // The item's roles: the tap selects, so these sit one swipe away.
-            ForEach(itemActions.prefix(3)) { ref in
-                Button(ref.label) { assign(ref, item) }
-                    .tint(Color.togoMute)
+            ForEach(Array((contextActions + itemActions).prefix(3))) { ref in
+                Button(role: ref.role == .destructive ? .destructive : nil) { assign(ref, item) } label: { Text(verbatim: ref.label) }
+                    .tint(ref.role == .destructive ? PrimitiveTint.fail : Color.togoMute)
             }
         }
         .accessibilityActions {
-            if item.id != picker.selected { Button(PrimitiveCopy.select) { select(item) } }
+            if PickerModel.canSelect(item, in: picker) { Button(PrimitiveCopy.select) { select(item) } }
             ForEach(itemActions) { ref in
                 Button("\(PrimitiveCopy.useAs) \(ref.label)") { assign(ref, item) }
+            }
+            ForEach(contextActions) { ref in
+                Button(role: ref.role == .destructive ? .destructive : nil) { assign(ref, item) } label: { Text(verbatim: ref.label) }
             }
             Button(PrimitiveCopy.details) { focused = item }
         }
     }
 
     @ViewBuilder private func menu(for item: PickerModel.Item) -> some View {
-        if item.id != picker.selected, item.disabled != true {
+        if PickerModel.canSelect(item, in: picker) {
             Button(PrimitiveCopy.select, systemImage: "checkmark") { select(item) }
         }
         if !itemActions.isEmpty {
@@ -196,6 +296,15 @@ struct PickerPrimitive: View {
                     Button(ref.label, systemImage: PickerModel.isTrue(item.facets?[ref.id]) ? "checkmark" : "circle") {
                         assign(ref, item)
                     }
+                }
+            }
+        }
+        if !contextActions.isEmpty {
+            Section {
+                ForEach(contextActions) { ref in
+                    Button(role: ref.role == .destructive ? .destructive : nil) {
+                        assign(ref, item)
+                    } label: { Text(verbatim: ref.label) }
                 }
             }
         }
@@ -240,7 +349,7 @@ struct PickerPrimitive: View {
 
     private var empty: some View {
         StateView(
-            kind: .empty, title: model.hasNarrowing ? PrimitiveCopy.noMatches : PrimitiveCopy.nothingHere,
+            kind: .empty, title: model.emptyTitle(picker),
             message: model.hasNarrowing ? PrimitiveCopy.tryShorter : "",
             action: model.hasNarrowing ? StateView.Action(PrimitiveCopy.showAll) { model.reset() } : nil
         )
@@ -282,10 +391,11 @@ struct PickerSearch: ViewModifier {
     let enabled: Bool
     @Binding var query: String
     let count: Int
+    var prompt: String? = nil
 
     func body(content: Content) -> some View {
         if enabled {
-            content.searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: PrimitiveCopy.searchCount(count))
+            content.searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: prompt ?? PrimitiveCopy.searchCount(count))
         } else {
             content
         }

@@ -205,7 +205,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Togo on iPhone to answer"
+            "value" : "Open Togo on iPhone to Answer"
           }
         }
       }
@@ -492,6 +492,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Working"
+          }
+        }
+      }
+    },
+    "watch.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request no longer available"
           }
         }
       }

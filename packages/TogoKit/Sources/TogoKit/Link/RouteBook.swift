@@ -16,6 +16,7 @@ public actor RouteBook {
 
     private var routes: [UUID: [HostRoute]] = [:]
     private var used: [UUID: Use] = [:]
+    private var connected: [UUID: Set<String>] = [:]
     /// Learned LAN addresses that answered with another machine's key while a different
     /// route connected. They are left out of every race from then on.
     private var mismatched: [UUID: Set<String>] = [:]
@@ -29,6 +30,7 @@ public actor RouteBook {
     public func forget(_ id: UUID) {
         routes[id] = nil
         used[id] = nil
+        connected[id] = nil
         mismatched[id] = nil
     }
 
@@ -49,6 +51,17 @@ public actor RouteBook {
         mismatched[id, default: []].formUnion(hosts.map { $0.lowercased() })
     }
 
+    /// A learned LAN address may now belong to a different device. Quarantine it even
+    /// when no route won; only those learned numeric addresses can soften a key warning.
+    /// Explicit addresses, names and tailnet routes retain their normal security warning.
+    func recordFailedRace(_ hosts: [String], for profile: HostProfile, sawPinnedKey: Bool) -> Bool {
+        let learned = Set((routes[profile.id] ?? profile.routes).filter {
+            $0.kind == .lan && !$0.manual && !$0.isName && $0.id != profile.endpoint.host.lowercased()
+        }.map(\.id))
+        recordMismatches(hosts, for: profile.id)
+        return sawPinnedKey || (!hosts.isEmpty && hosts.allSatisfy { learned.contains($0.lowercased()) })
+    }
+
     public func mismatches(_ id: UUID) -> Set<String> {
         mismatched[id] ?? []
     }
@@ -58,8 +71,19 @@ public actor RouteBook {
         mismatched[id]?.subtract(hosts.map { $0.lowercased() })
     }
 
+    func recordConnected(_ host: String, for id: UUID) {
+        connected[id, default: []].insert(host.lowercased())
+    }
+
+    func connectionTimeout(for profile: HostProfile, host: String, direct: Bool, override: Duration?) -> Duration {
+        let kind = (routes[profile.id] ?? profile.routes).first { $0.id == host.lowercased() }?.kind ?? HostRoute.kind(of: host)
+        return ConnectionTiming.timeout(kind: kind, succeeded: connected[profile.id]?.contains(host.lowercased()) == true,
+                                        direct: direct, override: override)
+    }
+
     public func recordUse(_ route: String, for id: UUID) {
         used[id] = Use(route: route, at: Date())
+        recordConnected(route, for: id)
     }
 
     /// The route the newest connection to `id` won with, if any connected in this process.

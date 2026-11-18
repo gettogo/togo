@@ -30,12 +30,14 @@ import TogoKit
     private(set) var handedOff = false
     @ObservationIgnored private(set) var arming: Task<Void, Never>?
     private let armDelay: Duration
+    @ObservationIgnored private var edited = false
 
     /// `arms` false waits for `beginArming()`, for a view that makes its model on every render
     /// and keeps only the first.
     init(confirm: HarnessScreen.Confirm, armDelay: Duration = PromptBarModel.defaultArmDelay, arms: Bool = true) {
         self.confirm = confirm
         self.armDelay = armDelay
+        seedDefaults()
         if arms { rearm() }
     }
 
@@ -55,10 +57,12 @@ import TogoKit
     /// over, disarmed, and says it changed when the user had begun answering.
     func update(_ new: HarnessScreen.Confirm) {
         guard new != confirm else { return }
-        let begun = !selections.isEmpty || texts.values.contains { !$0.isEmpty }
+        let begun = edited
         confirm = new
         selections = [:]
         texts = [:]
+        seedDefaults()
+        edited = false
         changed = begun
         if case .answered = phase {} else { phase = .open }
         rearm()
@@ -78,16 +82,22 @@ import TogoKit
             if chosen.contains(option) { chosen.remove(option) } else { chosen.insert(option) }
         } else {
             chosen = chosen.contains(option) ? [] : [option]
+            texts[question.id] = nil
         }
         selections[question.id] = chosen.isEmpty ? nil : chosen
+        edited = true
         changed = false
     }
 
     func text(for question: HarnessQuestion) -> String { texts[question.id] ?? "" }
 
     func setText(_ text: String, for question: HarnessQuestion) {
-        guard question.allowText else { return }
+        guard phase != .sending, question.allowText else { return }
         texts[question.id] = text
+        if !question.multi, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            selections[question.id] = nil
+        }
+        edited = true
         if !text.isEmpty { changed = false }
     }
 
@@ -95,10 +105,11 @@ import TogoKit
     static func answers(_ confirm: HarnessScreen.Confirm, selections: [String: Set<String>], texts: [String: String]) -> [String: [String]] {
         var out: [String: [String]] = [:]
         for question in confirm.questions {
+            guard applies(question, answers: out) else { continue }
             var answer = question.options.map(\.id).filter { selections[question.id]?.contains($0) ?? false }
             if question.allowText {
                 let typed = (texts[question.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if !typed.isEmpty { answer.append(typed) }
+                if !typed.isEmpty { answer = question.multi ? answer + [typed] : [typed] }
             }
             if !answer.isEmpty { out[question.id] = answer }
         }
@@ -107,15 +118,39 @@ import TogoKit
 
     var answers: [String: [String]] { Self.answers(confirm, selections: selections, texts: texts) }
 
+    var visibleQuestions: [HarnessQuestion] {
+        let given = answers
+        return confirm.questions.filter { Self.applies($0, answers: given) }
+    }
+
+    private static func applies(_ question: HarnessQuestion, answers: [String: [String]]) -> Bool {
+        guard let condition = question.when else { return true }
+        return (answers[condition.question] ?? []).contains { condition.equals.contains($0) }
+    }
+
+    private func seedDefaults() {
+        for question in confirm.questions {
+            let values = question.default ?? []
+            let ids = Set(question.options.map(\.id))
+            let chosen = values.filter { ids.contains($0) }
+            if !chosen.isEmpty { selections[question.id] = Set(question.multi ? chosen : Array(chosen.prefix(1))) }
+            if question.allowText, let text = values.first(where: { !ids.contains($0) }) {
+                texts[question.id] = text
+                if !question.multi, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { selections[question.id] = nil }
+            }
+        }
+    }
+
     /// `{"answers": {question id: [option ids or text]}}`; empty for a plain confirmation.
     static func args(_ answers: [String: [String]]) -> [String: JSONValue] {
         ["answers": .object(answers.mapValues { .array($0.map(JSONValue.string)) })]
     }
 
-    /// Every question has an answer.
+    /// Only active, required questions need an answer. Absent `required` keeps
+    /// the behavior of helpers that predate the form fields.
     var isComplete: Bool {
         let given = answers
-        return confirm.questions.allSatisfy { given[$0.id] != nil }
+        return visibleQuestions.allSatisfy { $0.required == false || given[$0.id] != nil }
     }
 
     var canSubmit: Bool {

@@ -74,11 +74,13 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
     public var confirm: Confirm?
     public var status: HarnessStatus?
     public var actions: [HarnessActionRef]
+    /// Opaque ownership token for a source-driven native interaction.
+    public var interaction: String?
 
     public init(id: String, primitive: HarnessPrimitive, title: String, fetchedAt: WireDate, stale: Bool = false,
                 picker: Picker? = nil, settings: Settings? = nil, checklist: Checklist? = nil,
                 liveList: LiveList? = nil, detail: Detail? = nil, confirm: Confirm? = nil,
-                status: HarnessStatus? = nil, actions: [HarnessActionRef] = []) {
+                status: HarnessStatus? = nil, actions: [HarnessActionRef] = [], interaction: String? = nil) {
         self.id = id
         self.primitive = primitive
         self.title = title
@@ -92,6 +94,7 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         self.confirm = confirm
         self.status = status
         self.actions = actions
+        self.interaction = interaction
     }
 
     /// A searchable, grouped list with one selection. Selecting runs `onSelect` with
@@ -100,13 +103,23 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var items: [Item]
         public var selected: String?
         public var searchable: Bool
+        /// "remote" delegates query matching to the harness; absent stays local.
+        public var searchMode: String?
         public var filters: [Filter]?
         public var onSelect: String
+        public var onSelectArgs: [String: JSONValue]?
+        /// The text currently held by a source-driven search field.
+        public var query: String?
         /// Asked (or applied with Undo) before `onSelect` runs, when set.
         public var onSelectConfirm: HarnessSelectConfirm?
         /// `onSelect`'s own words for an item's button ("Use for this session"), when it has them.
         public var onSelectLabel: String?
         public var itemActions: [HarnessActionRef]?
+        /// Per-item operations such as Rename or Delete, distinct from assignment roles.
+        public var contextActions: [HarnessActionRef]?
+        /// "preview" opens an item before committing; absent preserves direct selection.
+        public var selectionBehavior: String?
+        public var presentation: HarnessPickerPresentation?
         /// What is not set up yet, such as providers not signed in, listed after the items.
         public var setup: [Item]?
         /// Sets up one `setup` entry, run with args `{"id": entry id}`.
@@ -123,9 +136,11 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public var disabled: Bool?
             /// Values the filters match, by filter id.
             public var facets: [String: String]?
+            public var preview: Detail?
+            public var appearance: HarnessPickerItemAppearance?
 
             public init(id: String, title: String, subtitle: String? = nil, badge: String? = nil, group: String? = nil,
-                        disabled: Bool? = nil, facets: [String: String]? = nil) {
+                        disabled: Bool? = nil, facets: [String: String]? = nil, preview: Detail? = nil, appearance: HarnessPickerItemAppearance? = nil) {
                 self.id = id
                 self.title = title
                 self.subtitle = subtitle
@@ -133,6 +148,8 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
                 self.group = group
                 self.disabled = disabled
                 self.facets = facets
+                self.preview = preview
+                self.appearance = appearance
             }
         }
 
@@ -156,7 +173,9 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public init(items: [Item], selected: String? = nil, searchable: Bool, filters: [Filter]? = nil,
                     onSelect: String, onSelectConfirm: HarnessSelectConfirm? = nil, itemActions: [HarnessActionRef]? = nil,
                     setup: [Item]? = nil, setupAction: HarnessActionRef? = nil, setupInput: String? = nil,
-                    onSelectLabel: String? = nil) {
+                    onSelectLabel: String? = nil, searchMode: String? = nil,
+                    contextActions: [HarnessActionRef]? = nil, selectionBehavior: String? = nil, presentation: HarnessPickerPresentation? = nil,
+                    onSelectArgs: [String: JSONValue]? = nil, query: String? = nil) {
             self.items = items
             self.onSelectLabel = onSelectLabel
             self.setup = setup
@@ -164,10 +183,16 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             self.setupInput = setupInput
             self.selected = selected
             self.searchable = searchable
+            self.searchMode = searchMode
             self.filters = filters
             self.onSelect = onSelect
+            self.onSelectArgs = onSelectArgs
+            self.query = query
             self.onSelectConfirm = onSelectConfirm
             self.itemActions = itemActions
+            self.contextActions = contextActions
+            self.selectionBehavior = selectionBehavior
+            self.presentation = presentation
         }
     }
 
@@ -196,12 +221,18 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public static let number: Self = "number"
             /// Never carries its value: `value` is null and `isSet` says whether one exists.
             public static let secret: Self = "secret"
+            public static let multi: Self = "multi"
+            public static let action: Self = "action"
         }
 
         public struct Field: Codable, Hashable, Sendable, Identifiable {
             public var id: String
             public var label: String
             public var help: String?
+            public var warning: String?
+            public var actionLabel: String?
+            /// "prompt" presents an input immediately rather than a stored-setting editor.
+            public var presentation: String?
             public var kind: FieldKind
             public var value: JSONValue
             public var isSet: Bool?
@@ -217,10 +248,14 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             public init(id: String, label: String, help: String? = nil, kind: FieldKind, value: JSONValue,
                         isSet: Bool? = nil, options: [HarnessChoice]? = nil, min: Double? = nil, max: Double? = nil,
                         placeholder: String? = nil, readOnly: Bool? = nil, action: String? = nil,
-                        actionConfirm: HarnessSelectConfirm? = nil) {
+                        actionConfirm: HarnessSelectConfirm? = nil, warning: String? = nil, actionLabel: String? = nil,
+                        presentation: String? = nil) {
                 self.id = id
                 self.label = label
                 self.help = help
+                self.warning = warning
+                self.actionLabel = actionLabel
+                self.presentation = presentation
                 self.kind = kind
                 self.value = value
                 self.isSet = isSet
@@ -283,6 +318,13 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
         public var subtitle: String?
         public var body: Body
         public var actions: [HarnessActionRef]
+        public var sections: [Section]?
+
+        public struct Section: Codable, Hashable, Sendable {
+            public var title: String?
+            public var body: Body
+            public init(title: String? = nil, body: Body) { self.title = title; self.body = body }
+        }
 
         public struct Body: Codable, Hashable, Sendable {
             public var kind: String
@@ -296,10 +338,11 @@ public struct HarnessScreen: Codable, Hashable, Sendable, Identifiable {
             }
         }
 
-        public init(subtitle: String? = nil, body: Body, actions: [HarnessActionRef] = []) {
+        public init(subtitle: String? = nil, body: Body, actions: [HarnessActionRef] = [], sections: [Section]? = nil) {
             self.subtitle = subtitle
             self.body = body
             self.actions = actions
+            self.sections = sections
         }
     }
 

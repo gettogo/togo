@@ -176,10 +176,11 @@ private struct FileSearchResults: View {
         case .searching where search.hits.isEmpty:
             StateView(kind: .loading, title: FileTreeCopy.searching, message: search.query)
         case .failed(let message):
-            StateView(kind: .error, title: FileTreeCopy.searchFailed, message: message)
+            StateView(kind: .error, title: FileTreeCopy.searchFailed, message: message,
+                      action: .init(FilesCopy.tryAgain) { search.retry() })
         default:
             if search.hits.isEmpty {
-                StateView(kind: .empty, title: FileTreeCopy.noResults, message: FileTreeCopy.noResultsMessage(search.query))
+                StateView(kind: .empty, title: FileTreeCopy.noResults, message: search.partial ? search.partialMessage : FileTreeCopy.noResultsMessage(search.query))
             } else {
                 list
             }
@@ -207,7 +208,7 @@ private struct FileSearchResults: View {
             } footer: {
                 SectionFooter {
                     if search.partial {
-                        Text(FileTreeCopy.partial)
+                        Text(search.partialMessage)
                     } else if search.more {
                         Text(FileTreeCopy.moreResults(FileSearch.limit))
                     }

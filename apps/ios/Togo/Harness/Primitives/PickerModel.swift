@@ -41,10 +41,20 @@ struct PickerModel: Equatable {
     init() {}
 
     init(_ picker: HarnessScreen.Picker) {
+        query = picker.query ?? ""
         for filter in picker.filters ?? [] {
             if let value = filter.default, !value.isEmpty { filterValues[filter.id] = value }
         }
         expanded = Self.initiallyExpanded(picker)
+    }
+
+    /// Adopt a source edit only when the phone has no different pending text.
+    /// A conflict keeps that text for an explicit apply or discard.
+    mutating func synchronizeQuery(_ next: String?, previous: String?) -> Bool {
+        guard let next else { return false }
+        guard query == (previous ?? "") || query == next else { return true }
+        query = next
+        return false
     }
 
     /// The id of the "Not set up" section, apart from every group name.
@@ -54,6 +64,7 @@ struct PickerModel: Equatable {
     /// holding the first item action (the default role), and the only group when there is one.
     static func initiallyExpanded(_ picker: HarnessScreen.Picker) -> Set<String> {
         let names = Set(picker.items.map { $0.group ?? "" })
+        if picker.onSelect == "terminal.select" { return names }
         if names.count == 1 { return names }
         if let selected = picker.items.first(where: { $0.id == picker.selected }) {
             return [selected.group ?? ""]
@@ -111,7 +122,7 @@ struct PickerModel: Equatable {
 
     /// Whether the item passes the search, every filter and the sidebar's group.
     func shows(_ item: Item, in picker: HarnessScreen.Picker, except skipped: String? = nil, ignoringGroup: Bool = false) -> Bool {
-        guard Self.matches(item, query: query) else { return false }
+        guard picker.searchMode == "remote" || Self.matches(item, query: query) else { return false }
         for filter in picker.filters ?? [] where filter.id != skipped {
             guard Self.matches(item, filter: filter, value: filterValues[filter.id]) else { return false }
         }
@@ -221,6 +232,7 @@ struct PickerModel: Equatable {
     enum Tap: Equatable {
         case assign(action: String)
         case select
+        case details
         case none
     }
 
@@ -229,7 +241,12 @@ struct PickerModel: Equatable {
     func tap(_ item: Item, in picker: HarnessScreen.Picker) -> Tap {
         if item.disabled == true { return .none }
         if let picking { return .assign(action: picking) }
-        return item.id == picker.selected ? .none : .select
+        if picker.selectionBehavior == "preview" { return .details }
+        return Self.canSelect(item, in: picker) ? .select : .none
+    }
+
+    static func canSelect(_ item: Item, in picker: HarnessScreen.Picker) -> Bool {
+        item.disabled != true && (item.id != picker.selected || picker.selectionBehavior == "reselect")
     }
 
     /// Whether a selection's result closes its sheet: it landed, was typed, restarted the agent
@@ -244,10 +261,16 @@ struct PickerModel: Equatable {
     static func change(selecting item: Item, in picker: HarnessScreen.Picker, setting: String) -> GatedChange {
         let previous = picker.items.first { $0.id == picker.selected }
         return GatedChange(
-            action: picker.onSelect, target: item.id, args: args(for: item), confirm: picker.onSelectConfirm,
+            action: picker.onSelect, target: item.id, args: selectionArgs(for: item, picker: picker), confirm: picker.onSelectConfirm,
             setting: setting, value: item.title,
-            previous: previous.map { ($0.title, args(for: $0)) }
+            previous: previous.map { ($0.title, selectionArgs(for: $0, picker: picker)) }
         )
+    }
+
+    private static func selectionArgs(for item: Item, picker: HarnessScreen.Picker) -> [String: JSONValue] {
+        var values = args(for: item)
+        for (key, value) in picker.onSelectArgs ?? [:] { values[key] = value }
+        return values
     }
 
     /// The args a selection or item action carries: `{"id": item id}`.

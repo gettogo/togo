@@ -67,10 +67,12 @@ import TogoMosh
                 cols: request.cols, rows: request.rows
             )
         }
-        let env = SessionEnvironment(
+        var connectionEnvironment = SessionEnvironment(
             keys: keys, secrets: secrets, biometrics: biometrics, hostKeys: hostKeys,
             prompter: NoPrompts(), connector: Connector(factories: [mosh, ETFactory.factory, .ssh])
         )
+        connectionEnvironment.attemptObserver = ConnectionProgress.shared.report
+        let env = connectionEnvironment
         let deviceID = Self.deviceID()
         let signedIn = SignedInConnections()
         let helpers = HelperChannels(env: env)
@@ -99,6 +101,9 @@ import TogoMosh
         )
         let push = isolated ? nil : AppPush.make()
         self.push = push
+        let foregroundDeviceID: @Sendable () -> String?
+        if let push { foregroundDeviceID = push.foregroundDeviceID }
+        else { foregroundDeviceID = { nil } }
         // Only the public half of the key Togo made, read from the index without unlocking it.
         push?.pairing.deviceKey = { record in
             DeviceKeyLine.of(record, deviceKeyID: LiveOnboardingServices.storedDeviceKeyID) {
@@ -126,11 +131,11 @@ import TogoMosh
                             if let connection = await signedIn.take(record.id) {
                                 return record.noHelper
                                     ? PlainTmuxSource(record: record, connected: connection, helperFound: found)
-                                    : HelperSource(record: record, connected: connection)
+                                    : HelperSource(record: record, connected: connection, deviceID: foregroundDeviceID)
                             }
                             return record.noHelper
                                 ? PlainTmuxSource(record: record, env: env, helperFound: found)
-                                : HelperSource(record: record, env: env)
+                                : HelperSource(record: record, env: env, deviceID: foregroundDeviceID)
                         },
                         path: SystemPathSource()
                     )
@@ -194,12 +199,22 @@ import TogoMosh
             helperPath: { [weak services] in services?.hostRecord($0)?.helperPath },
             run: { [weak services] id, command, timeout in
                 guard let record = await services?.hostRecord(id) else { throw LiveServiceError.unknownMachine }
-                return try await helpers.connection(for: record).run(command, timeout: timeout)
+                let connection = try await helpers.connection(for: record)
+                do { return try await connection.run(command, timeout: timeout) }
+                catch { throw HelperUpdateCommandInterrupted(error) }
             }
         )
         LinkCenter.shared.tunnel = LiveCallbackTunnel(
             helpers: helpers, records: { [weak services] in services?.hostRecord($0) }, review: review
         )
+        LinkCenter.shared.portPreviewModel = { [weak services, weak review] origin in
+            guard let review, let hostID = origin.hostID, let sessionID = origin.sessionID, !sessionID.isEmpty,
+                  let capabilities = services?.latest[hostID]?.capabilities,
+                  capabilities.contains(Capability.ports) else { return nil }
+            let subject = ReviewSubject(hostID: hostID, sessionID: sessionID, bib: nil,
+                                        title: ReviewCopy.tabName(.ports), cwd: "", managed: false, capabilities: capabilities)
+            return PortsModel(subject: subject, services: review)
+        }
         LinkCenter.shared.openOnMac = { [weak machineTools] hostID, url in
             let link = url.absoluteString
             try await machineTools?.call(hostID) { try await $0.openOnMac(url: link) }

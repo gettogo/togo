@@ -159,13 +159,16 @@ enum LiveContextSource {
                 PendingStore(directory: $0, clock: { Date() }).request(requestId)
             }
         }.flatMap { $0.hostId == hostId ? $0 : nil }
+        let context = context(state, hostId: hostId)
+        let deadline = context?.expires.map { Date(timeIntervalSince1970: Double($0)) } ?? pending?.expiry
+            ?? Date(timeIntervalSince1970: Double(state.since) + RequestLifetime.seconds)
         return LiveCard(
             agent: state.agent, status: state.status, waiting: state.waiting, requestId: state.requestId,
-            command: state.command, context: context(state, hostId: hostId),
+            command: state.command, context: context,
             machine: several ? LiveCopy.machineName(hostId: hostId, pairings: pairings) : nil, stale: stale,
             showsCommand: pairings?.pairing(hostId: hostId)?.appHostID
                 .map(SharedSettings.readLiveActivityCommandMachines().contains) ?? false,
-            feedback: LiveAnswerFeedback.resolve(pending, local: state.answerFeedback, now: Date())
+            feedback: LiveAnswerFeedback.resolve(pending, local: state.answerFeedback, now: Date()), expiresAt: deadline
         )
     }
 }

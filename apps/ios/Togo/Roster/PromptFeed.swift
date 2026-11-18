@@ -40,13 +40,14 @@ enum PromptFeed {
             id: card.id, sessionID: card.sessionID ?? "", bib: card.bib ?? row?.bib ?? "",
             sessionName: name, agentName: card.agentName, machineName: machineName,
             question: card.title, command: card.detail.flatMap { $0.isEmpty ? nil : $0 },
-            allowsReply: card.allowText,
+            allowsReply: card.answerable && card.allowText,
             // A question with no options that takes words is answered in words alone.
             // A sign-in step with nothing to choose is answered on its page or in its field.
-            asksYesOrNo: choices.yesOrNo || (card.options.isEmpty && card.signIn == nil && !card.allowText),
-            more: choices.more.map { PromptOption(id: $0.n, label: $0.label) },
+            asksYesOrNo: card.answerable && choices.yesOrNo,
+            more: card.answerable ? choices.more.map { PromptOption(id: $0.n, label: $0.label) } : [],
             state: state(of: card, failure: failure),
-            signIn: card.signIn, hostID: card.hostID
+            signIn: card.signIn, hostID: card.hostID,
+            requiresTerminal: !card.answerable || (card.options.isEmpty && !card.allowText && card.signIn == nil)
         )
     }
 
@@ -127,10 +128,11 @@ enum PromptFeed {
     /// offers them, so a numbered prompt gets the number it asked for.
     /// Nil for words to a request that takes none: those are never sent.
     static func decision(_ answer: PromptAnswer, for card: RequestCard) -> Decision? {
+        guard card.answerable else { return nil }
         let choices = RequestChoices(card.options)
         switch answer {
-        case .yes: return choices.approve.map { .option($0.n) } ?? .approve
-        case .no: return choices.deny.map { .option($0.n) } ?? .deny
+        case .yes: return choices.yesOrNo ? choices.approve.map { .option($0.n) } : nil
+        case .no: return choices.yesOrNo ? choices.deny.map { .option($0.n) } : nil
         case .option(let n): return card.options.contains { $0.n == n } ? .option(n) : nil
         case .reply(let text): return card.allowText ? .text(text) : nil
         }

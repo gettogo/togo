@@ -186,6 +186,7 @@ private struct PendingRemovalsSection: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let removals: [PendingRemoval]
     let forget: (String) -> Void
+    @State private var forgetting = PendingRemovalForget()
 
     var body: some View {
         Section {
@@ -202,7 +203,7 @@ private struct PendingRemovalsSection: View {
                     .foregroundStyle(Color.togoMute)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    Button(settingsText("settings.machines.forgetNow", "Forget now")) { forget(removal.id) }
+                    Button(settingsText("settings.machines.forgetNow", "Forget Now")) { forgetting.request(removal) }
                         .font(.subheadline)
                         .buttonStyle(.borderless)
                 }
@@ -218,6 +219,7 @@ private struct PendingRemovalsSection: View {
             }
         }
         .groupedRows()
+        .modifier(PendingForgetDialog(model: $forgetting, namespace: "pairings", forget: forget))
     }
 }
 
@@ -253,6 +255,7 @@ private struct PendingKeySection: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let removal: PendingRemoval
     let forget: (String) -> Void
+    @State private var forgetting = PendingRemovalForget()
 
     var body: some View {
         Section {
@@ -269,7 +272,7 @@ private struct PendingKeySection: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .combine)
-                Button(settingsText("settings.machines.forgetNow", "Forget now")) { forget(removal.id) }
+                Button(settingsText("settings.machines.forgetNow", "Forget Now")) { forgetting.request(removal) }
                     .font(.subheadline)
                     .buttonStyle(.borderless)
             }
@@ -283,6 +286,7 @@ private struct PendingKeySection: View {
             }
         }
         .groupedRows()
+        .modifier(PendingForgetDialog(model: $forgetting, namespace: removal.id, forget: forget))
     }
 }
 

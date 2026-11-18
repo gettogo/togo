@@ -1,0 +1,273 @@
+{
+  "id": "1c",
+  "k": "card",
+  "p": {
+    "head": "Debug Tools",
+    "role": "omp.overlay"
+  },
+  "c": [
+    {
+      "id": "1d",
+      "k": "spacer",
+      "p": {
+        "size": "sm"
+      }
+    },
+    {
+      "id": "1e",
+      "k": "col",
+      "p": {
+        "role": "omp.select"
+      },
+      "c": [
+        {
+          "id": "1e.list",
+          "k": "list",
+          "p": {
+            "empty": "No items",
+            "max": {
+              "lines": 7
+            },
+            "selected": "1e.list/open-artifacts"
+          },
+          "c": [
+            {
+              "id": "1e.list/open-artifacts",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Open session artifacts in file manager"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Open: artifact folder"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/performance",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Profile CPU, reproduce, then bundle"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Report: performance issue"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/work",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Open flamegraph of last 30s"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Profile: work scheduling"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/dump",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Create report bundle immediately"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Report: dump session"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/memory",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Memory statistics + bundle"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Report: memory issue"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/logs",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Show last 50 log entries"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "View: recent logs"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/system",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Show environment details"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "View: system info"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/terminal",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Subprotocols, geometry, scrollback strategy"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "View: terminal state"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/protocols",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Styling, links, text sizing, graphics, notify"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Test: terminal protocols"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/raw-sse",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Show live provider SSE frames"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "View: raw SSE stream"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/remote-debugger",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Expose JavaScriptCore inspector socket (experimental)"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Start: JS remote debugger"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/transcript",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Write visible TUI conversation to a temp txt"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Export: TUI transcript"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "1e.list/clear-cache",
+              "k": "item",
+              "p": {
+                "detail": [
+                  {
+                    "s": "muted",
+                    "t": "Remove old session artifacts"
+                  }
+                ],
+                "label": [
+                  {
+                    "t": "Clear: artifact cache"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "1e.status",
+          "k": "text",
+          "p": {
+            "spans": [
+              {
+                "s": "muted",
+                "t": "Type to search"
+              }
+            ],
+            "wrap": "none"
+          }
+        }
+      ]
+    }
+  ]
+}

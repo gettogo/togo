@@ -24,6 +24,7 @@ enum RichMarkdown {
         case paragraph([Run])
         case heading([Run])
         case code(String)
+        case richCode(MarkdownFence)
         case table(MarkdownTable)
     }
 
@@ -33,6 +34,7 @@ enum RichMarkdown {
             case .prose(let text): .paragraph(runs(text))
             case .heading(let text): .heading(runs(text))
             case .code(_, let text): .code(text)
+            case .richCode(let fence): .richCode(fence)
             case .table(let table): .table(table)
             }
         }
@@ -65,6 +67,7 @@ enum RichMarkdown {
             switch block {
             case .paragraph(let runs), .heading(let runs): runs.map(\.text).joined()
             case .code(let text): text
+            case .richCode(let fence): fence.source
             case .table(let table): table.tabSeparated(ChatTableText.words)
             }
         }
@@ -77,6 +80,7 @@ enum RichMarkdown {
             switch block {
             case .paragraph(let runs), .heading(let runs): runs.map(\.text).joined()
             case .code(let text): text
+            case .richCode(let fence): fence.source
             case .table(let table):
                 ([ChatCopy.table(rows: table.rows.count)] + table.spokenRows(ChatTableText.words)).joined(separator: ". ")
             }
@@ -94,6 +98,7 @@ enum RichMarkdown {
             case .paragraph(let runs): "<p>\(html(runs: runs))</p>"
             case .heading(let runs): "<h3>\(html(runs: runs))</h3>"
             case .code(let text): "<pre><code>\(escape(text))</code></pre>"
+            case .richCode(let fence): "<pre><code class=\"language-\(escape(fence.language))\">\(escape(fence.source))</code></pre>"
             case .table(let table): ChatTableText.html(table)
             }
         }
@@ -160,6 +165,8 @@ enum RichMarkdown {
                 }
             case .code(let text):
                 out.append(NSAttributedString(string: text, attributes: base(mono, style)))
+            case .richCode(let fence):
+                out.append(NSAttributedString(string: fence.source, attributes: base(mono, style)))
             case .table(let table):
                 out.append(NSAttributedString(string: table.tabSeparated(ChatTableText.words), attributes: base(style.body, style)))
             }

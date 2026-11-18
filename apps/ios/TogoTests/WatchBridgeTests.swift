@@ -7,9 +7,11 @@ import TogoPush
 @MainActor private final class FakeWatchLink: Togo.WatchLink {
     var canReachWatchApp = true
     var sent: [[String: Any]] = []
+    var lastApplicationContext: [String: Any] = [:]
 
     func updateApplicationContext(_ context: [String: Any]) throws {
         sent.append(context)
+        lastApplicationContext = context
     }
 
     func last<T: Decodable>(_ key: String, as type: T.Type) throws -> T {
@@ -49,6 +51,19 @@ import TogoPush
             title: "Run tests?", subject: nil, options: [], receivedAt: Samples.now.addingTimeInterval(-age),
             answered: answered
         )
+    }
+
+    @Test func backgroundBridgeRestartKeepsTheRosterWhenClearingARequest() throws {
+        let sessions = [WatchSession(hostName: "Studio", bib: "01", agentName: "OMP", status: "idle",
+                                     activity: nil, machineId: Samples.studio.uuidString, sessionId: "s1")]
+        bridge().publish(sessions: sessions, requests: [])
+        let restarted = bridge()
+        restarted.sendPairings([])
+        #expect(try link.last(WatchLinkKey.context, as: WatchContext.self).sessions == sessions)
+        restarted.cleared("finished-request")
+        let context = try link.last(WatchLinkKey.context, as: WatchContext.self)
+        #expect(context.sessions == sessions)
+        #expect(context.closedRequestIds.contains("finished-request"))
     }
 
     @Test func watchDeviceForwardedToCoordinator() async throws {
@@ -140,23 +155,24 @@ import TogoPush
     }
 
     /// The phone may never have seen a request the Watch holds, so it names only what it knows
-    /// is closed: answered, expired or cleared.
+    /// is closed: answered or cleared. Expiry alone is not evidence of an answer.
     @Test func contextCarriesOnlyClosedRequests() throws {
         let bridge = bridge()
         let session = WatchSession(hostName: "Studio", bib: "04", agentName: "Claude", status: "needs_you", activity: nil)
         bridge.publish(sessions: [session], requests: [
             Self.request("r_open"), Self.request("r_sending", answered: .sending),
             Self.request("r_approved", answered: .approved), Self.request("r_elsewhere", answered: .elsewhere),
+            Self.request("r_sent", answered: .sent), Self.request("r_confirmed", answered: .confirmed),
             Self.request("r_expired", age: 700),
         ])
         let context = try link.last(WatchLinkKey.context, as: WatchContext.self)
-        #expect(context.closedRequestIds == ["r_approved", "r_elsewhere", "r_expired"])
+        #expect(context.closedRequestIds == ["r_approved", "r_confirmed", "r_elsewhere", "r_sent"])
         #expect(context.sessions == [session])
         #expect(context.at == Samples.now)
 
         bridge.cleared("r_open")
         #expect(try link.last(WatchLinkKey.context, as: WatchContext.self).closedRequestIds
-            == ["r_approved", "r_elsewhere", "r_expired", "r_open"])
+            == ["r_approved", "r_confirmed", "r_elsewhere", "r_open", "r_sent"])
     }
 
     @Test func sessionRowsUseCleanActivity() {

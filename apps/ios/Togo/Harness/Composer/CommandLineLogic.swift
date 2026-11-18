@@ -59,14 +59,22 @@ enum CommandLineLogic {
         }
         let ranked: [(Int, HarnessCompletion)] = items.compactMap { item in
             let title = bare(item.title), insert = bare(item.insert)
-            if title.hasPrefix(q) || insert.hasPrefix(q) { return (0, item) }
-            if title.contains(q) || insert.contains(q) { return (1, item) }
+            let aliases = (item.native?.aliases ?? []).map(bare)
+            if title.hasPrefix(q) || insert.hasPrefix(q) || aliases.contains(where: { $0.hasPrefix(q) }) { return (0, item) }
+            if title.contains(q) || insert.contains(q) || aliases.contains(where: { $0.contains(q) }) { return (1, item) }
             if item.detail?.lowercased().contains(q) == true { return (2, item) }
             return nil
         }
         return ranked.enumerated().sorted { a, b in
             a.element.0 != b.element.0 ? a.element.0 < b.element.0 : a.offset < b.offset
         }.map(\.element.1)
+    }
+
+    /// Explains why a canonical row matched an alias query without listing it twice.
+    static func matchingAlias(_ item: HarnessCompletion, query: String) -> String? {
+        let query = query.trimmingCharacters(in: .whitespaces).lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !query.isEmpty, !CommandKind.line(item).lowercased().contains(query) else { return nil }
+        return item.native?.aliases?.first { $0.lowercased().contains(query) }.map { $0.hasPrefix("/") ? $0 : "/" + $0 }
     }
 
     /// Starred commands first, then recent ones, each in its own order; the rest as they came.
@@ -102,7 +110,11 @@ enum CommandLineLogic {
     static func typed(_ text: String, commands: [HarnessCompletion]) -> Typed {
         guard let word = commandWord(text) else { return .text }
         let match = commands.first { command in
-            CommandKind.line(command).lowercased() == word.lowercased() || command.title.lowercased() == word.lowercased()
+            let names = [CommandKind.line(command), command.title] + (command.native?.aliases ?? [])
+            return names.contains { name in
+                let normalized = name.hasPrefix("/") ? name : "/" + name
+                return normalized.lowercased() == word.lowercased()
+            }
         }
         guard let match else { return .unknown(word) }
         let rest = text.trimmingCharacters(in: .whitespacesAndNewlines).dropFirst(word.count)
@@ -138,6 +150,7 @@ enum CommandLineLogic {
     /// The composer's line for a send that did not go: "Not sent", with the helper's reason
     /// when it refused and said why.
     static func notSentNotice(_ error: any Error) -> String {
+        if error is HelperCallInterrupted { return ServiceErrors.message(error) }
         if case HelperError.rpc(let rpc) = error, rpc.code == RPCErrorCode.refused, let why = rpc.refusalMessage, !why.isEmpty {
             return ComposerCopy.notSent + ". " + why
         }

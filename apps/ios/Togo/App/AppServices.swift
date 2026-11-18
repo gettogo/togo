@@ -32,6 +32,7 @@ import UIKit
     /// monitor use that connection. Background connections never ask.
     func signIn(hostID: HostID, prompter: any ConnectionPrompter) async throws
     func saveHost(_ record: HostRecord) async throws
+    func updateHostMetadata(_ id: HostID, change: HostDisplayEdit) async throws -> HostRecord
     /// Saves a machine being added. One already here under another record, by its host key or
     /// its helper, is merged into that record instead of listed twice.
     func addHost(_ record: HostRecord) async throws -> HostStore.SaveOutcome
@@ -92,6 +93,10 @@ extension AppServices {
     func refresh() async {}
 
     func hostRecord(_ id: HostID) -> HostRecord? { nil }
+
+    func updateHostMetadata(_ id: HostID, change: HostDisplayEdit) async throws -> HostRecord {
+        throw HostDisplayEdit.Failure.unavailable
+    }
 
     func setUpHere(_ record: HostRecord) async throws {
         try await saveHost(record)

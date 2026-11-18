@@ -56,4 +56,9 @@ public enum Method: String, Sendable {
     case integrationsStatus = "integrations.status"
     case integrationsInstall = "integrations.install"
     case integrationsUninstall = "integrations.uninstall"
+    case surfaceOpen = "surface.open"
+    case surfaceRead = "surface.read"
+    case surfaceInput = "surface.input"
+    case surfaceAck = "surface.ack"
+    case surfaceClose = "surface.close"
 }

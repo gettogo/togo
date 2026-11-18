@@ -107,7 +107,7 @@ import TogoKit
         #expect(RestoreActions.offered(for: restorable(resumable: true)) == [.restore, .restoreAndContinue])
         #expect(RestoreActions.offered(for: restorable(resumable: false)) == [.restore])
         #expect(RestoreActions.title(.restore) == "Restore")
-        #expect(RestoreActions.title(.restoreAndContinue) == "Restore and continue")
+        #expect(RestoreActions.title(.restoreAndContinue) == "Restore and Continue")
 
         // A row the helper judged unsafe never sends the resume flag, whatever is asked.
         let plain = restorable(resumable: false)

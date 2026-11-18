@@ -408,7 +408,7 @@ struct ChangeRow: Identifiable, Hashable {
         let sections = [
             ChangeSection(kind: .staged, rows: staged),
             ChangeSection(kind: .changed, rows: changed),
-            ChangeSection(kind: .untracked, rows: untrackedRows(files)),
+            ChangeSection(kind: .untracked, rows: UntrackedChanges.rows(files)),
             ChangeSection(kind: .conflicted, rows: conflicted),
         ]
         return sections.filter { !$0.rows.isEmpty }
@@ -425,33 +425,4 @@ struct ChangeRow: Identifiable, Hashable {
         }
     }
 
-    /// Untracked files one by one, except that a folder holding two or more of them and no other
-    /// listed change shows as one row, the way `git status` shows a new folder.
-    private static func untrackedRows(_ files: [GitStatus.File]) -> [ChangeRow] {
-        var rows: [ChangeRow] = []
-        var grouped: Set<String> = []
-        for file in files where file.index == "?" {
-            guard !grouped.contains(file.path) else { continue }
-            if let folder = newFolder(containing: file.path, in: files) {
-                let members = files.filter { $0.path.hasPrefix(folder) }.map(\.path)
-                grouped.formUnion(members)
-                rows.append(ChangeRow(section: .untracked, path: folder, paths: members, change: .untrackedFolder(members.count)))
-            } else {
-                rows.append(ChangeRow(section: .untracked, path: file.path, paths: [file.path], change: .untracked))
-            }
-        }
-        return rows
-    }
-
-    /// The outermost folder above `path` whose listed changes are all untracked, two or more.
-    private static func newFolder(containing path: String, in files: [GitStatus.File]) -> String? {
-        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
-        guard parts.count > 1 else { return nil }
-        for depth in 1..<parts.count {
-            let folder = parts.prefix(depth).joined(separator: "/") + "/"
-            let inside = files.filter { $0.path.hasPrefix(folder) }
-            if inside.count >= 2, inside.allSatisfy({ $0.index == "?" }) { return folder }
-        }
-        return nil
-    }
 }

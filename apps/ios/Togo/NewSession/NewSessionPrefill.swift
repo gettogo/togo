@@ -6,13 +6,15 @@ struct NewSessionPrefill: Equatable, Sendable {
     var hostID: HostID
     var folder: String?
     var presetID: UUID?
+    var agentID: String?
 
     static let maxFolderLength = 1024
 
-    init(hostID: HostID, folder: String?, presetID: UUID?) {
+    init(hostID: HostID, folder: String?, presetID: UUID?, agentID: String? = nil) {
         self.hostID = hostID
         self.folder = folder.flatMap(Self.folder)
         self.presetID = presetID
+        self.agentID = agentID
     }
 
     /// The folder trimmed, or nil when it is empty, too long or holds control characters.
@@ -31,6 +33,7 @@ extension NewSessionModel {
     func apply(_ prefill: NewSessionPrefill) {
         guard hostID == prefill.hostID, let machine, !machine.helperMissing else { return }
         requestedPresetID = prefill.presetID
+        if let agent = prefill.agentID { choose(agent: agent) }
         if let folder = prefill.folder, step == .folder {
             cwd = folder
             step = .agent

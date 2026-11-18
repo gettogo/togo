@@ -136,6 +136,7 @@ struct ImportHostsView: View {
                             openInForm(row.host)
                         }
                     }
+                    .disabled(model.saving)
             }
         } header: {
             SectionHeading(settingsText("import.hosts.hosts", "Hosts"))
@@ -152,6 +153,7 @@ struct ImportHostsView: View {
         if !model.skipped.isEmpty { skippedSection }
         Section {
             Button(settingsText("import.hosts.startOver", "Start over")) { model.startOver() }
+                .disabled(model.saving)
                 .frame(minHeight: 44)
         }
         .groupedRows()

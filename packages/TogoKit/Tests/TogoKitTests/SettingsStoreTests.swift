@@ -4,6 +4,20 @@ import Testing
 @testable import TogoKit
 
 struct SettingsStoreTests {
+    @Test func synchronousStartupSnapshotHonorsSavedPrivacyChoice() async {
+        let records = SyncedRecordStore<AppSettings>(
+            prefix: "settings.", local: MemoryBackend(), remote: nil, deviceID: "test", clock: { Date() }
+        )
+        var saved = AppSettings()
+        saved.resumeLock = false
+        saved.fontSize = 21
+        await records.put("app", saved)
+        let store = SettingsStore(records: records, syncSwitch: SyncSwitch(backend: MemoryBackend()))
+        let startup = store.localSettings()
+        #expect(!startup.resumeLock)
+        #expect(startup.fontSize == 21)
+    }
+
     @Test func deviceSettingsNeverSync() async throws {
         let remote = MemoryBackend()
         let local = MemoryBackend()

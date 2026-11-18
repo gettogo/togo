@@ -9,6 +9,7 @@ struct RequestDetailView: View {
     let requestId: String
     var position = 1
     var count = 1
+    var onAnswered: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -79,8 +80,8 @@ struct RequestDetailView: View {
     /// Leaves the answered request on screen long enough to read the result.
     private func dismissSoon() {
         Task {
-            try? await Task.sleep(for: .seconds(1.2))
-            dismiss()
+            try? await Task.sleep(for: WatchHome.holdAfterAnswer)
+            if let onAnswered { onAnswered() } else { dismiss() }
         }
     }
 }
@@ -94,6 +95,8 @@ private struct AnswerButtons: View {
     private var outcome: WatchStore.Outcome? { store.outcome(request.requestId) }
     /// Off for a moment after the request shows; see `WatchHome.armDelay`.
     @State private var armed = false
+    @State private var decision: String?
+    @State private var feedback = WatchAnswerFeedback()
     /// The state on screen. It follows the store's in one transaction, so the buttons give way
     /// to the result, and a failure line arrives, with the screen around them moving too.
     @State private var shown: WatchStore.RequestState?
@@ -115,15 +118,33 @@ private struct AnswerButtons: View {
                     result(WatchCopy.denied, systemImage: "xmark")
                 case .answered:
                     result(WatchCopy.answered, systemImage: "checkmark.circle")
+                case .sent:
+                    result(WatchCopy.sent, systemImage: "paperplane")
+                case .closed:
+                    result(WatchCopy.closed, systemImage: "minus.circle")
+                case .unconfirmed:
+                    result(WatchCopy.unconfirmed, systemImage: "exclamationmark.circle")
+                case .notApplied:
+                    result(WatchCopy.notApplied, systemImage: "exclamationmark.circle")
                 case .answeredElsewhere:
-                    result(WatchCopy.answeredElsewhere, systemImage: "checkmark.circle")
+                    result(WatchCopy.alreadyAnswered, systemImage: "checkmark.circle")
+                case .unavailable:
+                    result(WatchCopy.unavailable, systemImage: "questionmark.circle")
                 case .expired:
                     result(WatchCopy.expired, systemImage: "clock")
                 case .open, .sending, .failed, .notSetUp:
                     buttons(shown ?? state)
                 }
             }
-            .onChange(of: state, initial: true) { _, new in follow(new) }
+            .onChange(of: state, initial: true) { _, new in
+                follow(new)
+                if let result = feedback.observe(
+                    new, expectsReceipt: store.expectsAnswerReceipt(request.requestId), decision: decision
+                ) {
+                    WKInterfaceDevice.current().play(result == .denied ? .directionDown : .success)
+                    done()
+                }
+            }
         }
         .task {
             try? await Task.sleep(for: WatchHome.armDelay)
@@ -131,15 +152,9 @@ private struct AnswerButtons: View {
         }
         .onChange(of: outcome) { _, new in
             switch new {
-            case .approved:
-                WKInterfaceDevice.current().play(.success)
-                done()
-            case .denied:
-                WKInterfaceDevice.current().play(.directionDown)
-                done()
             case .failed, .notSetUp:
                 WKInterfaceDevice.current().play(.failure)
-            case .sending, nil:
+            case .approved, .denied, .sending, .sent, nil:
                 break
             }
         }
@@ -174,46 +189,52 @@ private struct AnswerButtons: View {
                 .font(.footnote)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        Button {
-            guard armed else { return }
-            Task { await store.answer(request.requestId, "approve") }
-        } label: {
-            Text(WatchCopy.yes)
-                .fontWeight(.medium)
-                .frame(maxWidth: .infinity)
-                .foregroundStyle(canApprove ? Color.black : Color.secondary)
+        if canApprove {
+            Button {
+                guard armed else { return }
+                decision = "approve"
+                Task { await store.answer(request.requestId, "approve") }
+            } label: {
+                Text(WatchCopy.yes)
+                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(canApprove ? Color.black : Color.secondary)
+            }
+            .buttonStyle(.borderedProminent)
+            // Not `.capsule`: that shape caps the button at about 178pt on a 207pt screen, leaving a
+            // right margin. A radius past half the height draws the same pill at the full column width.
+            .buttonBorderShape(.roundedRectangle(radius: 40))
+            .tint(.togoAccent)
+            .disabled(!canApprove || sending)
+            // Double Tap approves, the one thing this page is for. Only while Approve can go:
+            // otherwise Double Tap scrolls the page as usual.
+            .handGestureShortcut(.primaryAction, isEnabled: canApprove && armed && (state == .open || state == .failed))
+            // motion: cause → effect — the buttons give way to the result in the same place
+            .transition(Motion.swap(reduce: reduceMotion))
         }
-        .buttonStyle(.borderedProminent)
-        // Not `.capsule`: that shape caps the button at about 178pt on a 207pt screen, leaving a
-        // right margin. A radius past half the height draws the same pill at the full column width.
-        .buttonBorderShape(.roundedRectangle(radius: 40))
-        .tint(.togoAccent)
-        .disabled(!canApprove || sending)
-        // Double Tap approves, the one thing this page is for. Only while Approve can go:
-        // otherwise Double Tap scrolls the page as usual.
-        .handGestureShortcut(.primaryAction, isEnabled: canApprove && armed && (state == .open || state == .failed))
-        // motion: cause → effect — the buttons give way to the result in the same place
-        .transition(Motion.swap(reduce: reduceMotion))
         if !canApprove {
             Text(WatchCopy.answerOnPhone)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        Button {
-            guard armed else { return }
-            Task { await store.answer(request.requestId, "deny") }
-        } label: {
-            Text(WatchCopy.no)
-                .fontWeight(.medium)
-                .frame(maxWidth: .infinity)
+        if WatchStore.canDeny(request) {
+            Button {
+                guard armed else { return }
+                decision = "deny"
+                Task { await store.answer(request.requestId, "deny") }
+            } label: {
+                Text(WatchCopy.no)
+                    .fontWeight(.medium)
+                    .frame(maxWidth: .infinity)
+            }
+            // A full-width capsule the height of Yes: the whole row answers, and the pair reads as one choice.
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.roundedRectangle(radius: 40))
+            .disabled(sending)
+            // motion: cause → effect — the buttons give way to the result in the same place
+            .transition(Motion.swap(reduce: reduceMotion))
         }
-        // A full-width capsule the height of Yes: the whole row answers, and the pair reads as one choice.
-        .buttonStyle(.bordered)
-        .buttonBorderShape(.roundedRectangle(radius: 40))
-        .disabled(sending)
-        // motion: cause → effect — the buttons give way to the result in the same place
-        .transition(Motion.swap(reduce: reduceMotion))
     }
 
     private func result(_ title: String, systemImage: String) -> some View {
@@ -230,7 +251,7 @@ private extension WatchStore.RequestState {
     /// The request is settled and its result line takes the buttons' place.
     var isResult: Bool {
         switch self {
-        case .approved, .denied, .answered, .answeredElsewhere, .expired: true
+        case .approved, .denied, .sent, .answered, .answeredElsewhere, .expired, .unavailable, .closed, .unconfirmed, .notApplied: true
         case .open, .sending, .failed, .notSetUp: false
         }
     }

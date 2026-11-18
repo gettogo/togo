@@ -57,7 +57,8 @@ extension CommandLineModel {
     var chipRefresh: ChipRefresh? {
         if working { return nil }
         return ChipRefresh(
-            describing: routes.describing(), model: status?.model, effort: status?.effort, mode: mode
+            describing: routes.describing(), model: status?.model, effort: status?.effort, mode: mode,
+            commands: store.commandRevision
         )
     }
 
@@ -82,6 +83,12 @@ extension CommandLineModel {
     @discardableResult
     func perform(_ command: HarnessCompletion, typed: Bool = false) async -> Outcome {
         memory.record(CommandMemory.commandWord(CommandKind.line(command)), scope: scope)
+        if opensOriginalScreen(command), command.native?.args != "required" {
+            paletteOpen = false
+            pendingArgs = nil
+            await send(line: CommandKind.line(command))
+            return .close
+        }
         switch typed ? CommandKind.dispatch(command) : CommandKind.picking(command) {
         case .choose:
             return .stay
@@ -99,7 +106,7 @@ extension CommandLineModel {
         case .terminal(let line):
             paletteOpen = false
             // The pane shows the terminal as the command goes: its result, or its dialog, is there.
-            routes.showTerminal()
+            if !nativeCommandsAvailable { routes.showTerminal() }
             await send(line: line)
             return .close
         case .run(let run):
@@ -109,7 +116,7 @@ extension CommandLineModel {
 
     /// Runs a run-kind command that was sent. A destructive one, or one whose action carries a
     /// confirm line, asks first in a system dialog; its words were already in the field.
-    private func runCommand(_ run: CommandKind.Run) async -> Outcome {
+    func runCommand(_ run: CommandKind.Run) async -> Outcome {
         let ref = run.action.flatMap(routes.actionRef)
         let label = ref?.label ?? Self.label(run.line)
         let decision = ActionGate.decide(
@@ -229,4 +236,5 @@ struct ChipRefresh: Hashable, Sendable {
     var model: String?
     var effort: String?
     var mode: String
+    var commands: UUID
 }

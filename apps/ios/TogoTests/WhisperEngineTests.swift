@@ -83,6 +83,22 @@ struct WhisperEngineTests {
         #expect(standard.contains("/Library/Application Support/"))
     }
 
+    @Test func downloadAfterLeavingThePagePreservesConcurrentSettings() async {
+        var current = AppSettings()
+        let section = WhisperSettingsModel(whisper: whisper())
+        section.settings = current
+        section.currentSettings = { current }
+        // The page is gone: its snapshot is not refreshed while another screen edits settings.
+        current.themeID = "harbor"
+        current.fontSize = 20
+        current.resumeLock = false
+        await section.download { current = $0 }
+        #expect(current.dictationEngine == .whisper)
+        #expect(current.themeID == "harbor")
+        #expect(current.fontSize == 20)
+        #expect(!current.resumeLock)
+    }
+
     @Test func deleteFallsBackToApple() async throws {
         let whisper = whisper()
         var settings = AppSettings()

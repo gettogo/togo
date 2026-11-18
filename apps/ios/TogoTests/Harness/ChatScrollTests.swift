@@ -12,6 +12,21 @@ import TogoKit
 struct ChatScrollTests {
     private let a = NeedsMark(id: "approval-a", ready: false)
 
+    @Test func anEmptyRequestLinkDoesNotTargetAnUnrelatedFutureQuestion() async throws {
+        let services = FakeHarnessServices(descriptor: ChatTests.claude)
+        services.feeds = [.init(elements: [.opened(.init(epoch: "e", cursor: 0, items: [], more: false,
+            mission: .init(rev: 1, summary: .init(), sections: [])))], end: .hold)]
+        let store = HarnessSessionStore(subject: ChatTests.subject, services: services, cached: ChatTests.claude)
+        store.requestNeedsReveal()
+        #expect(store.pendingNeedsRequestID == "")
+        store.launch()
+        defer { store.stop() }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while store.phase != .live, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        try #require(store.phase == .live)
+        #expect(store.pendingNeedsRequestID == nil && store.scrollRequest == nil)
+    }
+
     /// ⌘↩ and ⌘. answer the topmost open yes-or-no request; answered or text-only ones are skipped.
     @Test func keyAnswersTakeTheTopmostOpenRequest() {
         var answered = Samples.request(id: "r1", bib: "01", title: "Edit?")
@@ -48,15 +63,21 @@ struct ChatScrollTests {
 
     @Test func aDragSuppressesEveryAutomaticScroll() {
         #expect(ChatScroll.decide(.needsChanged(old: [], new: [a]), dragging: true) == nil)
-        #expect(ChatScroll.decide(.sent, dragging: true) == nil)
+        #expect(ChatScroll.decide(.sent, dragging: true, pinned: false, lastRow: "sent") == nil)
         #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: true) == nil)
         #expect(ChatScroll.decide(.reveal("approval-a"), dragging: true) == nil)
     }
 
-    @Test func theOwnSendAndItsLiveLineScrollToTheFoot() {
-        #expect(ChatScroll.decide(.sent, dragging: false) == .bottom)
-        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: false) == .bottom)
-        #expect(ChatScroll.decide(.liveAppeared(afterSend: false), dragging: false) == nil)
+    @Test func sendingAtTheFootLeavesTheOffsetToTheSizeChangeAnchor() {
+        #expect(ChatScroll.decide(.sent, dragging: false, pinned: true, lastRow: "sent") == nil)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: false, pinned: true) == nil)
+    }
+
+    @Test func sendingFromHistoryTargetsTheLastRealRowOnlyOnce() {
+        #expect(ChatScroll.decide(.sent, dragging: false, pinned: false, lastRow: "sent") == .row("sent"))
+        #expect(ChatScroll.decide(.sent, dragging: false, pinned: false, lastRow: nil) == nil)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: true), dragging: false, pinned: false) == nil)
+        #expect(ChatScroll.decide(.liveAppeared(afterSend: false), dragging: false, pinned: false) == nil)
     }
 
     @Test func aRevealedFieldOrGoToRequestScrollsToItsRow() {

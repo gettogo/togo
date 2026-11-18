@@ -232,6 +232,15 @@ public actor SettingsStore {
         return settings
     }
 
+    /// Privacy gates need the saved local choice before the first app frame. Cloud merges
+    /// still happen in `load`; reading locally must not enable sync or rewrite the record.
+    public nonisolated func localSettings() -> AppSettings {
+        var settings = records.localRecords()[Self.recordID] ?? AppSettings()
+        settings.syncEnabled = syncSwitch.isOn
+        device.apply(to: &settings)
+        return settings
+    }
+
     public func save(_ settings: AppSettings) async {
         syncSwitch.set(settings.syncEnabled)
         device.save(settings)

@@ -6,10 +6,12 @@ import UIKit
 /// loopback opens in a preview here, through an SSH forward.
 struct PortsView: View {
     @Bindable var model: PortsModel
+    let initialURL: URL?
     @Environment(\.scenePhase) private var scenePhase
 
-    init(model: PortsModel) {
+    init(model: PortsModel, initialURL: URL? = nil) {
         self.model = model
+        self.initialURL = initialURL
     }
 
     var body: some View {
@@ -17,6 +19,7 @@ struct PortsView: View {
             .phaseSwap(model.subject.canPorts ? CaseName.of(model.phase) : "unavailable")
             .background(Color.togoInk)
             .onAppear { model.appear() }
+            .task { if let initialURL { await model.openLink(initialURL) } }
             .onDisappear { model.disappear() }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
@@ -29,7 +32,8 @@ struct PortsView: View {
             // local port is a new item, so the sheet comes back with the page at the new address.
             .presentSheet("review.portPreview", item: $model.preview) { preview in
                 PreviewSheet(
-                    url: preview.url, title: PortsCopy.previewTitle(preview.remote),
+                    url: SessionWebLink.previewURL(initialURL, remote: preview.remote, local: preview.url),
+                    title: PortsCopy.previewTitle(preview.remote),
                     activity: { model.touch() }
                 )
                 // A web page wants the room: full height on a phone, page-sized in a regular window.
@@ -349,8 +353,8 @@ enum PortsCopy {
     static let opening = String(localized: "review.ports.opening", defaultValue: "Opening")
     static let show = String(localized: "review.ports.show", defaultValue: "Show")
     static let forwardedTo = String(localized: "review.ports.forwardedTo", defaultValue: "Forwarded to ")
-    static let copyLink = String(localized: "review.ports.copyLink", defaultValue: "Copy link")
-    static let stop = String(localized: "review.ports.stop", defaultValue: "Stop preview")
+    static let copyLink = String(localized: "review.ports.copyLink", defaultValue: "Copy Link")
+    static let stop = String(localized: "review.ports.stop", defaultValue: "Stop Preview")
     static let gone = String(localized: "review.ports.gone", defaultValue: "Not listening any more")
     static let idleStopped = String(
         localized: "review.ports.idleStopped", defaultValue: "Stopped after 10 minutes without use."
@@ -360,7 +364,7 @@ enum PortsCopy {
     static let forward = String(localized: "review.ports.forward", defaultValue: "Forward")
     static let reload = String(localized: "review.ports.reload", defaultValue: "Reload")
     static let pageFailed = String(localized: "review.ports.pageFailed", defaultValue: "The page didn't load")
-    static let manualTitle = String(localized: "review.ports.manual", defaultValue: "Open another port")
+    static let manualTitle = String(localized: "review.ports.manual", defaultValue: "Open Another Port")
     static let manualPlaceholder = String(localized: "review.ports.manualPlaceholder", defaultValue: "Port number")
     static let manualFooter = String(
         localized: "review.ports.manualFooter", defaultValue: "For a server this session didn't start."

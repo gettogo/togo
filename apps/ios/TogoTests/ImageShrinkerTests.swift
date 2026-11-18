@@ -106,6 +106,52 @@ struct ImageShrinkerTests {
         #expect(!flow.canRetry)
     }
 
+    @Test(arguments: [true, false])
+    func dismissedPhotoLoadCannotReopenOrFailTheFlow(_ found: Bool) async throws {
+        let png = try #require(Fixtures.noise(width: 8, height: 8).pngData())
+        let flow = ImagePasteFlow(support: .available, upload: { _, _ in "" }, paste: { _ in })
+        var waiting: CheckedContinuation<Data?, Never>?
+        let load = Task { await flow.load { await withCheckedContinuation { waiting = $0 } } }
+        for _ in 0..<1000 where waiting == nil { try? await Task.sleep(for: .milliseconds(1)) }
+        let release = try #require(waiting)
+        flow.dismiss()
+        release.resume(returning: found ? png : nil)
+        await load.value
+        #expect(flow.phase == .idle)
+        #expect(!flow.canRetry)
+    }
+
+    @Test func olderPhotoLoadCannotReplaceTheNewerPaste() async throws {
+        let old = try #require(Fixtures.noise(width: 8, height: 8).pngData())
+        let new = try #require(Fixtures.noise(width: 16, height: 16).pngData())
+        let flow = ImagePasteFlow(support: .available, upload: { _, _ in "" }, paste: { _ in })
+        var waiting: CheckedContinuation<Data?, Never>?
+        let load = Task { await flow.load { await withCheckedContinuation { waiting = $0 } } }
+        for _ in 0..<1000 where waiting == nil { try? await Task.sleep(for: .milliseconds(1)) }
+        let release = try #require(waiting)
+        await flow.begin(new)
+        release.resume(returning: old)
+        await load.value
+        #expect(flow.annotating?.original == new)
+    }
+
+    @Test func dismissedUploadCannotPasteIntoTheTerminal() async throws {
+        var waiting: CheckedContinuation<String, Never>?
+        var pasted: [String] = []
+        let flow = ImagePasteFlow(support: .available, upload: { _, _ in
+            await withCheckedContinuation { waiting = $0 }
+        }, paste: { pasted.append($0) })
+        await flow.begin(try #require(Fixtures.noise(width: 8, height: 8).pngData()))
+        let send = Task { await flow.send(annotated: nil) }
+        for _ in 0..<1000 where waiting == nil { try? await Task.sleep(for: .milliseconds(1)) }
+        let release = try #require(waiting)
+        flow.dismiss()
+        release.resume(returning: "/tmp/uploaded-image.png")
+        await send.value
+        #expect(pasted.isEmpty)
+        #expect(flow.phase == .idle)
+    }
+
     @Test func failedPhotoLoadOffersRetry() async throws {
         let png = try #require(Fixtures.noise(width: 8, height: 8).pngData())
         var attempts = 0

@@ -21,6 +21,7 @@ enum ChatMarkdown {
 /// across paragraphs up to a code block. Links open on a tap.
 struct MarkdownText: View, Equatable {
     let text: String
+    var isStreaming = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: ChatSelectable.blockSpacing) {
@@ -35,6 +36,8 @@ struct MarkdownText: View, Equatable {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 case .code(let code):
                     CodeWell(text: code)
+                case .richCode(let fence):
+                    RichFenceView(fence: fence, streaming: isStreaming)
                 case .table(let table):
                     MarkdownTableView(table: table)
                 }
@@ -56,7 +59,7 @@ struct CodeWell: View {
     @State private var copied = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: true) {
             // The corner's copy button keeps clear of the first line's end.
             SelectableText(
                 key: text, layout: .lines, insets: UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 40),
@@ -64,6 +67,7 @@ struct CodeWell: View {
             ) { traits in
                 ChatSelectable.attributed(ChatLinks.plain(text), style: .code, traits: traits)
             }
+            .fixedSize(horizontal: true, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.togoDeepest, in: .rect(cornerRadius: 12, style: .continuous))

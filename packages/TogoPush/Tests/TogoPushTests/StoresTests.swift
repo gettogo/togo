@@ -48,14 +48,14 @@ struct StoresTests {
     @Test func pendingPrunesOld() {
         let clock = Mutex(Self.now)
         let store = PendingStore(directory: directory(), clock: { clock.withLock { $0 } })
-        store.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-601)))
+        store.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-PendingStore.retention - 1)))
         store.upsert(request("r_bbbbbbbbbb", receivedAt: Self.now.addingTimeInterval(-30)))
         store.mark("r_bbbbbbbbbb", .sending)
         #expect(store.all().count == 2)
         store.prune()
         #expect(store.all().map(\.requestId) == ["r_bbbbbbbbbb"])
         #expect(store.all().first?.answered == .sending)
-        clock.withLock { $0 = Self.now.addingTimeInterval(600) }
+        clock.withLock { $0 = Self.now.addingTimeInterval(PendingStore.retention) }
         store.prune()
         #expect(store.all().isEmpty)
         store.upsert(request("r_cccccccccc", receivedAt: Self.now))
@@ -83,7 +83,7 @@ struct StoresTests {
         store.prune()
         store.remove("r_aaaaaaaaaa")
         _ = store.all()
-        #expect(writes.withLock { $0 } == 6)
+        #expect(writes.withLock { $0 } == 5)
     }
 
     /// Two stores on one directory stand in for two processes answering the same request.
@@ -182,6 +182,22 @@ struct StoresTests {
             pairings[i % 2].put(p)
         }
         #expect(PairingStore(directory: dir).all().count == 40)
+    }
+
+    @Test func expiredAnswerNeverReachesTheMailbox() async throws {
+        StubProtocol.reset(status: 202)
+        let store = PendingStore(directory: directory(), clock: { Self.now })
+        store.upsert(request("r_aaaaaaaaaa", receivedAt: Self.now.addingTimeInterval(-600)))
+        let sender = RelayAnswerSender(
+            keys: InMemoryDeviceKeys(), session: StubProtocol.session(), pending: store, clock: { Self.now }
+        )
+        let p = pairing(hostKey: Curve25519.KeyAgreement.PrivateKey().publicKey)
+        for decision in ["approve", "deny"] {
+            await #expect(throws: AnswerError.notAllowed("request_too_old")) {
+                try await sender.send(requestId: "r_aaaaaaaaaa", decision: decision, pairing: p)
+            }
+        }
+        #expect(StubProtocol.requests().isEmpty)
     }
 
     @Test func answerSenderRefusesText() async throws {

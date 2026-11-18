@@ -1,7 +1,6 @@
 import SwiftUI
 import TogoKit
 import UIKit
-
 /// The calm, full-window conversation built from the session's items: prompts, folded work
 /// lines, replies, and inline approvals and questions. The composer sits at its foot, placed by
 /// the workspace; the chat keeps its height clear and starts at the top, with no band above it.
@@ -12,7 +11,6 @@ struct ChatView: View {
     /// The chat is on screen, so ⌘↩ and ⌘. answer from it; kept alive under the terminal it
     /// answers nothing the person cannot see.
     var answersKeys = true
-
     @State private var expanded: [String: Disclosure] = [:]
     @State private var detail: HarnessItem?
     @State private var selecting: SelectedText?
@@ -25,7 +23,6 @@ struct ChatView: View {
     /// they follow it without animation: what is there on open is simply there.
     @State private var live: WorkingState?
     @State private var showsEarlierButton: Bool
-
     init(store: HarnessSessionStore, actions: ChatActions = .inert, answersKeys: Bool = true) {
         self.store = store
         self.actions = actions
@@ -33,7 +30,6 @@ struct ChatView: View {
         _live = State(initialValue: store.liveWork)
         _showsEarlierButton = State(initialValue: Self.showsEarlier(store))
     }
-
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
@@ -100,8 +96,21 @@ struct ChatView: View {
             // The content as a whole: what a scroll to the foot aims at.
             .id(ChatScroll.contentID)
         }
+        .id(scroll.identity)
+        .onChange(of: store.shownLayer) { _, layer in
+            if layer == .terminal { store.retireInteraction() }
+        }
+        .onChange(of: store.conversation) {
+            expanded = [:]
+            detail = nil
+            selecting = nil
+            live = nil
+        }
         // The gap above the composer, kept by every scroll: at the foot and to a needs card.
         .chatScrollMargins()
+        // Paint only the scrolling transcript through its viewport; controls and loading
+        // overlays below remain fully legible, including the Needs you shortcut.
+        .modifier(ChatScrollEdges())
         .scrollDismissesKeyboard(.interactively)
         // While the composer's / or @ menu is up, a tap on the conversation puts the keyboard
         // away, and the menu goes with it: a way out that needs no aim.
@@ -111,7 +120,7 @@ struct ChatView: View {
         )
         .overlay {
             if !ChatLoadingState.hasContent(store) {
-                ChatLoadingView(state: loadingState)
+                ChatLoadingView(state: loadingState, hostID: store.subject.hostID)
                     // motion: state change — reading gives way to the empty state in place.
                     .motion(.fade, value: loadingState)
             }
@@ -119,7 +128,7 @@ struct ChatView: View {
         .overlay(alignment: .top) {
             if ChatLoadingState.hasContent(store), loadingState.isProgress {
                 // The status stays in the pane without changing scroll geometry or anchors.
-                ChatLoadingView(state: loadingState, inline: true)
+                ChatLoadingView(state: loadingState, inline: true, hostID: store.subject.hostID)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(Color.togoInk)
@@ -132,6 +141,7 @@ struct ChatView: View {
         // or at the foot if that row has gone.
         .modifier(ChatScrolling(store: store, marks: needsMarks, scroll: scroll, has: { id in rows.contains { $0.id == id } }))
         .background(Color.togoInk)
+        .modifier(ChatSurfaceLifecycle(store: store))
         .environment(\.chatImageFetch, imageFetch)
         .accessibilityRotor(ChatCopy.rotorPrompts) { rotor(where: \.isPrompt) }
         .accessibilityRotor(ChatCopy.rotorNeeds) { rotor(where: \.isNeeds) }
@@ -182,7 +192,7 @@ struct ChatView: View {
             guard case .needs(let item) = row, case .approval(let approval) = item.body else { return nil }
             return approval.requestId
         }
-        if answersKeys, let target = ChatKeyAnswers.target(requestIDs: ids, card: actions.card) {
+        if answersKeys, store.phase == .live, let target = ChatKeyAnswers.target(requestIDs: ids, card: actions.card) {
             ZStack {
                 Button(ChatCopy.approve) { actions.answer(target.requestID, target.approve) }
                     .keyboardShortcut(.return, modifiers: .command)
@@ -267,21 +277,18 @@ struct ChatView: View {
                     VStack(alignment: .trailing, spacing: 2) {
                         PromptBubble(
                             text: user.text, note: promptNote(user), dimmed: user.queued,
-                            command: user.images.isEmpty && CommandEcho.isCommand(user.text, known: store.commandList)
+                            command: user.images.isEmpty && CommandEcho.isCommand(user.text, known: store.commandList),
+                            cancelTitle: ComposerCopy.cancelQueued,
+                            cancelEnabled: store.phase == .live,
+                            onCancel: user.queued ? { Task { await store.cancelQueued(item: item) } } : nil
                         )
-                        // Queued prompts show only here, so their Take back is on the row itself.
-                        if user.queued {
-                            Button(ComposerCopy.cancelQueued) { Task { await store.cancelQueued(item: item) } }
-                                .buttonStyle(PlainAnswerStyle())
-                                .font(.footnote)
-                        }
                     }
                     .modifier(RowActions(item: item, spoken: ChatCopy.spokenPrompt(user.text), host: self, selectable: true) { selecting = $0 })
                 }
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
-                ReplyRow(text: text.text)
+                ReplyRow(text: text.text, partial: text.partial)
                     .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(RichMarkdown.spoken(text.text)), host: self, selectable: true) { selecting = $0 })
             }
         case .work(let id, let summary, let steps):
@@ -306,6 +313,7 @@ struct ChatView: View {
             }
         case .needs(let item):
             needsView(item)
+                .disabled(store.phase != .live)
         case .notice(let item):
             if case .notice(let notice) = item.body, row.isContinued {
                 TurnMarkerRow(notice: notice, gap: gap)
@@ -323,19 +331,28 @@ struct ChatView: View {
         case .approval(let approval):
             ApprovalRow(
                 item: item, approval: approval, card: actions.card(approval.requestId),
-                failure: actions.failure(approval.requestId), showInTerminal: terminalAction(item)
+                failure: actions.failure(approval.requestId), showInTerminal: terminalAction(item), openNative: nativeRequestAction(item)
             ) { decision in
                 actions.answer(approval.requestId, decision)
             }
             .contextMenu { terminalButton(item) }
         case .question(let question):
-            QuestionRow(item: item, question: question, showInTerminal: terminalAction(item)) { args in
+            QuestionRow(item: item, question: question, showInTerminal: terminalAction(item),
+                        openNative: nativeRequestAction(item)) { args in
                 await store.answerReporting(item, args: args)
             }
             .contextMenu { terminalButton(item) }
         default:
             EmptyView()
         }
+    }
+
+    private func nativeRequestAction(_ item: HarnessItem) -> (() -> Void)? {
+        if store.canOpenNativeQuestion(item) { return { store.openNativeQuestion(item.id) } }
+        guard store.canRecoverTerminalRequest(item) else { return nil }
+        if case .approval(let approval) = item.body, let card = actions.card(approval.requestId),
+           ApprovalRow.shape(approval: approval, card: card) != .waiting { return nil }
+        return { Task { await store.recoverTerminalRequest(item) } }
     }
 
     /// "Show in terminal" for an item that has a place there.

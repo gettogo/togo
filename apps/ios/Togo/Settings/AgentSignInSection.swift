@@ -79,7 +79,7 @@ struct AgentSignInSection: View {
 }
 
 enum AgentSignInCopy {
-    static let title = String(localized: "settings.signIn.title", defaultValue: "Sign in")
+    static let title = String(localized: "settings.signIn.title", defaultValue: "Sign In")
     static let footer = String(
         localized: "settings.signIn.footer",
         defaultValue: "Starts the agent's sign-in on this machine in a muted session. Keys you paste go straight to the agent and are not kept."

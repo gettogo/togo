@@ -17,7 +17,7 @@ import struct TogoPush.Pairing
     }
 
     private func services(
-        watches: Watches, helpers: NoHelper = NoHelper(), local: MemoryBackend = MemoryBackend(),
+        watches: Watches, helpers: any HelperCalling = NoHelper(), local: MemoryBackend = MemoryBackend(),
         remote: MemoryBackend? = nil, syncOn: Bool = true,
         forgotPasswords: ForgottenPasswords? = nil, reported: @escaping (HostID, Set<String>) -> Void = { _, _ in }
     ) -> LiveServices {
@@ -67,6 +67,7 @@ import struct TogoPush.Pairing
         let services = services(watches: Watches(), local: local)
         services.showLocalHosts()
         #expect(services.hosts.map(\.id) == [Samples.studio])
+        #expect(services.hostRecord(Samples.studio)?.profile.name == "Studio")
         let arrived = Mutex<[HostID]>([])
         services.onMachineArrived = { id in arrived.withLock { $0.append(id) } }
         let waiting = services.terminal(hostID: Samples.studio, sessionID: "s1", transport: nil, userStarted: true)
@@ -266,6 +267,37 @@ import struct TogoPush.Pairing
         }
     }
 
+    @Test func displayEditsDoNotRestartConnectionsOrDropTheirChannels() async throws {
+        let watches = Watches(), helpers = NoHelper()
+        let services = services(watches: watches, helpers: helpers)
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let before = try #require(watches[Samples.studio])
+        let updated = try await services.updateHostMetadata(Samples.studio, change: .init(name: "Renamed", symbol: "laptop"))
+        #expect(updated.profile.name == "Renamed")
+        #expect(services.hostRecord(Samples.studio)?.symbol == "laptop")
+        #expect(watches[Samples.studio] === before)
+        #expect(helpers.dropped.withLock { $0 }.isEmpty)
+    }
+
+    @Test func displayEditsPatchTheLatestRecordWithoutRestoringOldConnectionFields() async throws {
+        let services = services(watches: Watches())
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        _ = await services.hostStore.update(Samples.studio) { record in
+            record.profile.endpoint.host = "new.example.test"
+            record.profile.auth = .key(id: "latest-key")
+            record.helperPath = "/new/togo"
+            record.symbol = "server.rack"
+        }
+        let updated = try await services.updateHostMetadata(Samples.studio, change: .init(name: "Renamed", symbol: nil))
+        #expect(updated.profile.name == "Renamed")
+        #expect(updated.profile.endpoint.host == "new.example.test")
+        #expect(updated.profile.auth == .key(id: "latest-key"))
+        #expect(updated.helperPath == "/new/togo")
+        #expect(updated.symbol == "server.rack")
+    }
+
     @Test func editReconnectsWithTheNewProfile() async throws {
         let watches = Watches()
         let helpers = NoHelper()
@@ -362,4 +394,57 @@ import struct TogoPush.Pairing
 
         #expect(reports == [["r1"], []])
     }
+    @Test func folderBrowserFetchIncludesHiddenFoldersForItsLocalToggle() async throws {
+        let helper = ScriptedHelper()
+        helper.answer("fs.listDir", #"{"path":"/tmp","entries":[{"name":".config","dir":true}]}"#)
+        let services = services(watches: Watches(), helpers: helper)
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let listing = try await services.listDir(hostID: Samples.studio, path: "/tmp")
+        #expect(listing.entries.map(\.name) == [".config"])
+        #expect(helper.requests.last?.params["showHidden"] == .bool(true))
+    }
+
+    @Test func failedAgentDiscoveryWaitsForAnotherOnlineEpoch() async throws {
+        let watches = Watches()
+        let helpers = NoHelper()
+        let services = services(watches: watches, helpers: helpers)
+        await services.start()
+        try await services.saveHost(record(Samples.studio, "Studio"))
+        let watch = try #require(watches[Samples.studio])
+        let online = HostSnapshot(hostID: Samples.studio, reach: .online)
+        watch.sink.yield(online)
+        await eventually { helpers.mayAsk.withLock { $0.count } == 1 }
+        // Let the failing background call finish before publishing another snapshot.
+        try await Task.sleep(for: .milliseconds(30))
+        for _ in 0..<5 { watch.sink.yield(online) }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(helpers.mayAsk.withLock { $0.count } == 1)
+        watch.sink.yield(HostSnapshot(hostID: Samples.studio, reach: .offline("disconnected")))
+        watch.sink.yield(online)
+        await eventually { helpers.mayAsk.withLock { $0.count } == 2 }
+        #expect(helpers.mayAsk.withLock { $0 } == [false, false])
+    }
+
+    @Test func returningToForegroundCancelsDelayedHelperTeardown() async throws {
+        let helpers = NoHelper()
+        let services = services(watches: Watches(), helpers: helpers)
+        var cleanups: [CheckedContinuation<Void, Never>] = []
+        services.beforeDroppingHelpers = {
+            await withCheckedContinuation { cleanups.append($0) }
+        }
+        services.setForeground(false)
+        await eventually { cleanups.count == 1 }
+        services.setForeground(true)
+        cleanups[0].resume()
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(helpers.dropAllCount.withLock { $0 } == 0)
+
+        services.setForeground(false)
+        await eventually { cleanups.count == 2 }
+        cleanups[1].resume()
+        await eventually { helpers.dropAllCount.withLock { $0 } == 1 }
+        #expect(helpers.dropAllCount.withLock { $0 } == 1)
+    }
+
 }

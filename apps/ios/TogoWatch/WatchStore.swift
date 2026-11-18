@@ -13,14 +13,14 @@ import WidgetKit
 /// replayed push cannot bring it back.
 @MainActor @Observable final class WatchStore {
     enum Outcome: Equatable, Sendable {
-        case sending, approved, denied, failed
+        case sending, sent, approved, denied, failed
         /// The phone has not given this Watch a pairing for the request's machine yet.
         case notSetUp
     }
 
     /// What a request's screen shows. Only `open`, `failed` and `notSetUp` offer Approve and Deny.
     enum RequestState: Equatable, Sendable {
-        case open, sending, failed
+        case open, sending, sent, failed, closed, unconfirmed, notApplied
         /// This Watch cannot answer for the machine until the phone sends its pairing.
         case notSetUp
         /// The relay took this screen's answer.
@@ -31,6 +31,8 @@ import WidgetKit
         case answeredElsewhere
         /// Past the ten minutes the helper accepts an answer in.
         case expired
+        /// The local record is gone; no answer can be inferred from its absence.
+        case unavailable
 
         var isActionable: Bool { self == .open || self == .failed || self == .notSetUp }
     }
@@ -103,6 +105,12 @@ import WidgetKit
 
     func outcome(_ requestId: String) -> Outcome? { outcomes[requestId] }
 
+    /// A relay acknowledgement is not completion when this machine sends answer receipts.
+    func expectsAnswerReceipt(_ requestId: String) -> Bool {
+        guard let request = deps.pending.request(requestId) else { return false }
+        return deps.pairings.pairing(hostId: request.hostId)?.answerReceipts == true
+    }
+
     /// A request by id, still there after it was answered so its screen can say so.
     func request(_ requestId: String) -> PendingRequest? {
         requests.first { $0.requestId == requestId } ?? deps.pending.request(requestId)
@@ -114,15 +122,30 @@ import WidgetKit
     }
 
     func state(of requestId: String, at now: Date) -> RequestState {
+        if let request = deps.pending.request(requestId) {
+            if request.answered == .confirmed { return .answered }
+            if let result = request.answerReceipt {
+                switch result {
+                case .applied: return .answered
+                case .answered: return .answeredElsewhere
+                case .expired: return .expired
+                case .promptGone: return .closed
+                case .unconfirmed: return .unconfirmed
+                case .failed: return .notApplied
+                }
+            }
+        }
         switch outcomes[requestId] {
         case .approved: return .approved
         case .denied: return .denied
         case .sending: return .sending
+        case .sent: return .sent
         case .failed, .notSetUp, nil: break
         }
-        guard let request = deps.pending.request(requestId) else { return .answeredElsewhere }
+        guard let request = deps.pending.request(requestId) else { return .unavailable }
         switch request.answered {
-        case .approved, .denied: return .answered
+        case .approved, .denied, .sent: return .sent
+        case .confirmed: return .answered
         case .elsewhere: return .answeredElsewhere
         case .sending: return .sending
         case nil: break
@@ -145,7 +168,7 @@ import WidgetKit
     }
 
     private static func expired(_ request: PendingRequest, at now: Date) -> Bool {
-        now.timeIntervalSince(request.receivedAt) >= RequestLifetime.seconds
+        now >= request.expiry
     }
 
     /// The time the sessions are from, when that is more than five minutes ago.
@@ -165,13 +188,17 @@ import WidgetKit
         request.options.contains { $0.role == "approve" }
     }
 
+    static func canDeny(_ request: PendingRequest) -> Bool {
+        request.options.contains { $0.role == "deny" }
+    }
+
     /// Reads the store again, after another process may have changed it.
     func reload() {
         let now = deps.clock()
         requests = deps.pending.all()
             .filter {
                 ($0.answered == nil || $0.answered == .sending)
-                    && now.timeIntervalSince($0.receivedAt) < RequestLifetime.seconds
+                    && now < $0.expiry
             }
             .sorted { $0.receivedAt < $1.receivedAt }
     }
@@ -180,16 +207,21 @@ import WidgetKit
     func ingest(_ push: PushPayload, hostId: String) {
         guard let requestId = push.requestId else { return }
         switch push.kind {
+        case .answer:
+            guard let event = AnswerReceiptEvent(payload: push, hostId: hostId, now: deps.clock()),
+                  deps.pending.receive(event, now: deps.clock()) else { return }
+            outcomes[requestId] = nil
         case .needsYou:
             let age = deps.clock().timeIntervalSince1970 - Double(push.ts) / 1000
-            guard age <= NotificationServiceCore.maxAge, age >= -NotificationServiceCore.maxSkew else { return }
+            guard deps.clock() < push.requestExpiry, age >= -NotificationServiceCore.maxSkew else { return }
             deps.pending.upsert(PendingRequest(
                 requestId: requestId, hostId: hostId, sessionId: push.sessionId, bib: push.bib, agent: push.agent,
                 host: push.host, title: PromptText.clean(push.title, maxLines: 2), subject: push.subject,
                 // From when the machine sent it: watchOS can hold a silent push for minutes.
                 options: push.options ?? [],
-                receivedAt: min(deps.clock(), Date(timeIntervalSince1970: Double(push.ts) / 1000)), answered: nil,
-                allowText: push.allowText == true ? true : nil
+                receivedAt: Date(timeIntervalSince1970: Double(push.ts) / 1000), answered: nil,
+                allowText: push.allowText == true ? true : nil,
+                expiresAt: push.expires.map { Date(timeIntervalSince1970: Double($0)) }
             ))
         case .clear:
             close(requestId)
@@ -232,7 +264,7 @@ import WidgetKit
         }
         if let notice {
             let model = replyModel(target)
-            if model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.keep(text, problem: notice) }
+            if model.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { model.keep(text, problem: notice, id: id) }
         }
         return notice
     }
@@ -267,6 +299,7 @@ import WidgetKit
             return
         }
         if decision == "approve", !Self.canApprove(request) { return }
+        if decision == "deny", !Self.canDeny(request) { return }
         await send(hostId: request.hostId, requestId: requestId, decision: decision)
     }
 
@@ -290,6 +323,7 @@ import WidgetKit
         switch state(of: requestId) {
         case .answeredElsewhere: return WatchCopy.answeredElsewhere
         case .expired: return WatchCopy.expired
+        case .unavailable: return WatchCopy.unavailable
         default: return nil
         }
     }
@@ -306,6 +340,8 @@ import WidgetKit
             return
         }
         guard decision == "approve" || decision == "deny" else { return }
+        if let known = deps.pending.request(requestId),
+           decision == "approve" ? !Self.canApprove(known) : !Self.canDeny(known) { return }
         guard let pairing = deps.pairings.pairing(hostId: hostId) else {
             outcomes[requestId] = .notSetUp
             revision += 1
@@ -316,30 +352,29 @@ import WidgetKit
         do {
             try await deps.sender.send(requestId: requestId, decision: decision, pairing: pairing)
         } catch {
+            if let request = deps.pending.request(requestId), request.answered == .confirmed || request.answerReceipt != nil {
+                outcomes[requestId] = nil
+                changed()
+                return
+            }
             if let claimed = deps.pending.request(requestId), claimed.answered == .sending { giveBack(claimed) }
             outcomes[requestId] = .failed
             reload()
             return
         }
-        deps.pending.mark(requestId, decision == "approve" ? .approved : .denied)
-        outcomes[requestId] = decision == "approve" ? .approved : .denied
+        deps.pending.markRelaySent(requestId)
+        outcomes[requestId] = .sent
         changed()
     }
 
     /// Marks a request answered elsewhere, or keeps a clear for one not seen yet, so its push
     /// arriving late cannot open it.
     private func close(_ requestId: String) {
-        switch deps.pending.request(requestId)?.answered {
-        case .approved, .denied, .elsewhere:
-            return
-        case nil, .sending:
-            _ = deps.pending.claim(requestId, hostId: "")
-            deps.pending.mark(requestId, .elsewhere)
-        }
+        deps.pending.close(requestId)
     }
 
     private func changed() {
-        deps.pending.prune(olderThan: RequestLifetime.seconds)
+        deps.pending.prune()
         reload()
         deps.reloadComplication()
     }

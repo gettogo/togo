@@ -7,7 +7,7 @@ extension CommandLineModel {
     /// The session's TUI owns its input and can be reached: commands, prompts typed rather
     /// than sent through the harness API, an idle agent, no pictures waiting.
     var peekable: Bool {
-        guard let peekTerminal, peekTerminal.available(), !peek.dismissed, attachments.isEmpty, !working else { return false }
+        guard !nativeCommandsAvailable, let peekTerminal, peekTerminal.available(), !peek.dismissed, attachments.isEmpty, !working else { return false }
         return routes.has(HarnessCapability.commands) && !routes.has(HarnessCapability.sendAPI)
     }
 

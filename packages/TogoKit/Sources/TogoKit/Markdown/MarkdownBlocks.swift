@@ -11,6 +11,7 @@ public struct MarkdownBlocks: Sendable, Equatable {
         case prose(String)
         case heading(String)
         case code(language: String?, text: String)
+        case richCode(MarkdownFence)
         /// A GitHub-flavoured table: a header row, a delimiter row, then body rows.
         case table(MarkdownTable)
     }
@@ -61,7 +62,7 @@ public struct MarkdownBlocks: Sendable, Equatable {
         var language: String?
         var inCode = false
         /// The fence that opened the code, ``` or ~~~: only the same one closes it.
-        var openFence = "```"
+        var openFence: MarkdownFenceMarker?
         /// Spaces before the opening fence; a fence inside a list item indents its code by as
         /// much, and that indent is the list's, not the code's.
         var fenceIndent = 0
@@ -99,16 +100,15 @@ public struct MarkdownBlocks: Sendable, Equatable {
                 }
                 flushTable()
             }
-            if let fence = Self.fence(trimmed), !inCode || fence == openFence {
+            if (!inCode && MarkdownFenceMarker.opening(trimmed) != nil) || (inCode && openFence?.closes(trimmed) == true) {
                 if inCode {
-                    emit(.code(language: language, text: code.joined(separator: "\n")), at: codeStart)
+                    emit(MarkdownFenceRegistry.block(language: language, source: code.joined(separator: "\n"), closed: true), at: codeStart)
                     code = []
                     language = nil
                 } else {
                     flushProse()
-                    openFence = fence
-                    let tag = trimmed.dropFirst(3).trimmingCharacters(in: .whitespacesAndNewlines)
-                    language = tag.isEmpty ? nil : tag
+                    openFence = MarkdownFenceMarker.opening(trimmed)
+                    language = openFence?.language
                     fenceIndent = line.prefix { $0 == " " }.count
                     codeStart = start
                 }

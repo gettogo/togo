@@ -22,13 +22,14 @@ struct WaitingSummary: Equatable {
         self.oldest = oldest
     }
 
-    init(requests: [PendingRequest], now: Date, machineName: (String) -> String) {
+    init(requests: [PendingRequest], now: Date, machineID: (String) -> UUID? = { _ in nil }, machineName: (String) -> String) {
         let open = Self.open(requests, now: now)
         count = open.count
         oldest = open.first.map { request in
             Oldest(
                 bib: request.bib, agent: request.agent ?? "",
-                link: LiveCopy.link(bib: request.bib, machine: request.host ?? machineName(request.hostId))
+                link: LiveCopy.link(bib: request.bib, machine: machineName(request.hostId),
+                    hostID: machineID(request.hostId), sessionID: request.sessionId)
             )
         }
     }
@@ -36,7 +37,7 @@ struct WaitingSummary: Equatable {
     /// Unanswered requests still inside their window, oldest first.
     static func open(_ requests: [PendingRequest], now: Date) -> [PendingRequest] {
         requests
-            .filter { $0.isOpen(at: now) && now.timeIntervalSince($0.receivedAt) < openFor }
+            .filter { $0.isAnswerable(at: now) }
             .sorted { $0.receivedAt < $1.receivedAt }
     }
 }
@@ -62,7 +63,7 @@ struct WaitingProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<WaitingEntry>) -> Void) {
         let now = Date.now
         let requests = Self.requests()
-        let expiries = WaitingSummary.open(requests, now: now).map { $0.receivedAt.addingTimeInterval(WaitingSummary.openFor) }
+        let expiries = WaitingSummary.open(requests, now: now).map(\.expiry)
         let dates = [now] + Array(Set(expiries)).sorted()
         let entries = dates.map { entry(at: $0, requests: requests) }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
@@ -70,7 +71,8 @@ struct WaitingProvider: TimelineProvider {
 
     private func entry(at date: Date, requests: [PendingRequest]) -> WaitingEntry {
         let pairings = LiveCopy.sharedPairings()
-        return WaitingEntry(date: date, summary: WaitingSummary(requests: requests, now: date) {
+        return WaitingEntry(date: date, summary: WaitingSummary(requests: requests, now: date,
+            machineID: { LiveCopy.machineID(hostId: $0, pairings: pairings) }) {
             LiveCopy.machineName(hostId: $0, pairings: pairings)
         })
     }

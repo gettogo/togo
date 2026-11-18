@@ -11,6 +11,10 @@ struct PromptBubble: View {
     var dimmed = false
     /// The prompt is a command line ("/compact"): it reads as what ran, not as words to the agent.
     var command = false
+    var cancelTitle = ChatCopy.cancel
+    var cancelEnabled = true
+    var onCancel: (() -> Void)?
+    var onRetry: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
@@ -38,16 +42,48 @@ struct PromptBubble: View {
                     // motion: state change — a queued prompt brightens in place when it is sent.
                     .motion(.respond, value: dimmed)
             }
-            if let note {
-                Text(note)
-                    .font(.caption)
-                    .foregroundStyle(Color.togoMute)
-                    // A state change in place: "Queued" → "Sending…" crossfades, nothing rises.
-                    .contentTransition(.interpolate)
+            if note != nil || onRetry != nil || onCancel != nil {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { footerNote; footerActions }.fixedSize(horizontal: true, vertical: false)
+                    VStack(alignment: .trailing, spacing: 6) { footerNote; footerActions }
+                }
+                .transaction { $0.animation = nil }
             }
         }
         .padding(.leading, 48)
         .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    @ViewBuilder private var footerNote: some View {
+        if let note {
+            Text(note).font(.caption).foregroundStyle(Color.togoMute)
+                .fixedSize(horizontal: false, vertical: true).contentTransition(.interpolate)
+        }
+    }
+
+    private var footerActions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { buttons }.fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .trailing, spacing: 6) { buttons }
+        }
+    }
+
+    @ViewBuilder private var buttons: some View {
+        if let onRetry { footerButton(ChatCopy.tryAgain, action: onRetry) }
+        if let onCancel { footerButton(cancelTitle, action: onCancel).disabled(!cancelEnabled) }
+    }
+
+    private func footerButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Color.togoSnow)
+                .padding(.horizontal, 12)
+                .frame(minWidth: 44, minHeight: 44)
+                .background(Color.togoRaised, in: .capsule)
+                .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -69,27 +105,14 @@ struct PendingPromptRow: View {
                     .padding(.bottom, 4)
                     .opacity(0.6)
             }
-            PromptBubble(text: prompt.text, note: note, dimmed: true)
-            HStack(spacing: 4) {
-                if failed {
-                    Button(ChatCopy.tryAgain, action: onRetry)
-                        .buttonStyle(PlainAnswerStyle())
-                }
-                if prompt.state != .sending {
-                    Button(ChatCopy.cancel, action: onCancel)
-                        .buttonStyle(PlainAnswerStyle())
-                }
-            }
-            .font(.footnote)
-            // Try again appearing is the failure itself: instant, at the row, with the error
-            // haptic; never carried by the store's arrival transaction.
-            .transaction { $0.animation = nil }
+            PromptBubble(text: prompt.text, note: note, dimmed: true,
+                         onCancel: prompt.state == .sending ? nil : onCancel, onRetry: canRetry ? onRetry : nil)
         }
         .haptic(.error, trigger: failed) { _, failed in failed }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(ChatCopy.spokenPrompt(prompt.text) + ", " + (note ?? ""))
         .accessibilityActions {
-            if case .failed = prompt.state { Button(ChatCopy.tryAgain, action: onRetry) }
+            if canRetry { Button(ChatCopy.tryAgain, action: onRetry) }
             if prompt.state != .sending { Button(ChatCopy.cancel, action: onCancel) }
         }
     }
@@ -98,11 +121,16 @@ struct PendingPromptRow: View {
         if case .failed = prompt.state { true } else { false }
     }
 
+    /// A prompt that failed, or whose delivery could not be confirmed, is sent again only when
+    /// the user asks: it is never replayed on its own, and it must not hold the queue for good.
+    private var canRetry: Bool { failed || prompt.state == .unconfirmed }
+
     private var note: String? {
         switch prompt.state {
         case .waiting: ChatCopy.queued
         case .sending: ChatCopy.sending
-        case .failed(let message): ChatCopy.notSent + ". " + message
+        case .failed(let message): ChatCopy.sendFailed + ". " + message
+        case .unconfirmed: ChatCopy.deliveryUnconfirmed
         }
     }
 }
@@ -110,9 +138,10 @@ struct PendingPromptRow: View {
 /// The agent's answer, in full.
 struct ReplyRow: View, Equatable {
     let text: String
+    var partial = false
 
     var body: some View {
-        MarkdownText(text: text)
+        MarkdownText(text: text, isStreaming: partial)
             // Streamed and finalised text updates in place: a note's arrival transaction moves
             // the rows around it, never reflows this paragraph (motion v2 §5).
             .transaction { $0.animation = nil }

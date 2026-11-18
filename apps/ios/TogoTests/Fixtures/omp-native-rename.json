@@ -1,0 +1,50 @@
+{
+  "id": "o",
+  "k": "card",
+  "p": {
+    "head": "Rename Session",
+    "role": "omp.overlay"
+  },
+  "c": [
+    {
+      "id": "p",
+      "k": "col",
+      "p": {
+        "gap": "sm",
+        "role": "omp.form.field"
+      },
+      "c": [
+        {
+          "id": "q",
+          "k": "text",
+          "p": {
+            "spans": [
+              {
+                "s": "strong",
+                "t": "Rename session"
+              }
+            ]
+          }
+        },
+        {
+          "id": "r",
+          "k": "input",
+          "p": {
+            "cursor": 14,
+            "prompt": "> ",
+            "sendable": false,
+            "text": "Native check A"
+          }
+        },
+        {
+          "id": "s",
+          "k": "text",
+          "p": {
+            "hidden": true,
+            "text": ""
+          }
+        }
+      ]
+    }
+  ]
+}

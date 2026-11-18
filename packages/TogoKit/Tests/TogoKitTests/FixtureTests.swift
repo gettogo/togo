@@ -21,6 +21,7 @@ struct FixtureTests {
     static let appPendingFixtures: Set<String> = [
         "approval.list-subject.json", "push.pair-watch.json",
         "harness.screen-secret.json",
+        "surface.open.json", "surface.read.json",
     ]
 
     @Test func pendingFixturesValidate() throws {
@@ -212,6 +213,10 @@ struct FixtureTests {
         case .harnessLocate: (HarnessLocateParams.self, HarnessLocation.self)
         case .integrationsStatus: (EmptyParams.self, IntegrationsStatus.self)
         case .integrationsInstall, .integrationsUninstall: (IntegrationsChangeParams.self, IntegrationsChange.self)
+        case .surfaceOpen: (JSONValue.self, SurfaceLease.self)
+        case .surfaceRead: (JSONValue.self, SurfaceReadResult.self)
+        case .surfaceInput: (JSONValue.self, SurfaceDispatchResult.self)
+        case .surfaceAck, .surfaceClose: (JSONValue.self, EmptyResult.self)
         }
     }
 

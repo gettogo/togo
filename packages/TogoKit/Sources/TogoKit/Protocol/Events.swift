@@ -469,9 +469,11 @@ public struct EventEnvelope: Codable, Hashable, Sendable {
 
 public struct EventsSubscribeParams: Codable, Hashable, Sendable {
     public var foreground: Bool?
+    public var deviceId: String?
 
-    public init(foreground: Bool? = nil) {
+    public init(foreground: Bool? = nil, deviceId: String? = nil) {
         self.foreground = foreground
+        self.deviceId = deviceId
     }
 }
 

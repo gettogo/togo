@@ -60,7 +60,7 @@ import WatchKit
         WatchDevice(
             deviceId: try keys.deviceID(), name: WKInterfaceDevice.current().name,
             x25519: Base64URL.encode(try keys.agreementKey().publicKey.rawRepresentation),
-            approvalKey: Base64URL.encode(try keys.signingKey().publicKey.rawRepresentation), apnsToken: token
+            approvalKey: Base64URL.encode(try keys.signingKey().publicKey.rawRepresentation), apnsToken: token, answerReceipts: true
         )
     }
 

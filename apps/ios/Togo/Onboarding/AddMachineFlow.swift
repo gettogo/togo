@@ -49,8 +49,14 @@ enum ConnectOutcome: Equatable, Sendable {
     func forgetHostKey(_ hostID: String) async throws
     /// Keeps `password` for the machine in this device's keychain, or removes it when nil.
     func setSavedPassword(_ password: String?, for machine: UUID) throws
+    /// Metadata only: opening Edit must not ask for or read the password.
+    func hasSavedPassword(for machine: UUID) -> Bool
     /// The label of a key in this device's keychain, or nil when the key is not here.
     func keyLabel(id: String) -> String?
+}
+
+extension OnboardingServices {
+    func hasSavedPassword(for machine: UUID) -> Bool { false }
 }
 
 enum DiscoveryPhase: Equatable, Sendable {
@@ -166,6 +172,8 @@ enum ConnectPhase: Equatable, Sendable {
 
     /// The saved machine as the form opened, for telling whether anything was changed.
     var originalDraft: MachineDraft?
+    var updateMetadata: (@MainActor (HostDisplayEdit) async throws -> HostRecord)?
+    private var closed = false
 
     /// Whether there is anything to save: always for a new machine, only after an edit for a saved one.
     var hasChanges: Bool { originalDraft.map { $0 != draft } ?? true }
@@ -255,8 +263,8 @@ enum ConnectPhase: Equatable, Sendable {
     /// Shows field errors in place when the form is not ready; otherwise starts the attempt
     /// where it is. The connection step is pushed only when the attempt needs a decision.
     func connect() {
-        showsErrors = true
-        guard draft.isValid, !isWorking else { return }
+        showsErrors = validatesConnection
+        guard !isWorking, !validatesConnection || draft.isValid else { return }
         retry()
     }
 
@@ -280,6 +288,21 @@ enum ConnectPhase: Equatable, Sendable {
     /// sheet cancels it. A machine that connects with a usable helper is saved here.
     func runAttempt() async {
         phase = .connecting
+        if let edit = displayEdit, let updateMetadata {
+            guard !closed, !Task.isCancelled else { return }
+            saving = true
+            defer { saving = false }
+            do {
+                let record = try await updateMetadata(edit)
+                guard !closed, !Task.isCancelled else { return }
+                complete(record)
+            } catch {
+                guard !closed, !Task.isCancelled else { return }
+                phase = .failed(String(localized: "onboard.save.failed", defaultValue: "Couldn't save \(machineName). Try again."))
+                showConnect()
+            }
+            return
+        }
         var deviceKey: KeyInfo?
         if draft.auth == .deviceKey {
             do {
@@ -295,7 +318,7 @@ enum ConnectPhase: Equatable, Sendable {
         }
         guard let profile = draft.profile(id: id, deviceKeyID: deviceKey?.id) else { return }
         self.profile = profile
-        let password = draft.auth == .password ? draft.password : nil
+        let password = draft.auth == .password && !draft.password.isEmpty ? draft.password : nil
         let given = answers
         answers = nil
         let outcome = await services.connect(profile, password: password, answers: given) { [weak self] prompt in
@@ -336,11 +359,12 @@ enum ConnectPhase: Equatable, Sendable {
     /// A machine with a usable helper is saved at once. Without one, the user decides on the
     /// helper screen, unless the machine was already saved without it.
     private func settle(_ report: HelperReport) async {
-        if case .missing = report.helper {
+        switch report.helper {
+        case .missing:
             if keepsNoHelper { await save(withHelper: false) } else { showConnect() }
-        } else if report.tmuxSupported {
+        case .present where report.tmuxSupported:
             await save(withHelper: true)
-        } else {
+        default:
             showConnect()
         }
     }
@@ -365,6 +389,7 @@ enum ConnectPhase: Equatable, Sendable {
 
     /// Leaving the flow answers a pending question with no.
     func cancel() {
+        closed = true
         answerTrust(false)
     }
 
@@ -382,8 +407,12 @@ enum ConnectPhase: Equatable, Sendable {
     // MARK: Saving
 
     /// An empty field while editing keeps whatever password is saved; anything else replaces it.
-    private func savePassword(for machine: UUID) throws {
+    func savePassword(for machine: UUID) throws {
         guard draft.auth == .password, draft.savePassword else {
+            // A metadata lookup may have been unavailable when Edit opened. An unchanged
+            // off setting and empty field must not delete a credential we could not inspect.
+            if let originalDraft, originalDraft.auth == .password, draft.auth == .password,
+               !originalDraft.savePassword, !draft.savePassword, draft.password.isEmpty { return }
             try services.setSavedPassword(nil, for: machine)
             return
         }

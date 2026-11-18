@@ -1,6 +1,33 @@
 import SwiftUI
 import TogoKit
 
+/// A separate row above the composer, included in the bottom inset. The parent omits it
+/// entirely when no agents are running.
+struct AgentsRunningLine: View {
+    let store: HarnessSessionStore
+    let count: Int
+
+    var body: some View {
+        Button { store.showAgents() } label: {
+            HStack(spacing: 8) {
+                Text(MissionCopy.runningAgents(count))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .monospacedDigit()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+            .font(.footnote)
+            .foregroundStyle(Color.togoMute)
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(MissionCopy.agentsHint)
+        .accessibilityIdentifier("composer.agents")
+    }
+}
+
 /// A session's mission at a glance, as the preview over a roster line's long-press menu:
 /// "2 agents  1 shell  plan 3/7" in mono, a small plan ring or a working mark at its leading
 /// edge, and the beacon while something needs the user. Still: it is a snapshot, not a control.

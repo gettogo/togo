@@ -81,6 +81,30 @@ import TogoKit
         #expect(services.logRequests.last?.ref == nil)
     }
 
+    @Test func nextAppearanceReadsCommitsAddedSinceTheLastVisit() async {
+        let services = FakeReviewServices()
+        services.commits = commits(1)
+        let model = HistoryModel(subject: subject, services: services)
+        await model.loadIfNeeded()
+        services.commits = commits(2, prefix: "new: ")
+        await model.loadIfNeeded()
+        #expect(model.commits.count == 2)
+        #expect(model.commits.first?.subject == "new: Change 0")
+    }
+
+    @Test func refreshReturnsToCurrentBranchWhenThePickedOneWasDeleted() async {
+        let services = FakeReviewServices()
+        let model = HistoryModel(subject: subject, services: services)
+        await model.load()
+        await model.select(branch: "fix/ids")
+        services.branchList.branches.removeAll { $0.name == "fix/ids" }
+        await model.load()
+        #expect(model.selectedRef == nil)
+        #expect(services.logRequests.last?.ref == nil)
+        #expect(model.shownBranch == "main")
+        #expect(model.state == .ready)
+    }
+
     @Test func failedLogShowsMessageAndRetries() async {
         let services = FakeReviewServices()
         services.failures[.log] = ReviewFixtureError.offline

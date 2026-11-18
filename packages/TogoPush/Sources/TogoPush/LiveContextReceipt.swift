@@ -39,9 +39,9 @@ public struct LiveContextReceiptSender: Sendable {
         guard let pairing = pairings.pairing(hostId: hostID), pairing.liveContextReceipts == true,
               let tokenHash = pairing.apnsTokenHash, tokenHash.count == 64,
               let request = pending.request(requestID), request.hostId == hostID,
-              !request.isPlaceholder, request.isOpen(at: now),
+              !request.isPlaceholder, request.isAnswerable(at: now),
               now.timeIntervalSince(request.receivedAt) >= -NotificationServiceCore.maxSkew,
-              now.timeIntervalSince(request.receivedAt) < RequestLifetime.seconds
+              now < request.expiry
         else { return false }
         let ts = Mailbox.milliseconds(now)
         let deviceID = try keys.deviceID()

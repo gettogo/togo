@@ -70,6 +70,7 @@ struct ImportRow: Identifiable, Equatable {
     func isTicked(_ id: String) -> Bool { ticked.contains(id) }
 
     func toggle(_ id: String) {
+        guard !saving else { return }
         guard let row = rows.first(where: { $0.id == id }) else { return }
         if case .blocked = row.status { return }
         if !ticked.insert(id).inserted { ticked.remove(id) }
@@ -77,6 +78,7 @@ struct ImportRow: Identifiable, Equatable {
 
     /// Reads the file at `url`; false, with a message, when it is too big, empty or not text.
     @discardableResult func load(_ url: URL) -> Bool {
+        guard !saving else { return false }
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         // One byte past the limit is enough to know the file is too big, without reading all of it.
@@ -90,6 +92,7 @@ struct ImportRow: Identifiable, Equatable {
 
     /// Reads chosen file contents; false, with a message, when too big or not text.
     @discardableResult func loadFile(_ data: Data) -> Bool {
+        guard !saving else { return false }
         guard data.count <= SSHConfigImport.maxBytes else {
             message = String(localized: "import.hosts.fileTooLarge", defaultValue: "That file is more than 256 KiB. Paste only the hosts you need.")
             return false
@@ -108,6 +111,10 @@ struct ImportRow: Identifiable, Equatable {
     }
 
     func review() {
+        guard !saving else { return }
+        finished = false
+        imported = nil
+        failure = nil
         rows = []
         skipped = []
         ticked = []
@@ -139,6 +146,10 @@ struct ImportRow: Identifiable, Equatable {
     }
 
     func startOver() {
+        guard !saving else { return }
+        finished = false
+        imported = nil
+        message = nil
         rows = []
         skipped = []
         ticked = []
@@ -150,6 +161,7 @@ struct ImportRow: Identifiable, Equatable {
     /// so trying again after a failure only adds what is left.
     func importTicked() async {
         guard !saving else { return }
+        finished = false
         guard rows.contains(where: { ticked.contains($0.id) }) else { return }
         saving = true
         failure = nil
@@ -170,7 +182,9 @@ struct ImportRow: Identifiable, Equatable {
                 try await save(HostRecord(id: id, profile: profile, symbol: row.draft.symbol.rawValue))
                 count += 1
                 imported = count
-                rows[index].status = .alreadyAdded
+                if let current = rows.firstIndex(where: { $0.id == row.id }) {
+                    rows[current].status = .alreadyAdded
+                }
                 ticked.remove(row.id)
             }
             finished = true

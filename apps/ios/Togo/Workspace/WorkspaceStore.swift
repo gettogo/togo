@@ -83,7 +83,7 @@ extension AppStore {
     /// snapshot says nothing about its sessions, so its tabs stay.
     func closeEndedTabs(on hostID: HostID, listed: Set<String>) {
         for tab in workspace.tabs where tab.hostID == hostID && !listed.contains(tab.sessionID) {
-            closeEndedTab(tab.id)
+            closeEndedTab(tab.id, showNotice: true)
         }
         // A review opened from the sessions list has no tab of its own.
         if let subject = reviewing?.subject, subject.hostID == hostID, !listed.contains(subject.sessionID) {
@@ -108,10 +108,20 @@ extension AppStore {
         }
     }
 
-    func closeEndedTab(_ id: TabID) {
+    func closeEndedTab(_ id: TabID, showNotice: Bool = false) {
         guard let tab = workspace.tabs.first(where: { $0.id == id }) else { return }
-        if workspace.selected == id && workspaceOpen {
-            workspace.ended = WorkspaceCopy.ended(tab.bib ?? tab.title)
+        if focusedTab?.id == id && workspaceOpen {
+            let message = WorkspaceCopy.ended(tab.bib ?? tab.title)
+            workspace.ended = message
+            // Do not mount the neighbour's terminal under keys already on their way to
+            // this session. Selecting another session is an explicit action from the list.
+            workspaceOpen = false
+            // The navigation pop can retain the workspace during its transition. Leave no
+            // terminal selected in that retained view, including the other split pane.
+            workspace.selected = nil
+            workspace.secondary = nil
+            workspace.focused = .primary
+            if showNotice { notice = Notice(text: message, isError: false) }
         }
         endReview(hostID: tab.hostID, sessionID: tab.sessionID, why: ReviewEntryCopy.sessionEnded)
         close(id)
@@ -135,11 +145,11 @@ extension AppStore {
         machine(for: hostID)?.name ?? services.hosts.first { $0.id == hostID }?.name ?? ""
     }
 
-    /// "04 Claude Code" for a tab chip, falling back to the tab's own title for a session the
+    /// The same number and session name as its list row, falling back to the tab's saved title if the
     /// control center does not list.
     func chipLabel(for tab: WorkspaceTab) -> (bib: String?, name: String) {
         if let row = session(for: tab) {
-            return (row.bib, row.bib == nil ? SessionActions.label(row) : row.agentName)
+            return (row.bib, row.name.isEmpty ? row.agentName : row.name)
         }
         return (tab.bib, tab.title)
     }

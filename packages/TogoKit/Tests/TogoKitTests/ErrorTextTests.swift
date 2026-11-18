@@ -3,6 +3,26 @@ import Testing
 @testable import TogoKit
 
 struct ErrorTextTests {
+    @Test(arguments: [JSONValue.null, .string("")])
+    func missingTmuxExplainsInstallationAndRecovery(_ found: JSONValue) {
+        let error = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.tmuxUnavailable, message: "tmux_unavailable",
+            data: .object(["found": found, "required": .string("3.2")])))
+        #expect(error.localizedDescription == "tmux is not installed on this machine. Install tmux 3.2 or newer, then try again.\n\nIf tmux is already installed, restart Togo on the machine.")
+    }
+
+    @Test func olderTmuxNamesTheInstalledVersionAndRecovery() {
+        let error = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.tmuxUnavailable, message: "tmux_unavailable",
+            data: .object(["found": .string("2.9a"), "required": .string("3.2")])))
+        #expect(error.localizedDescription == "This machine has tmux 2.9a. Togo needs version 3.2 or newer. Update tmux, then try again.\n\nIf tmux is already up to date, restart Togo on the machine.")
+    }
+
+    @Test(arguments: [nil, JSONValue.object([:]), .object(["found": .bool(true)]),
+        .object(["found": .string("2.9\ncommand output")]), .object(["found": .string(String(repeating: "2", count: 33))])])
+    func unknownTmuxDetailsDoNotClaimItIsMissingOrEchoCommandOutput(_ data: JSONValue?) {
+        let error = HelperError.rpc(RPCErrorObject(code: RPCErrorCode.tmuxUnavailable, message: "tmux_unavailable", data: data))
+        #expect(error.localizedDescription == "Togo needs tmux 3.2 or newer on this machine. Install or update tmux, then try again.\n\nIf tmux is already up to date, restart Togo on the machine.")
+    }
+
     static let errors: [any Error] = [
         SSHError.hostKeyChanged(host: "[h]:22", expected: ["SHA256:old"], presented: "SHA256:new"),
         SSHError.hostKeyRejected,

@@ -31,9 +31,9 @@ enum TutorialTip: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .workspace: String(localized: "tutorial.tip.workspace.title", defaultValue: "Chat or terminal")
-        case .request: String(localized: "tutorial.tip.request.title", defaultValue: "Answer from here")
-        case .offline: String(localized: "tutorial.tip.offline.title", defaultValue: "What Offline means")
+        case .workspace: String(localized: "tutorial.tip.workspace.title", defaultValue: "Chat or Terminal")
+        case .request: String(localized: "tutorial.tip.request.title", defaultValue: "Answer from Here")
+        case .offline: String(localized: "tutorial.tip.offline.title", defaultValue: "What Offline Means")
         }
     }
 

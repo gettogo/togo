@@ -7,6 +7,14 @@ import UserNotifications
 /// Which notifications offer Reply, and what it asks of the user.
 @Suite(.serialized)
 struct CategoryTests {
+    @Test func aReadOnlyWaitingPromptOffersNoNotificationOrWidgetAnswers() throws {
+        let content = core.process(try sealed(push(.needsYou, allowText: false, options: []))).content
+        #expect(content.categoryIdentifier == NotificationCategoryID.info)
+        let pending = PendingStore(directory: directory, clock: { Self.now })
+        let request = try #require(pending.request("r_aaaaaaaaaa"))
+        #expect(LiveContext(pending: request, now: Self.now).answer == nil)
+    }
+
     static let now = Date(timeIntervalSince1970: 1_793_707_200)
     static let hostID = "h_mmg42klgyqzwneiskrelxms3j7"
 

@@ -52,7 +52,7 @@ struct DebugHostForm: View {
                 TextField("User", text: $user)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
             }
-            Section("Sign in") {
+            Section("Sign In") {
                 Picker("Method", selection: $auth) {
                     ForEach(AuthChoice.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -61,7 +61,7 @@ struct DebugHostForm: View {
                 }
             }
             Section("Route") {
-                TextField("Jump host", text: $jump, prompt: Text("user@host:22"))
+                TextField("Jump Host", text: $jump, prompt: Text("user@host:22"))
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
                 Picker("Transport", selection: $transport) {
                     Text("Auto").tag(TransportPreference.auto)
@@ -69,8 +69,8 @@ struct DebugHostForm: View {
                     Text("Mosh").tag(TransportPreference.mosh)
                     Text("ET").tag(TransportPreference.et)
                 }
-                Toggle("ET available", isOn: $etAvailable)
-                TextField("mosh-server path", text: $moshServerPath, prompt: Text("Found on PATH"))
+                Toggle("ET Available", isOn: $etAvailable)
+                TextField("mosh-server Path", text: $moshServerPath, prompt: Text("Found on PATH"))
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
             }
             if let error {

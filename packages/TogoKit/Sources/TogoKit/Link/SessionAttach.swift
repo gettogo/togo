@@ -7,6 +7,7 @@ public struct SessionEnvironment: Sendable {
     public var hostKeys: any HostKeyStore
     public var prompter: any ConnectionPrompter
     public var connector: Connector
+    public var attemptObserver: @Sendable (ConnectionAttemptEvent) -> Void = { _ in }
 
     public init(
         keys: KeychainKeyStore, secrets: any SecretStore, biometrics: BiometricSession,
@@ -20,10 +21,10 @@ public struct SessionEnvironment: Sendable {
         self.connector = connector
     }
 
-    public func connection(for profile: HostProfile) -> SSHConnection {
+    public func connection(for profile: HostProfile, purpose: ConnectionPurpose = .requests) -> SSHConnection {
         SSHConnection(
             profile: profile, keys: keys, secrets: secrets, biometrics: biometrics,
-            hostKeys: hostKeys, prompter: prompter
+            hostKeys: hostKeys, prompter: prompter, purpose: purpose, attemptObserver: attemptObserver
         )
     }
 }
@@ -45,12 +46,25 @@ public enum SessionAttach {
 
     /// Attaches to a tmux session on a host without the helper, by the id `PlainTmuxSource` gave it.
     public static func connectPlainTmux(profile: HostProfile, sessionID: String, env: SessionEnvironment) -> LinkConnect {
-        connect(profile: profile, env: env) { _ in
-            guard let name = PlainTmux.name(forID: sessionID) else {
-                throw HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "no such session"))
+        connect(profile: profile, env: env) { connection in
+            try await plainAttachArgv(sessionID: sessionID) { command in
+                try await connection.run(command, timeout: .seconds(10)).status
             }
-            return PlainTmux.attachArgv(name: name)
         }
+    }
+
+    static func plainAttachArgv(
+        sessionID: String, run: @Sendable (String) async throws -> Int32
+    ) async throws -> [String] {
+        guard let name = PlainTmux.name(forID: sessionID) else {
+            throw HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "no such session"))
+        }
+        let status = try await run(shellQuote(PlainTmux.sessionProbeArgv(name: name)))
+        if status == 1 {
+            throw HelperError.rpc(RPCErrorObject(code: RPCErrorCode.notFound, message: "no such session"))
+        }
+        guard status == 0 else { throw SSHError.channelClosed(exitStatus: status) }
+        return PlainTmux.attachArgv(name: name)
     }
 
     private static func connect(
@@ -66,7 +80,7 @@ public enum SessionAttach {
                 onWaking: onWaking,
                 attempt: { await WakeProbe.anyReachable(hosts: hosts, port: probe.port, timeout: .seconds(2)) }
             )
-            let connection = env.connection(for: profile)
+            let connection = env.connection(for: profile, purpose: .terminal)
             do {
                 try await connection.connect()
                 let request = AttachRequest(

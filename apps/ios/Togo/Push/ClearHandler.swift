@@ -16,6 +16,7 @@ import WidgetKit
         /// Tells the Watch the request is gone, when it is reachable.
         var cleared: (String) -> Void = { _ in }
         var received: (String, String) async -> Void = { _, _ in }
+        var answerReceived: (AnswerReceiptEvent) async -> Void = { _ in }
     }
 
     private let deps: Dependencies
@@ -28,6 +29,20 @@ import WidgetKit
     @discardableResult
     func didReceiveRemoteNotification(_ userInfo: [AnyHashable: Any]) async -> Bool {
         guard let opened = deps.core.open(userInfo: userInfo) else { return false }
+        if opened.payload.kind == .answer {
+            guard let event = AnswerReceiptEvent(payload: opened.payload, hostId: opened.pairing.hostId, now: Date()) else { return false }
+            deps.pending.prune()
+            guard deps.pending.receive(event, now: Date()) else { return false }
+            deps.pending.clearOfflineMark(hostId: opened.pairing.hostId)
+            await deps.notifications.removeOffline(hostId: opened.pairing.hostId)
+            deps.reloadWidgets()
+            if !event.result.isFailure || event.result == .expired || event.result == .promptGone {
+                await deps.notifications.removeDelivered(requestIds: [event.requestId])
+                deps.cleared(event.requestId)
+            }
+            await deps.answerReceived(event)
+            return true
+        }
         // Anything the machine sends means it is answering again.
         if opened.payload.kind != .offline {
             deps.pending.clearOfflineMark(hostId: opened.pairing.hostId)
@@ -39,7 +54,7 @@ import WidgetKit
             return changed
         }
         guard opened.payload.kind == .clear, let requestId = opened.payload.requestId else { return false }
-        await clear([requestId])
+        await clear([requestId], hostId: opened.pairing.hostId)
         return true
     }
 
@@ -49,14 +64,15 @@ import WidgetKit
         let now = Date()
         let sent = Date(timeIntervalSince1970: Double(p.ts) / 1000)
         let age = now.timeIntervalSince(sent)
-        guard let requestId = p.requestId, age <= NotificationServiceCore.maxAge,
-              age >= -NotificationServiceCore.maxSkew, deps.pending.request(requestId) == nil
+        guard let requestId = p.requestId, now < p.requestExpiry,
+              age >= -NotificationServiceCore.maxSkew
         else { return false }
         deps.pending.upsert(PendingRequest(
             requestId: requestId, hostId: hostId, sessionId: p.sessionId, bib: p.bib, agent: p.agent,
             host: p.host ?? machine, title: PromptText.clean(p.title, maxLines: 1), subject: p.subject,
-            options: p.options ?? [], receivedAt: min(now, sent), answered: nil,
-            allowText: p.allowText == true ? true : nil
+            options: p.options ?? [], receivedAt: sent, answered: nil,
+            allowText: p.allowText == true ? true : nil,
+            expiresAt: p.expires.map { Date(timeIntervalSince1970: Double($0)) }
         ))
         deps.reloadWidgets()
         return true
@@ -84,12 +100,11 @@ import WidgetKit
         if !all.isEmpty { await clear(all) }
     }
 
-    private func clear(_ requestIds: Set<String>) async {
+    private func clear(_ requestIds: Set<String>, hostId: String = "") async {
+        // Persist before the first await: an alert or an action may arrive meanwhile.
+        for id in requestIds { deps.pending.close(id, hostId: hostId) }
         await deps.notifications.removeDelivered(requestIds: requestIds)
-        for id in requestIds {
-            deps.pending.remove(id)
-            deps.cleared(id)
-        }
+        for id in requestIds { deps.cleared(id) }
         deps.reloadWidgets()
     }
 }

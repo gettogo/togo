@@ -196,6 +196,10 @@ public struct HarnessFeedState: Sendable {
     /// The cursor for the next `harnessOpen`.
     public var openAfter: Int { restart ? 0 : timeline.cursor }
 
+    /// A reconnect discovered another helper epoch after using an old cursor. Keep cached
+    /// rows until a fresh open arrives, but never acknowledge that incomplete tail.
+    public mutating func reopenFromStart() { restart = true }
+
     /// Applies an open result and replays the notifications held for it. Answers `.reopen`
     /// when a replayed one says so.
     @discardableResult

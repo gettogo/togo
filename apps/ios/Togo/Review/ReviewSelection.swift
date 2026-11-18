@@ -28,10 +28,11 @@ struct ReviewSelection: Equatable, Sendable {
     /// Exactly `paths`, each of which must be an entry of the displayed `status`.
     init(_ status: GitStatus, paths: [String]) throws {
         guard !paths.isEmpty else { throw Failure.empty }
+        let files = Dictionary(status.files.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
         var seen: [String: GitSeen] = [:]
         for path in paths {
             guard GitPathsParams.isValidPath(path) else { throw Failure.invalidPath(path) }
-            guard let file = status.files.first(where: { $0.path == path }) else { throw Failure.notShown(path) }
+            guard let file = files[path] else { throw Failure.notShown(path) }
             seen[path] = GitSeen(file)
             // Discarding a staged rename brings its old path back, so that path is part of
             // what the user saw: same letters, no file there.

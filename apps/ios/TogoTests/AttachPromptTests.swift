@@ -132,18 +132,32 @@ import TogoKit
         #expect(prompts.host == nil)
     }
 
-    @Test func queueIsCappedAndDeclinesTheOldest() async {
+    @Test func queueIsCappedWithoutReplacingTheCurrentQuestion() async {
         let prompts = AttachPrompts()
         var replies: [Task<AuthAnswer?, Never>] = []
+        var completed = Set<Int>()
+        var first: UUID?
         for count in 1...(AttachPrompts.limit + 1) {
             let prompter = prompter(prompts)
             _ = prompter.beginAttempt()
             let codePrompt = self.codePrompt
-            replies.append(Task { await prompter.answer(codePrompt) })
+            replies.append(Task {
+                let answer = await prompter.answer(codePrompt)
+                completed.insert(count)
+                return answer
+            })
             await waitForQuestions(prompts, min(count, AttachPrompts.limit))
+            if count == 1 { first = prompts.current?.id }
         }
+        for _ in 0..<1000 where !completed.contains(AttachPrompts.limit + 1) {
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(prompts.current?.id == first)
+        #expect(completed == [AttachPrompts.limit + 1])
         #expect(prompts.queue.count == AttachPrompts.limit)
-        #expect(await replies[0].value == nil)
+        if let first { prompts.answer(first, ["123456"]) }
+        if case .responses(let values)? = await replies[0].value { #expect(values == ["123456"]) }
+        else { Issue.record("The current question was declined while the user answered it") }
         prompts.withdrawAll()
         for reply in replies { _ = await reply.value }
     }

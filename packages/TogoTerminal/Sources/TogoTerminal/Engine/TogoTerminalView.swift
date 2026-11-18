@@ -75,6 +75,20 @@ final class TogoTerminalView: TerminalView {
         }
     }
 
+    /// Parser replies must not become input to a session hidden behind native chat.
+    let acceptsReplies = Atomic(true)
+
+    nonisolated override func send(source: Terminal, data: ArraySlice<UInt8>) {
+        guard acceptsReplies.load(ordering: .relaxed) else { return }
+        let bytes = Array(data)
+        // SwiftTerm also defers parser replies out of its terminal lock. Recheck
+        // after that hop: the user may have covered the terminal meanwhile.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.acceptsReplies.load(ordering: .relaxed) else { return }
+            self.terminalDelegate?.send(source: self, data: bytes[...])
+        }
+    }
+
     /// Whether the cursor may blink at all; the engine sets it from the terminal settings.
     var cursorBlinkRequested = true
     /// The cursor's shape, always a steady style; how it blinks is decided by `refreshCaret`.
@@ -396,7 +410,7 @@ final class TogoTerminalView: TerminalView {
             optionAsMeta: optionAsMetaKey, mode: extendedKeyMode?() ?? .legacy)
         guard let bytes = extended ?? KeyEncoder.hardware(
             characters: characters, charactersIgnoringModifiers: charactersIgnoringModifiers,
-            modifiers: modifiers, optionAsMeta: optionAsMetaKey) else { return false }
+            modifiers: modifiers, optionAsMeta: optionAsMetaKey, keyCode: keyCode) else { return false }
         send(data: bytes[...])
         chordRepeater.start(key: keyCode, bytes: bytes, isHeld: isHeld)
         return true
@@ -467,20 +481,6 @@ final class TogoTerminalView: TerminalView {
             stop = Position(col: end.col, row: end.row + top)
         }
         setSelectionRange(start: Position(col: start.col, row: start.row + top), end: stop)
-    }
-
-    /// Display widths of a visible row's cells: 2 and 0 for the halves of a wide glyph.
-    func cellWidths(row: Int) -> [Int] {
-        terminalStateSnapshot().visibleRows.dropFirst(row).first?.cellWidths ?? []
-    }
-
-    func showEditMenu(at point: CGPoint) {
-        showStandardContextMenu(at: point)
-    }
-
-    @objc func performShortcut(_ command: UIKeyCommand) {
-        guard let action = ShortcutAction(command: command) else { return }
-        onShortcut?(action)
     }
 
     @objc private func handleWheelPan(_ gesture: UIPanGestureRecognizer) {

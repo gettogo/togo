@@ -40,14 +40,14 @@ import TogoKit
         let port: ListeningPort
         let target: ForwardTarget
         let forward: LocalForward
+        let owner: UUID
         var events: Task<Void, Never>?
-        /// A failure was already reported, so its end needs no second message.
-        var failed = false
     }
 
     private struct ForwardKey: Hashable {
         let hostID: HostID
         let target: ForwardTarget
+        let owner: UUID
     }
 
     /// What a stopped forward needs to open again on the same local port.
@@ -55,6 +55,7 @@ import TogoKit
         let subject: ReviewSubject
         let port: ListeningPort
         let localPort: Int
+        let owner: UUID
     }
 
     private let channels: any HelperCalling
@@ -62,6 +63,7 @@ import TogoKit
     private let opener: (HostRecord) async throws -> any TCPChannelOpener
     private let prompter: (HostRecord) -> AttachPrompter?
     private var forwards: [Int: Forward] = [:]
+    private let defaultForwardOwner = UUID()
     private var paused: [Paused] = []
     /// Forwards still starting, so a second tap joins the first instead of opening another.
     private var opening: [ForwardKey: Task<Int, any Error>] = [:]
@@ -196,16 +198,20 @@ import TogoKit
     // MARK: Forwards
 
     func forward(_ s: ReviewSubject, port: ListeningPort) async throws -> ForwardInfo {
+        try await forward(s, port: port, owner: defaultForwardOwner)
+    }
+
+    func forward(_ s: ReviewSubject, port: ListeningPort, owner: UUID) async throws -> ForwardInfo {
         guard let target = ForwardTarget(port) else { throw ForwardError.notLoopback(port) }
-        let key = ForwardKey(hostID: s.hostID, target: target)
-        if let open = forwards.first(where: { ForwardKey(hostID: $0.value.subject.hostID, target: $0.value.target) == key }) {
+        let key = ForwardKey(hostID: s.hostID, target: target, owner: owner)
+        if let open = forwards.first(where: { ForwardKey(hostID: $0.value.subject.hostID, target: $0.value.target, owner: $0.value.owner) == key }) {
             return Self.info(open.value.port, open.key)
         }
         if let opening = opening[key] {
             return Self.info(port, try await opening.value)
         }
         guard forwards.count + paused.count + opening.count < Self.forwardLimit else { throw ForwardError.limit }
-        let task = Task { try await self.open(s, port: port, target: target, preferred: nil) }
+        let task = Task { try await self.open(s, port: port, target: target, preferred: nil, owner: owner) }
         opening[key] = task
         defer { opening[key] = nil }
         let localPort = try await task.value
@@ -271,7 +277,7 @@ import TogoKit
     private func detach(_ localPorts: [Int]) -> [Forward] {
         localPorts.sorted().compactMap { localPort in
             guard let open = forwards.removeValue(forKey: localPort) else { return nil }
-            paused.append(Paused(subject: open.subject, port: open.port, localPort: localPort))
+            paused.append(Paused(subject: open.subject, port: open.port, localPort: localPort, owner: open.owner))
             open.events?.cancel()
             return open
         }
@@ -294,11 +300,13 @@ import TogoKit
             // A machine removed while the app was away takes its previews with it.
             guard records(entry.subject.hostID) != nil, let target = ForwardTarget(entry.port) else { continue }
             do {
-                let localPort = try await open(entry.subject, port: entry.port, target: target, preferred: entry.localPort)
+                let localPort = try await open(entry.subject, port: entry.port, target: target, preferred: entry.localPort, owner: entry.owner)
                 if localPort != entry.localPort {
                     // A preview still shows the old address, which nothing serves now.
                     await stopForward(localPort: localPort)
                     emit(entry.localPort, Self.previewClosed)
+                } else if !foreground {
+                    await stopAll(detach([localPort]))
                 }
             } catch {
                 emit(entry.localPort, ServiceErrors.message(error))
@@ -306,11 +314,13 @@ import TogoKit
         }
     }
 
-    private func open(_ s: ReviewSubject, port: ListeningPort, target: ForwardTarget, preferred: Int?) async throws -> Int {
+    private func open(
+        _ s: ReviewSubject, port: ListeningPort, target: ForwardTarget, preferred: Int?, owner: UUID
+    ) async throws -> Int {
         let record = try record(s.hostID)
         let forward = LocalForward(opener: try await opener(record), target: target, preferredLocalPort: preferred)
         let localPort = try await forward.start()
-        var entry = Forward(subject: s, port: port, target: target, forward: forward)
+        var entry = Forward(subject: s, port: port, target: target, forward: forward, owner: owner)
         let id = entry.id
         entry.events = Task { [weak self] in
             for await event in forward.events {
@@ -328,7 +338,11 @@ import TogoKit
         case .upstreamRefused:
             emit(localPort, ReviewCopy.nothingListening(remote))
         case .upstreamFailed(let detail):
-            forwards[localPort]?.failed = true
+            // A fatal channel error is not a server that may start listening later.
+            // Remove the handle before notifying readers so their failed row cannot orphan it.
+            forwards[localPort] = nil
+            open.events?.cancel()
+            Task { await open.forward.stop() }
             if foreground { emit(localPort, detail) }
         case .stopped:
             if !foreground {
@@ -336,7 +350,7 @@ import TogoKit
                 _ = detach([localPort])
             } else {
                 forwards[localPort] = nil
-                if !open.failed { emit(localPort, Self.previewClosed) }
+                emit(localPort, Self.previewClosed)
             }
         }
     }

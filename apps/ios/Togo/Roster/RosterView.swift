@@ -450,7 +450,7 @@ struct RosterHeadline: View {
         }
         if !roster.tallyText.isEmpty {
             // The session tally is a background value: it changes at once, never rolls.
-            Text(verbatim: roster.tallyText)
+            Text(verbatim: roster.tallyDisplayText)
                 .font(Self.font)
                 .monospacedDigit()
                 .foregroundStyle(Color.togoMute)

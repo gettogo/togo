@@ -158,7 +158,8 @@ struct GatedChange {
             asking = ActionGateRequest(
                 dialog: dialog,
                 run: { [weak self] in done(await self?.apply(change, undo: nil, context: context)) },
-                afterReply: Self.afterReply(change, context: context, done: done)
+                afterReply: Self.afterReply(change, context: context, done: done),
+                cancel: { done(nil) }
             )
         }
     }
@@ -182,19 +183,19 @@ struct GatedChange {
         switch result.result {
         case .relaunched:
             let back = undo.map { previous in
-                SessionUndo(title: PrimitiveCopy.backTo(previous.label)) { [weak self] in
+                SessionUndo(title: PrimitiveCopy.backTo(previous.label)) {
                     var reverse = change
                     reverse.args = previous.args
                     reverse.value = previous.label
                     reverse.previous = nil
-                    _ = await self?.apply(reverse, undo: nil, context: context)
+                    _ = await PrimitiveActions().apply(reverse, undo: nil, context: context)
                 }
             }
             note(PrimitiveCopy.restartedWith(change.value), SessionNote.Echo(value: change.value), back)
-        case .typed:
+        case .typed, .queued:
             note(PrimitiveCopy.setWaiting(change.setting, change.value, agent: context.agent),
                  SessionNote.Echo(value: change.value, waiting: true), nil)
-        case .applied, .queued:
+        case .applied:
             note(PrimitiveCopy.setTo(change.setting, change.value), SessionNote.Echo(value: change.value), nil)
         default:
             break
@@ -383,15 +384,10 @@ struct PrimitiveActionRow: View {
 
     @ViewBuilder private var buttons: some View {
         ForEach(refs) { ref in
-            Button {
+            SourceActionButton(ref: ref, outcome: actions.outcome(ref.id, target: target), busy: actions.isRunning(ref.id, target: target)) {
                 Task { await actions.trigger(ref, target: target, context: context) }
-            } label: {
-                OutcomeLabel(title: ref.label, outcome: actions.outcome(ref.id, target: target),
-                             busy: actions.isRunning(ref.id, target: target))
             }
             .buttonStyle(PrimitiveCapsuleStyle(role: ref.role, large: large))
-            .disabled(actions.isRunning(ref.id, target: target))
-            .accessibilityValue(actions.isRunning(ref.id, target: target) ? PrimitiveCopy.running : "")
         }
     }
 }

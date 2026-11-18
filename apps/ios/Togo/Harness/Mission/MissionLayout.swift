@@ -8,12 +8,44 @@ import TogoKit
 /// declares its capability (needs: approvals or questions). Without a descriptor, as from the
 /// roster before the session is described, the snapshot's own sections stand.
 enum MissionLayout {
+    /// Match the helper's agents count. Long-lived background jobs are a different section.
+    static func runningAgents(_ mission: HarnessMission?, working: Bool, reconciled: Bool) -> Int {
+        guard working || reconciled else { return 0 }
+        return mission?.sections.first { $0.kind == .agents }?.rows.filter {
+            $0.state == .running || $0.state == .waiting
+        }.count ?? 0
+    }
+
     static func sections(_ mission: HarnessMission?, capabilities: Set<String>?) -> [HarnessSection] {
         guard let mission else { return [] }
         return MissionSectionKind.order.compactMap { kind in
             guard let section = mission.sections.first(where: { $0.kind == kind }) else { return nil }
             guard let capabilities else { return section }
             return supports(kind, capabilities) ? section : nil
+        }
+    }
+
+    /// Present the snapshot without trimming history on behalf of an older helper. The helper
+    /// owns row removal; the app keeps identity and source order within each activity group.
+    static func presentedSections(_ mission: HarnessMission?, descriptor: HarnessDescriptor?) -> [HarnessSection] {
+        sections(mission, capabilities: descriptor.map { Set($0.capabilities) }).compactMap { section in
+            guard !section.rows.isEmpty || (section.kind == .status
+                && (section.status != nil || !statusScreens(descriptor).isEmpty)) else { return nil }
+            var result = section
+            if section.kind == .agents || section.kind == .background {
+                result.rows = section.rows.filter { MissionActivity.isRunning($0.state) }
+                    + section.rows.filter { !MissionActivity.isRunning($0.state) }
+            }
+            return result
+        }
+    }
+
+    static func headerCount(_ section: HarnessSection, summary: MissionSummary) -> Int {
+        switch section.kind {
+        case .agents, .background: section.rows.filter { MissionActivity.isRunning($0.state) }.count
+        case .needs: max(section.rows.count, summary.needsYou)
+        case .plan: 0
+        default: section.rows.count
         }
     }
 

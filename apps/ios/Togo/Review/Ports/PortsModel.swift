@@ -6,7 +6,7 @@ import UIKit
 ///
 /// A preview reaches its server through an SSH forward that listens on this device's loopback
 /// address. Forwards are short-lived: dismissing a preview stops its forward unless a copied link
-/// still uses it, leaving the ports screen stops every one, and so do ten minutes without use.
+/// still uses it, leaving the ports screen stops every one, and so do ten minutes without use outside a visible preview.
 /// Going to the background pauses them; the services reopen each on the local port it had.
 @MainActor @Observable final class PortsModel {
     enum Phase: Equatable {
@@ -64,6 +64,10 @@ import UIKit
     private var reopen: [Int: ListeningPort] = [:]
     private var visible = false
     private var foreground = true
+    /// Kept until completion even after close/disappear, so a new call cannot reuse
+    /// an in-flight handle that the old call still has to clean up.
+    private var opening: [Int: Task<Int?, Never>] = [:]
+    private let forwardOwner = UUID()
     private var poller: Task<Void, Never>?
     private var idleTimer: Task<Void, Never>?
     /// Reads forward events while the screen is up or a forward is open.
@@ -221,6 +225,29 @@ import UIKit
         shown = Preview(remote: port.port, localPort: localPort)
     }
 
+    /// A terminal link may open only a listener freshly listed for this session. A page on
+    /// an unknown port must never be guessed to be an OAuth callback or a manual forward.
+    func openLink(_ url: URL) async {
+        guard SignInRoute.isLoopback(url) else { return }
+        let number = url.port ?? (url.scheme?.lowercased() == "https" ? 443 : 80)
+        do {
+            let listed = try await services.ports(subject)
+            guard !Task.isCancelled, foreground else { return }
+            apply(listed)
+            phase = .loaded
+            guard let port = listed.first(where: { $0.port == number && Self.isPreviewable($0) }) else {
+                manualError = String(localized: "review.ports.linkUnavailable", defaultValue:
+                    "This page's port is not listed for this session. Open it on the machine.")
+                return
+            }
+            manualError = nil
+            await open(port)
+        } catch {
+            guard !Task.isCancelled else { return }
+            phase = .failed(ServiceErrors.message(error))
+        }
+    }
+
     /// A port typed by hand, for a server this session didn't start.
     func openManual(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
@@ -278,6 +305,21 @@ import UIKit
 
     /// The forward's local port, opening it first if needed. Nil when it can't be opened.
     @discardableResult private func openForward(_ port: ListeningPort) async -> Int? {
+        let result: Int?
+        if let task = opening[port.port] {
+            result = await task.value
+        } else {
+            let task = Task { await self.performOpenForward(port) }
+            opening[port.port] = task
+            defer { opening[port.port] = nil }
+            result = await task.value
+        }
+        // Closing or leaving may have run while either waiter was suspended.
+        guard let result, localPort(port.port) == result else { return nil }
+        return result
+    }
+
+    private func performOpenForward(_ port: ListeningPort) async -> Int? {
         guard Self.isPreviewable(port) else { return nil }
         listen()
         touch()
@@ -285,7 +327,7 @@ import UIKit
         states[port.port] = .opening
         notes[port.port] = nil
         do {
-            let info = try await services.forward(subject, port: port)
+            let info = try await services.forward(subject, port: port, owner: forwardOwner)
             guard states[port.port] == .opening else {
                 // Closed or left while it opened.
                 await services.stopForward(localPort: info.localPort)
@@ -318,6 +360,8 @@ import UIKit
     private func idleOut() async {
         let open = states.compactMap { $0.value == .opening ? nil : $0.key }.sorted()
         for remote in open {
+            // A page on screen is in use even without a full navigation (SPA, scrolling).
+            guard shown?.remote != remote else { continue }
             let wasOpen = localPort(remote) != nil
             await close(remote)
             if wasOpen { notes[remote] = PortsCopy.idleStopped }

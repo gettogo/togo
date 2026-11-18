@@ -52,9 +52,15 @@ extension SSHConnection {
                 },
                 discard: { win in try? await win.client.close() }
             )
-        } catch SSHError.hostKeyChanged where gate.sawPinnedKey {
-            // The machine answered with its own key somewhere; that route just failed later.
-            throw SSHError.unreachable(String(localized: "The machine could not be reached. Check the address and your network", bundle: .module))
+        } catch {
+            let staleAddressOnly = await routeBook.recordFailedRace(
+                mismatched.hosts, for: profile, sawPinnedKey: gate.sawPinnedKey)
+            if case SSHError.hostKeyChanged = error, staleAddressOnly {
+                // No credentials were sent to the mismatching routes. A learned numeric
+                // LAN address may have been reused on this network; keep retrying the host.
+                throw SSHError.unreachable(String(localized: "The machine could not be reached. Check the address and your network", bundle: .module))
+            }
+            throw error
         }
         await routeBook.recordMismatches(mismatched.hosts, for: profile.id)
         clients = [win.value.client]

@@ -1,0 +1,251 @@
+{
+  "id": "p.^sheet",
+  "k": "overlay",
+  "p": {
+    "anchor": "center",
+    "head": "Sign in to OpenRouter",
+    "modal": true,
+    "role": "omp.overlay.login",
+    "size": "md"
+  },
+  "c": [
+    {
+      "id": "p.^sheet/0",
+      "k": "col",
+      "p": {
+        "gap": "lg"
+      },
+      "c": [
+        {
+          "id": "p.^sheet/0/body",
+          "k": "col",
+          "p": {
+            "gap": "md",
+            "role": "omp.login.body"
+          },
+          "c": [
+            {
+              "id": "p.^sheet/0/body/lead",
+              "k": "text",
+              "p": {
+                "role": "omp.login.lead",
+                "text": "Continue in your browser. If it didn't open, open or copy the link below.",
+                "wrap": "word"
+              }
+            },
+            {
+              "id": "p.^sheet/0/body/link",
+              "k": "row",
+              "p": {
+                "align": "center",
+                "gap": "sm",
+                "role": "omp.login.link"
+              },
+              "c": [
+                {
+                  "id": "p.^sheet/0/body/link/icon",
+                  "k": "icon",
+                  "p": {
+                    "name": "link"
+                  }
+                },
+                {
+                  "id": "p.^sheet/0/body/link/url",
+                  "k": "text",
+                  "p": {
+                    "lines": 1,
+                    "role": "omp.login.url",
+                    "spans": [
+                      {
+                        "href": "https://example.com/authorize",
+                        "s": "mono",
+                        "t": "https://example.com/authorize"
+                      }
+                    ],
+                    "title": "https://example.com/authorize",
+                    "truncate": "middle"
+                  }
+                },
+                {
+                  "id": "p.^sheet/0/body/link/copyLink",
+                  "k": "button",
+                  "p": {
+                    "actions": {
+                      "click": "copy"
+                    },
+                    "href": "https://example.com/authorize",
+                    "role": "omp.btn",
+                    "text": "Copy",
+                    "title": "Copy the sign-in link"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "p.^sheet/0/body/shortcut",
+              "k": "text",
+              "p": {
+                "lines": 1,
+                "role": "omp.login.shortcut",
+                "spans": [
+                  {
+                    "s": "dim",
+                    "t": "On this machine  "
+                  },
+                  {
+                    "href": "https://example.com/authorize",
+                    "s": "mono",
+                    "t": "https://example.com/authorize"
+                  }
+                ],
+                "title": "https://example.com/authorize",
+                "truncate": "middle"
+              }
+            },
+            {
+              "id": "p.^sheet/0/body/i1",
+              "k": "col",
+              "p": {
+                "gap": "sm",
+                "role": "omp.login.prompt"
+              },
+              "c": [
+                {
+                  "id": "p.^sheet/0/body/i1/label",
+                  "k": "text",
+                  "p": {
+                    "role": "omp.login.label",
+                    "text": "Paste the authorization code (or full redirect URL)",
+                    "wrap": "word"
+                  }
+                },
+                {
+                  "id": "q",
+                  "k": "col",
+                  "p": {
+                    "gap": "sm",
+                    "role": "omp.form.field"
+                  },
+                  "c": [
+                    {
+                      "id": "r",
+                      "k": "input",
+                      "p": {
+                        "cursor": 0,
+                        "prompt": "> ",
+                        "sendable": false,
+                        "text": ""
+                      }
+                    },
+                    {
+                      "id": "s",
+                      "k": "text",
+                      "p": {
+                        "hidden": true,
+                        "text": ""
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "p.^sheet/0/body/status",
+              "k": "col",
+              "p": {
+                "gap": "xs",
+                "role": "omp.login.status"
+              },
+              "c": [
+                {
+                  "id": "p.^sheet/0/body/status/p0",
+                  "k": "row",
+                  "p": {
+                    "align": "center",
+                    "gap": "sm",
+                    "role": "omp.login.waiting"
+                  },
+                  "c": [
+                    {
+                      "id": "p.^sheet/0/body/status/p0/0",
+                      "k": "spinner",
+                      "p": {
+                        "label": "Waiting for browser authentication\u2026",
+                        "style": "orbit",
+                        "tone": "muted"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "p.^sheet/0/actions",
+          "k": "row",
+          "p": {
+            "align": "center",
+            "gap": "sm",
+            "role": "omp.actions"
+          },
+          "c": [
+            {
+              "id": "p.^sheet/0/actions/openLink",
+              "k": "button",
+              "p": {
+                "actions": {
+                  "click": "open"
+                },
+                "href": "https://example.com/authorize",
+                "icon": "open",
+                "role": "omp.btn",
+                "text": "Open sign-in page",
+                "title": "Open openrouter.ai/auth in your browser"
+              }
+            },
+            {
+              "id": "p.^sheet/0/actions/1",
+              "k": "spacer",
+              "p": {
+                "grow": 1
+              }
+            },
+            {
+              "id": "p.^sheet/0/actions/cancel",
+              "k": "button",
+              "p": {
+                "actions": {
+                  "click": "cancel"
+                },
+                "keys": [
+                  "escape"
+                ],
+                "role": "omp.btn",
+                "text": "Cancel",
+                "title": "Cancel  esc"
+              }
+            },
+            {
+              "id": "p.^sheet/0/actions/submit",
+              "k": "button",
+              "p": {
+                "actions": {
+                  "click": "submit"
+                },
+                "keys": [
+                  "enter"
+                ],
+                "role": "omp.btn",
+                "text": "Continue",
+                "title": "Continue  \u23ce",
+                "tone": "accent",
+                "variant": "primary"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

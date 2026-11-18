@@ -43,7 +43,7 @@ struct ComposerTextInput: UIViewRepresentable {
 
     func updateUIView(_ view: ComposerTextView, context: Context) {
         context.coordinator.parent = self
-        view.font = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .regular)
+        view.font = Self.font(for: context.environment.dynamicTypeSize)
         view.textColor = UIColor(Color.togoSnow)
         view.accessibilityLabel = placeholder
         view.autocapitalizationType = assists ? .sentences : .none
@@ -67,6 +67,27 @@ struct ComposerTextInput: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    /// Use the same type size as the SwiftUI placeholder, including per-view overrides.
+    static func font(for size: DynamicTypeSize) -> UIFont {
+        let category: UIContentSizeCategory = switch size {
+        case .xSmall: .extraSmall
+        case .small: .small
+        case .medium: .medium
+        case .large: .large
+        case .xLarge: .extraLarge
+        case .xxLarge: .extraExtraLarge
+        case .xxxLarge: .extraExtraExtraLarge
+        case .accessibility1: .accessibilityMedium
+        case .accessibility2: .accessibilityLarge
+        case .accessibility3: .accessibilityExtraLarge
+        case .accessibility4: .accessibilityExtraExtraLarge
+        case .accessibility5: .accessibilityExtraExtraExtraLarge
+        default: .large
+        }
+        let body = UIFont.preferredFont(forTextStyle: .body, compatibleWith: UITraitCollection(preferredContentSizeCategory: category))
+        return UIFont.monospacedSystemFont(ofSize: body.pointSize, weight: .regular)
+    }
 
     @MainActor final class Coordinator: NSObject, UITextViewDelegate {
         var parent: ComposerTextInput

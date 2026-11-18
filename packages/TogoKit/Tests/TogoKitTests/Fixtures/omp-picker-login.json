@@ -1,0 +1,69 @@
+{
+ "id": "n.^picker",
+ "k": "picker",
+ "p": {
+  "actions": [
+   {
+    "id": "confirm",
+    "keys": [
+     "enter"
+    ],
+    "label": "Sign in",
+    "primary": true
+   },
+   {
+    "end": true,
+    "id": "close",
+    "keys": [
+     "esc"
+    ],
+    "label": "Close"
+   }
+  ],
+  "cursor": 0,
+  "empty": "No OAuth providers available",
+  "icon": "key-round",
+  "items": [
+   {
+    "detail": "Not configured",
+    "dot": "muted",
+    "id": "openai-codex",
+    "label": "ChatGPT Plus/Pro (Codex Subscription)",
+    "mark": {
+     "seed": "openai-codex",
+     "text": "CP"
+    }
+   },
+   {
+    "detail": "Not configured",
+    "dot": "muted",
+    "id": "anthropic",
+    "label": "Anthropic (Claude Pro/Max)",
+    "mark": {
+     "seed": "anthropic",
+     "text": "AC"
+    }
+   },
+   {
+    "detail": "Not configured",
+    "dot": "muted",
+    "id": "zai",
+    "label": "Z.AI (GLM Coding Plan)",
+    "mark": {
+     "seed": "zai",
+     "text": "ZA"
+    }
+   }
+  ],
+  "layout": "cards",
+  "noun": "providers",
+  "placeholder": "Search providers…",
+  "preview": "none",
+  "query": "",
+  "selected": "openai-codex",
+  "size": "md",
+  "subtitle": "Pick a provider",
+  "title": "Sign in",
+  "total": 3
+ }
+}

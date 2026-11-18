@@ -28,6 +28,7 @@ let package = Package(
         .testTarget(
             name: "TogoKitTests",
             dependencies: ["TogoKit"],
+            resources: [.copy("Fixtures")],
             swiftSettings: [.treatAllWarnings(as: .error)]
         ),
     ]

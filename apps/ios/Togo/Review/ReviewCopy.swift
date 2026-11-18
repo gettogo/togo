@@ -14,7 +14,7 @@ enum ReviewCopy {
 
     /// A write was refused because the file is not as the user last saw it.
     static let stale = String(localized: "review.stale", defaultValue: "This file changed since you looked. Check it again.")
-    static let tryAgain = String(localized: "review.tryAgain", defaultValue: "Try again")
+    static let tryAgain = String(localized: "review.tryAgain", defaultValue: "Try Again")
     static let unavailable = String(
         localized: "review.unavailable", defaultValue: "Review isn't available on this machine yet."
     )

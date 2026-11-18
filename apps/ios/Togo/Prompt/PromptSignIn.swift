@@ -89,15 +89,15 @@ struct PromptSecretField: View {
 }
 
 enum SignInCopy {
-    static let copyCode = String(localized: "signIn.copyCode", defaultValue: "Copy code")
+    static let copyCode = String(localized: "signIn.copyCode", defaultValue: "Copy Code")
     static let copied = String(localized: "signIn.copied", defaultValue: "Copied")
-    static let pasteKey = String(localized: "signIn.pasteKey", defaultValue: "Paste key or code")
+    static let pasteKey = String(localized: "signIn.pasteKey", defaultValue: "Paste Key or Code")
     static let secretPlaceholder = String(localized: "signIn.secretPlaceholder", defaultValue: "Key or code")
     static let copiesHint = String(localized: "signIn.copiesHint", defaultValue: "Copies the code first.")
 
     static func open(host: String) -> String {
         host.isEmpty
-            ? String(localized: "signIn.openPage", defaultValue: "Open sign-in page")
+            ? String(localized: "signIn.openPage", defaultValue: "Open Sign-In Page")
             : String(localized: "signIn.openHost", defaultValue: "Open \(host)")
     }
 

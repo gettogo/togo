@@ -59,6 +59,28 @@ struct SignInURLTests {
         }
     }
 
+    /// A page about signing in is an ordinary page: it opens in the browser view, with no
+    /// sign-in consent alert.
+    @Test func pagesAboutSigningInAreNotSignIns() {
+        for raw in [
+            "https://developers.google.com/identity/protocols/oauth2",
+            "https://example.com/login-help",
+            "https://docs.example.com/docs/oauth-guide",
+            "https://example.com/blog/authorize-net-review",
+            "https://example.com/devices",
+        ] {
+            #expect(!SignInRoute.isSignIn(URL(string: raw)!), "\(raw)")
+        }
+        for raw in [
+            "https://github.com/login/oauth/authorize",
+            "https://accounts.google.com/o/oauth2/v2/auth",
+            "https://console.example.com/oauth/authorize",
+            "https://example.com/signin",
+        ] {
+            #expect(SignInRoute.isSignIn(URL(string: raw)!), "\(raw)")
+        }
+    }
+
     @Test func codeFlagReadsOnlyTrue() {
         #expect(!SignInURL(URL(string: "https://claude.ai/oauth/authorize?code=false")!).offersCode)
         #expect(SignInURL(URL(string: "https://claude.ai/oauth/authorize?code=1")!).offersCode)
@@ -69,7 +91,7 @@ struct WebAuthFlowTests {
     static let claude = SignInURL(SignInURLTests.claude)
     static let device = SignInURL(URL(string: "https://github.com/login/device")!)
 
-    @Test func callbackThroughTheForwardSignsIn() {
+    @Test func callbackThroughTheForwardStillNeedsAgentConfirmation() {
         var flow = WebAuthFlow(Self.claude)
         #expect(flow.start() == [.openForward])
         #expect(flow.phase == .preparing)
@@ -79,10 +101,10 @@ struct WebAuthFlowTests {
         #expect(flow.handle(.callbackSeen) == [.settleLater])
         #expect(flow.phase == .delivered)
         #expect(flow.handle(.settled) == [.closeBrowser, .stopForward])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.phase == .delivered)
         // The cancel from code comes back as the browser ending; nothing more happens.
-        #expect(flow.handle(.browserEnded) == [])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.handle(.browserEnded) == [.stopForward])
+        #expect(flow.phase == .delivered)
     }
 
     @Test func busyPortFallsBackToTheCode() {
@@ -93,7 +115,7 @@ struct WebAuthFlowTests {
         #expect(flow.handle(.browserEnded) == [])
         #expect(flow.phase == .needsCode)
         #expect(flow.handle(.codeSent) == [.stopForward])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.phase == .delivered)
     }
 
     @Test func closingTheBrowserFirstOffersTheCodeWhenThereIsOne() {
@@ -125,13 +147,13 @@ struct WebAuthFlowTests {
         #expect(flow.handle(.providerSetUp) == [])
     }
 
-    @Test func closingAfterTheCallbackStillSignsIn() {
+    @Test func closingAfterTheCallbackStillNeedsAgentConfirmation() {
         var flow = WebAuthFlow(Self.claude)
         _ = flow.start()
         _ = flow.handle(.forwardReady)
         _ = flow.handle(.callbackSeen)
         #expect(flow.handle(.browserEnded) == [.stopForward])
-        #expect(flow.phase == .signedIn)
+        #expect(flow.phase == .delivered)
     }
 
     @Test func lostForwardWithACodeWaitsForIt() {

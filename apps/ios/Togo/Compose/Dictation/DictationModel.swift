@@ -225,6 +225,11 @@ import TogoTerminal
             stopped = true
         }
         guard current == generation else { return }
+        if stopped, MicrophoneOwners.owner(of: engine) === self {
+            // A failed result stream does not promise that its audio capture stopped.
+            // Tear it down while this generation still owns the engine.
+            engine.cancel()
+        }
         complete(stopped: stopped)
     }
 

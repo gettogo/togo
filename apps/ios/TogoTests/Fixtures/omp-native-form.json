@@ -1,0 +1,277 @@
+{
+  "id": "o",
+  "k": "col",
+  "p": {
+    "gap": "md",
+    "role": "omp.editor.ask"
+  },
+  "c": [
+    {
+      "id": "o.body0",
+      "k": "list",
+      "p": {
+        "role": "omp.ask.options"
+      },
+      "c": [
+        {
+          "id": "o.body0/0",
+          "k": "col",
+          "p": {
+            "gap": "lg",
+            "role": "omp.ask.form"
+          },
+          "c": [
+            {
+              "id": "o.body0/0/s0",
+              "k": "section",
+              "p": {
+                "head": [
+                  {
+                    "t": "Native form check"
+                  }
+                ],
+                "role": "omp.ask.section"
+              },
+              "c": [
+                {
+                  "id": "o.body0/0/s0/0",
+                  "k": "col",
+                  "p": {
+                    "gap": "xs",
+                    "role": "omp.ask.field"
+                  },
+                  "c": [
+                    {
+                      "id": "o.body0/0/s0/0/0",
+                      "k": "text",
+                      "p": {
+                        "role": "omp.ask.label",
+                        "spans": [
+                          {
+                            "t": "Memo"
+                          },
+                          {
+                            "s": "error",
+                            "t": " *"
+                          }
+                        ],
+                        "wrap": "word"
+                      }
+                    },
+                    {
+                      "id": "p",
+                      "k": "input",
+                      "p": {
+                        "cursor": 0,
+                        "sendable": false,
+                        "text": "original"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "o.body0/0/s0/1",
+                  "k": "col",
+                  "p": {
+                    "gap": "xs",
+                    "role": "omp.ask.field"
+                  },
+                  "c": [
+                    {
+                      "id": "o.body0/0/s0/1/f1",
+                      "k": "list",
+                      "p": {
+                        "role": "omp.ask.options"
+                      },
+                      "c": [
+                        {
+                          "id": "o.body0/0/s0/1/f1/o0",
+                          "k": "item",
+                          "p": {
+                            "actions": {
+                              "menu": [
+                                "note"
+                              ]
+                            },
+                            "label": [
+                              {
+                                "t": "Red"
+                              }
+                            ],
+                            "role": "omp.ask.check"
+                          }
+                        },
+                        {
+                          "id": "o.body0/0/s0/1/f1/o1",
+                          "k": "item",
+                          "p": {
+                            "actions": {
+                              "menu": [
+                                "note"
+                              ]
+                            },
+                            "label": [
+                              {
+                                "t": "Blue"
+                              }
+                            ],
+                            "role": "omp.ask.check"
+                          }
+                        },
+                        {
+                          "id": "o.body0/0/s0/1/f1/other",
+                          "k": "item",
+                          "p": {
+                            "label": [
+                              {
+                                "t": "Other…"
+                              }
+                            ],
+                            "role": "omp.ask.check"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "o.body0/0/s0/2",
+                  "k": "col",
+                  "p": {
+                    "gap": "xs",
+                    "role": "omp.ask.field"
+                  },
+                  "c": [
+                    {
+                      "id": "o.body0/0/s0/2/0",
+                      "k": "text",
+                      "p": {
+                        "role": "omp.ask.label",
+                        "spans": [
+                          {
+                            "t": "Mode"
+                          }
+                        ],
+                        "wrap": "word"
+                      }
+                    },
+                    {
+                      "id": "o.body0/0/s0/2/f2",
+                      "k": "list",
+                      "p": {
+                        "role": "omp.ask.options"
+                      },
+                      "c": [
+                        {
+                          "id": "o.body0/0/s0/2/f2/o0",
+                          "k": "item",
+                          "p": {
+                            "actions": {
+                              "menu": [
+                                "note"
+                              ]
+                            },
+                            "label": [
+                              {
+                                "t": "Short"
+                              }
+                            ],
+                            "role": "omp.ask.option",
+                            "tone": "accent"
+                          }
+                        },
+                        {
+                          "id": "o.body0/0/s0/2/f2/o1",
+                          "k": "item",
+                          "p": {
+                            "actions": {
+                              "menu": [
+                                "note"
+                              ]
+                            },
+                            "label": [
+                              {
+                                "t": "Long"
+                              }
+                            ],
+                            "role": "omp.ask.option"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "o.actions",
+      "k": "row",
+      "p": {
+        "align": "center",
+        "gap": "sm",
+        "role": "omp.actions"
+      },
+      "c": [
+        {
+          "id": "o.actions/hide",
+          "k": "button",
+          "p": {
+            "actions": {
+              "click": "hide"
+            },
+            "keys": [
+              "alt",
+              "h"
+            ],
+            "role": "omp.btn",
+            "text": "Hide",
+            "title": "Hide  ⌥H"
+          }
+        },
+        {
+          "id": "o.actions/1",
+          "k": "spacer",
+          "p": {
+            "grow": 1
+          }
+        },
+        {
+          "id": "o.actions/cancel",
+          "k": "button",
+          "p": {
+            "actions": {
+              "click": "cancel"
+            },
+            "keys": [
+              "escape"
+            ],
+            "role": "omp.btn",
+            "text": "Cancel",
+            "title": "Cancel  esc"
+          }
+        },
+        {
+          "id": "o.actions/submit",
+          "k": "button",
+          "p": {
+            "actions": {
+              "click": "submit"
+            },
+            "keys": [
+              "enter"
+            ],
+            "role": "omp.btn",
+            "text": "Submit",
+            "title": "Submit  ⏎",
+            "tone": "accent",
+            "variant": "primary"
+          }
+        }
+      ]
+    }
+  ]
+}

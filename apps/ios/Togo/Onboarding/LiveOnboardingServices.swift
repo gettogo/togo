@@ -150,6 +150,10 @@ import TogoKit
         try secrets.set(Data(password.utf8), for: account, requireUserPresence: true)
     }
 
+    func hasSavedPassword(for machine: UUID) -> Bool {
+        (try? secrets.contains(SSHConnection.passwordAccount(machine))) ?? false
+    }
+
     func keyLabel(id: String) -> String? {
         (try? keys.info(id: id))?.label
     }
@@ -178,13 +182,13 @@ private struct HidingSavedPassword: SecretStore {
 /// the user gave to the machine's last question (once), and the host key check shown in the
 /// flow. Password prompts inside keyboard-interactive are filled by the connection itself; any
 /// other prompt is declined and kept, so the flow can ask the user.
-private final class OnboardingPrompter: ConnectionPrompter {
+final class OnboardingPrompter: ConnectionPrompter {
     let password: String?
     let trustNewKey: @Sendable (HostKeyPrompt) async -> Bool
     private let state: Mutex<(answers: [String]?, declined: AuthPrompt?)>
 
     init(password: String?, answers: [String]?, trustNewKey: @escaping @Sendable (HostKeyPrompt) async -> Bool) {
-        self.password = password
+        self.password = password.flatMap { $0.isEmpty ? nil : $0 }
         self.trustNewKey = trustNewKey
         state = Mutex((answers, nil))
     }

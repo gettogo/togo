@@ -26,5 +26,5 @@ struct ShowKeyboardToolbarItem: ToolbarContent {
 }
 
 extension WorkspaceCopy {
-    static let showKeyboard = String(localized: "workspace.showKeyboard", defaultValue: "Show keyboard")
+    static let showKeyboard = String(localized: "workspace.showKeyboard", defaultValue: "Show Keyboard")
 }

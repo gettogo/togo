@@ -58,6 +58,36 @@ struct ChatScrollRequest: Equatable, Sendable {
 }
 
 extension HarnessSessionStore {
+    /// Every entry point clears composer focus before presenting mission control.
+    func missionVisibilityChanged() {
+        if showsMission { LayerToolbarItem.resignKeyboard() }
+        else { missionSection = nil }
+    }
+
+    /// The agents link opens the existing session manager at its agents list.
+    func showAgents() {
+        missionSection = .agents
+        showsMission = true
+    }
+
+    /// The rows again from the feed, with this phone's notes in place: after a note is added.
+    func refreshRows() {
+        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: true)
+    }
+    /// The session's current mode id for the mode chip; empty only while truly unknown.
+    var currentMode: String {
+        ModeMemory.current(status: ModeMemory.status(mission.mission), remembered: rememberedMode, described: descriptor?.mode)
+    }
+
+    /// A catalog notification invalidates commands, without reopening history.
+    @discardableResult func refreshCommands(_ note: HarnessNotification) -> HarnessApply {
+        guard note.sessionId == subject.sessionID, note.epoch == feed.timeline.epoch,
+              feed.isLoaded, phase == .live else { return .ignored }
+        commandList = []
+        commandRevision = UUID()
+        return .applied
+    }
+
     var hasAdapter: Bool { descriptor?.adapter != nil }
 
     /// The agent as the app names it everywhere ("OMP", "Claude Code"): the catalog's name for
@@ -89,10 +119,7 @@ extension HarnessSessionStore {
 
     /// The oldest needs card the user has not answered yet, in the main chat.
     var oldestOpenNeeds: String? {
-        rows.first { row in
-            guard case .needs(let item) = row else { return false }
-            return WorkingLogic.hasOpenNeeds([item])
-        }?.id
+        WorkingLogic.openNeeds(rows: rows).first?.id
     }
 
     /// Shows the chat and scrolls it to a needs card: `id`, or the oldest one still open. Used
@@ -104,10 +131,38 @@ extension HarnessSessionStore {
         scrollRequest = ChatScrollRequest(row: row)
     }
 
+    /// A request link can arrive before the descriptor or its full question. Keep the intent
+    /// through that first load, without opening an input or answering the request.
+    func requestNeedsReveal(requestID: String? = nil) {
+        pendingNeedsRequestID = requestID ?? ""
+        focusedAgent = nil
+        layer = .chat
+        resolveNeedsReveal()
+    }
+
+    func resolveNeedsReveal() {
+        guard chatAvailable, let request = pendingNeedsRequestID else { return }
+        let item = WorkingLogic.openNeeds(rows: rows).first { item in
+            if request.isEmpty { return true }
+            switch item.body {
+            case .approval(let value): return value.requestId == request
+            case .question(let value): return value.requestId == request
+            default: return false
+            }
+        }
+        guard let item else {
+            if request.isEmpty, feed.isLoaded { pendingNeedsRequestID = nil }
+            return
+        }
+        pendingNeedsRequestID = nil
+        revealNeeds(id: item.id)
+    }
+
     // MARK: Actions
 
     func run(action: String, target: String? = nil, args: [String: JSONValue]? = nil) async throws -> HarnessActionResult {
-        try await services.act(subject, action: action, target: target, args: args)
+        try await prepareHarnessInput()
+        return try await services.act(subject, action: action, target: target, args: args)
     }
 
     func screen(_ id: String, query: [String: String]? = nil) async throws -> HarnessScreen {
@@ -257,16 +312,29 @@ extension HarnessSessionStore {
 
     /// Runs what was held for the turn's end, oldest first, and notes each in the chat.
     func runDeferred() {
+        guard phase == .live, deferredTask == nil, !deferred.isEmpty else { return }
         let held = deferred
+        let binding = conversation
         deferred = []
         guard !held.isEmpty else { return }
-        Task { [weak self] in
+        deferredTask = Task { [weak self] in
+            defer {
+                if self?.conversation == binding {
+                    self?.deferredTask = nil
+                    if self?.working == false { self?.runDeferred() }
+                }
+            }
             for change in held {
-                guard let self else { return }
+                guard let self, self.conversation == binding, self.phase == .live, !Task.isCancelled else { return }
                 let result = try? await self.run(action: change.action, target: change.target, args: change.args)
+                guard self.conversation == binding, !Task.isCancelled else { return }
                 switch result?.result {
+                case .relaunched?: self.note(change.note, code: "model")
+                case .applied?: self.note(PrimitiveCopy.done, code: "model")
+                case .typed?: self.note(PrimitiveCopy.sent, code: "model")
+                case .queued?: self.note(PrimitiveCopy.queued, code: "model")
                 case .failed?, nil: self.note(result?.message ?? PrimitiveCopy.failed, code: "error")
-                default: self.note(change.note, code: "model")
+                default: self.note(result?.message ?? PrimitiveCopy.changeUnavailable, code: "error")
                 }
             }
         }

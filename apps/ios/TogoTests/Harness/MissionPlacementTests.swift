@@ -123,7 +123,7 @@ struct MissionPlacementTests {
     }
 
     @Test func theLongPressSaysWhatEachItemDoes() {
-        #expect(MissionMenu.title(.goToRequest) == "Go to request")
+        #expect(MissionMenu.title(.goToRequest) == "Go to Request")
         #expect(MissionMenu.title(.stop) == "Stop")
         #expect(MissionMenu.title(.compact) == "Compact…")
         #expect(MissionMenu.title(.terminal) == ChatCopy.terminal)

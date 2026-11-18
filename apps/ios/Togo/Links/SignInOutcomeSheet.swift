@@ -14,8 +14,15 @@ struct SignInOutcomeSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     switch runner.phase {
-                    case .signedIn, .delivered:
+                    case .signedIn:
                         signedIn
+                    case .delivered:
+                        Text(String(localized: "signIn.responseDelivered", defaultValue:
+                            "A sign-in response reached the machine. Check the agent to confirm."))
+                            .font(.body)
+                            .foregroundStyle(Color.togoSnow)
+                            .fixedSize(horizontal: false, vertical: true)
+                        reopen
                     case .failed(let message):
                         Text(message)
                             .font(.body)

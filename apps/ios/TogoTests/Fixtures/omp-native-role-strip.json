@@ -1,0 +1,2191 @@
+{
+  "id": "n",
+  "k": "picker",
+  "p": {
+    "actions": [
+      {
+        "id": "stripApply",
+        "keys": [
+          "enter"
+        ],
+        "label": "Assign / clear",
+        "primary": true
+      },
+      {
+        "end": true,
+        "id": "close",
+        "keys": [
+          "esc"
+        ],
+        "label": "Cancel"
+      }
+    ],
+    "columns": [
+      {
+        "format": "num",
+        "head": "Int",
+        "id": "int",
+        "priority": 1
+      },
+      {
+        "format": "num",
+        "head": "t/s",
+        "id": "speed",
+        "priority": 2
+      },
+      {
+        "format": "num",
+        "head": "Ctx",
+        "id": "ctx",
+        "priority": 4
+      },
+      {
+        "format": "price",
+        "head": "$/M",
+        "id": "price",
+        "priority": 3
+      }
+    ],
+    "cursor": 0,
+    "empty": "No models available in this scope",
+    "focus": "strip",
+    "icon": "cpu",
+    "items": [
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "chips": [
+          {
+            "auto": true,
+            "on": false,
+            "text": "web"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/parallel",
+        "label": "web/parallel",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "chips": [
+          {
+            "auto": true,
+            "on": false,
+            "text": "speech"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/kokoro",
+        "label": "local/kokoro",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "chips": [
+          {
+            "auto": true,
+            "on": false,
+            "text": "dictation"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/parakeet-tdt-0.6b-v3",
+        "label": "local/parakeet-tdt-0.6b-v3",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "ctx": 8192,
+          "price": "free"
+        },
+        "id": "apple/on-device",
+        "label": "apple/on-device",
+        "mark": {
+          "icon": "provider:apple",
+          "seed": "apple",
+          "text": "Ap"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/lfm2.5-350m",
+        "label": "local/lfm2.5-350m",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/lfm2.5-230m",
+        "label": "local/lfm2.5-230m",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/falcon-h1-90m",
+        "label": "local/falcon-h1-90m",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/gemma-3-1b",
+        "label": "local/gemma-3-1b",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/qwen3-1.7b",
+        "label": "local/qwen3-1.7b",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/qwen2.5-1.5b",
+        "label": "local/qwen2.5-1.5b",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/lfm2-1.2b",
+        "label": "local/lfm2-1.2b",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/nemotron-streaming-en-0.6b",
+        "label": "local/nemotron-streaming-en-0.6b",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/llama3.2:3b",
+        "label": "local/llama3.2:3b",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/whisper-base",
+        "label": "local/whisper-base",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/whisper-large-v3-turbo",
+        "label": "local/whisper-large-v3-turbo",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "local/whisper-small",
+        "label": "local/whisper-small",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/brave",
+        "label": "web/brave",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/deepseek",
+        "label": "web/deepseek",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/duckduckgo",
+        "label": "web/duckduckgo",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/ecosia",
+        "label": "web/ecosia",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/exa",
+        "label": "web/exa",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/firecrawl",
+        "label": "web/firecrawl",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/google",
+        "label": "web/google",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/hackernews",
+        "label": "web/hackernews",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/hosted",
+        "label": "web/hosted",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/jina",
+        "label": "web/jina",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/kagi",
+        "label": "web/kagi",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/keenable",
+        "label": "web/keenable",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/kimi",
+        "label": "web/kimi",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/mojeek",
+        "label": "web/mojeek",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/ollama",
+        "label": "web/ollama",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/perplexity",
+        "label": "web/perplexity",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/public",
+        "label": "web/public",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/searxng",
+        "label": "web/searxng",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/sofya",
+        "label": "web/sofya",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/startpage",
+        "label": "web/startpage",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/synthetic",
+        "label": "web/synthetic",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/tavily",
+        "label": "web/tavily",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/tinyfish",
+        "label": "web/tinyfish",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      },
+      {
+        "badges": [
+          {
+            "text": "free",
+            "tone": "success"
+          }
+        ],
+        "facts": {
+          "price": "free"
+        },
+        "id": "web/zai",
+        "label": "web/zai",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        },
+        "mono": true
+      }
+    ],
+    "layout": "rows",
+    "noun": "models",
+    "order": [
+      {
+        "count": 3,
+        "group": "recent",
+        "label": "Recent"
+      },
+      "web/parallel",
+      "local/kokoro",
+      "local/parakeet-tdt-0.6b-v3",
+      {
+        "count": 1,
+        "group": "provider:apple:0",
+        "label": "apple"
+      },
+      "apple/on-device",
+      {
+        "count": 12,
+        "group": "provider:local:1",
+        "label": "local"
+      },
+      "local/lfm2.5-350m",
+      "local/lfm2.5-230m",
+      "local/falcon-h1-90m",
+      "local/gemma-3-1b",
+      "local/qwen3-1.7b",
+      "local/qwen2.5-1.5b",
+      "local/lfm2-1.2b",
+      "local/nemotron-streaming-en-0.6b",
+      "local/llama3.2:3b",
+      "local/whisper-base",
+      "local/whisper-large-v3-turbo",
+      "local/whisper-small",
+      {
+        "count": 24,
+        "group": "provider:web:13",
+        "label": "web"
+      },
+      "web/brave",
+      "web/deepseek",
+      "web/duckduckgo",
+      "web/ecosia",
+      "web/exa",
+      "web/firecrawl",
+      "web/google",
+      "web/hackernews",
+      "web/hosted",
+      "web/jina",
+      "web/kagi",
+      "web/keenable",
+      "web/kimi",
+      "web/mojeek",
+      "web/ollama",
+      "web/perplexity",
+      "web/public",
+      "web/searxng",
+      "web/sofya",
+      "web/startpage",
+      "web/synthetic",
+      "web/tavily",
+      "web/tinyfish",
+      "web/zai"
+    ],
+    "placeholder": "Search models\u2026",
+    "preview": "side",
+    "query": "",
+    "scope": "all",
+    "scopes": [
+      {
+        "count": 16,
+        "icon": "sparkles",
+        "id": "roles",
+        "label": "Roles"
+      },
+      {
+        "count": 40,
+        "icon": "list",
+        "id": "all",
+        "label": "All models"
+      },
+      {
+        "count": 1,
+        "dot": "success",
+        "group": "Providers",
+        "id": "provider:apple",
+        "label": "apple",
+        "mark": {
+          "icon": "provider:apple",
+          "seed": "apple",
+          "text": "Ap"
+        }
+      },
+      {
+        "count": 14,
+        "group": "Providers",
+        "id": "provider:local",
+        "label": "local",
+        "mark": {
+          "icon": "provider:local",
+          "seed": "local",
+          "text": "Lo"
+        }
+      },
+      {
+        "count": 25,
+        "group": "Providers",
+        "id": "provider:web",
+        "label": "web",
+        "mark": {
+          "icon": "provider:web",
+          "seed": "web",
+          "text": "We"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:abliteration",
+        "label": "abliteration",
+        "mark": {
+          "icon": "provider:abliteration",
+          "seed": "abliteration",
+          "text": "Ab"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:aiand",
+        "label": "aiand",
+        "mark": {
+          "icon": "provider:aiand",
+          "seed": "aiand",
+          "text": "Ai"
+        }
+      },
+      {
+        "disabled": "Set AIMLAPI_API_KEY to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:aimlapi",
+        "label": "aimlapi",
+        "mark": {
+          "icon": "provider:aimlapi",
+          "seed": "aimlapi",
+          "text": "Ai"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:alibaba-coding-plan",
+        "label": "alibaba-coding-plan",
+        "mark": {
+          "icon": "provider:alibaba-coding-plan",
+          "seed": "alibaba-coding-plan",
+          "text": "AC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:alibaba-token-plan",
+        "label": "alibaba-token-plan",
+        "mark": {
+          "icon": "provider:alibaba-token-plan",
+          "seed": "alibaba-token-plan",
+          "text": "AT"
+        }
+      },
+      {
+        "disabled": "Add an API key in config to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:amazon-bedrock",
+        "label": "amazon-bedrock",
+        "mark": {
+          "icon": "provider:amazon-bedrock",
+          "seed": "amazon-bedrock",
+          "text": "AB"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:anthropic",
+        "label": "anthropic",
+        "mark": {
+          "icon": "provider:anthropic",
+          "seed": "anthropic",
+          "text": "An"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:antigravity-cli",
+        "label": "antigravity-cli",
+        "mark": {
+          "icon": "provider:antigravity-cli",
+          "seed": "antigravity-cli",
+          "text": "AC"
+        }
+      },
+      {
+        "disabled": "Set AZURE_OPENAI_API_KEY to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:azure",
+        "label": "azure",
+        "mark": {
+          "icon": "provider:azure",
+          "seed": "azure",
+          "text": "Az"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:baseten",
+        "label": "baseten",
+        "mark": {
+          "icon": "provider:baseten",
+          "seed": "baseten",
+          "text": "Ba"
+        }
+      },
+      {
+        "disabled": "Set AWS_BEARER_TOKEN_BEDROCK to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:bedrock-mantle",
+        "label": "bedrock-mantle",
+        "mark": {
+          "icon": "provider:bedrock-mantle",
+          "seed": "bedrock-mantle",
+          "text": "BM"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:cerebras",
+        "label": "cerebras",
+        "mark": {
+          "icon": "provider:cerebras",
+          "seed": "cerebras",
+          "text": "Ce"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:charm-hyper",
+        "label": "charm-hyper",
+        "mark": {
+          "icon": "provider:charm-hyper",
+          "seed": "charm-hyper",
+          "text": "CH"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:chutes",
+        "label": "chutes",
+        "mark": {
+          "icon": "provider:chutes",
+          "seed": "chutes",
+          "text": "Ch"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:cline-pass",
+        "label": "cline-pass",
+        "mark": {
+          "icon": "provider:cline-pass",
+          "seed": "cline-pass",
+          "text": "CP"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:cloudflare-ai-gateway",
+        "label": "cloudflare-ai-gateway",
+        "mark": {
+          "icon": "provider:cloudflare-ai-gateway",
+          "seed": "cloudflare-ai-gateway",
+          "text": "CA"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:cloudflare-workers-ai",
+        "label": "cloudflare-workers-ai",
+        "mark": {
+          "icon": "provider:cloudflare-workers-ai",
+          "seed": "cloudflare-workers-ai",
+          "text": "CW"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:commandcode",
+        "label": "commandcode",
+        "mark": {
+          "icon": "provider:commandcode",
+          "seed": "commandcode",
+          "text": "Co"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:coralbricks",
+        "label": "coralbricks",
+        "mark": {
+          "icon": "provider:coralbricks",
+          "seed": "coralbricks",
+          "text": "Co"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:coreweave",
+        "label": "coreweave",
+        "mark": {
+          "icon": "provider:coreweave",
+          "seed": "coreweave",
+          "text": "Co"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:cursor",
+        "label": "cursor",
+        "mark": {
+          "icon": "provider:cursor",
+          "seed": "cursor",
+          "text": "Cu"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:deepinfra",
+        "label": "deepinfra",
+        "mark": {
+          "icon": "provider:deepinfra",
+          "seed": "deepinfra",
+          "text": "De"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:deepseek",
+        "label": "deepseek",
+        "mark": {
+          "icon": "provider:deepseek",
+          "seed": "deepseek",
+          "text": "De"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:devin",
+        "label": "devin",
+        "mark": {
+          "icon": "provider:devin",
+          "seed": "devin",
+          "text": "De"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:factory-droid",
+        "label": "factory-droid",
+        "mark": {
+          "icon": "provider:factory-droid",
+          "seed": "factory-droid",
+          "text": "FD"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:firepass",
+        "label": "firepass",
+        "mark": {
+          "icon": "provider:firepass",
+          "seed": "firepass",
+          "text": "Fi"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:fireworks",
+        "label": "fireworks",
+        "mark": {
+          "icon": "provider:fireworks",
+          "seed": "fireworks",
+          "text": "Fi"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:github-copilot",
+        "label": "github-copilot",
+        "mark": {
+          "icon": "provider:github-copilot",
+          "seed": "github-copilot",
+          "text": "GC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:gitlab-duo",
+        "label": "gitlab-duo",
+        "mark": {
+          "icon": "provider:gitlab-duo",
+          "seed": "gitlab-duo",
+          "text": "GD"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:gitlab-duo-agent",
+        "label": "gitlab-duo-agent",
+        "mark": {
+          "icon": "provider:gitlab-duo-agent",
+          "seed": "gitlab-duo-agent",
+          "text": "GD"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:gmi-cloud",
+        "label": "gmi-cloud",
+        "mark": {
+          "icon": "provider:gmi-cloud",
+          "seed": "gmi-cloud",
+          "text": "GC"
+        }
+      },
+      {
+        "disabled": "Set GEMINI_API_KEY to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:google",
+        "label": "google",
+        "mark": {
+          "icon": "provider:google",
+          "seed": "google",
+          "text": "Go"
+        }
+      },
+      {
+        "disabled": "Add an API key in config to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:google-antigravity",
+        "label": "google-antigravity",
+        "mark": {
+          "icon": "provider:google-antigravity",
+          "seed": "google-antigravity",
+          "text": "GA"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:google-gemini-cli",
+        "label": "google-gemini-cli",
+        "mark": {
+          "icon": "provider:google-gemini-cli",
+          "seed": "google-gemini-cli",
+          "text": "GG"
+        }
+      },
+      {
+        "disabled": "Add an API key in config to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:google-vertex",
+        "label": "google-vertex",
+        "mark": {
+          "icon": "provider:google-vertex",
+          "seed": "google-vertex",
+          "text": "GV"
+        }
+      },
+      {
+        "disabled": "Set GROQ_API_KEY to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:groq",
+        "label": "groq",
+        "mark": {
+          "icon": "provider:groq",
+          "seed": "groq",
+          "text": "Gr"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:helmcode",
+        "label": "helmcode",
+        "mark": {
+          "icon": "provider:helmcode",
+          "seed": "helmcode",
+          "text": "He"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:huggingface",
+        "label": "huggingface",
+        "mark": {
+          "icon": "provider:huggingface",
+          "seed": "huggingface",
+          "text": "Hu"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:inception",
+        "label": "inception",
+        "mark": {
+          "icon": "provider:inception",
+          "seed": "inception",
+          "text": "In"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:kilo",
+        "label": "kilo",
+        "mark": {
+          "icon": "provider:kilo",
+          "seed": "kilo",
+          "text": "Ki"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:kimi-code",
+        "label": "kimi-code",
+        "mark": {
+          "icon": "provider:kimi-code",
+          "seed": "kimi-code",
+          "text": "KC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:liquid",
+        "label": "liquid",
+        "mark": {
+          "icon": "provider:liquid",
+          "seed": "liquid",
+          "text": "Li"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:meta",
+        "label": "meta",
+        "mark": {
+          "icon": "provider:meta",
+          "seed": "meta",
+          "text": "Me"
+        }
+      },
+      {
+        "disabled": "Set MINIMAX_API_KEY to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:minimax",
+        "label": "minimax",
+        "mark": {
+          "icon": "provider:minimax",
+          "seed": "minimax",
+          "text": "Mi"
+        }
+      },
+      {
+        "disabled": "Add an API key in config to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:minimax-cn",
+        "label": "minimax-cn",
+        "mark": {
+          "icon": "provider:minimax-cn",
+          "seed": "minimax-cn",
+          "text": "MC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:minimax-code",
+        "label": "minimax-code",
+        "mark": {
+          "icon": "provider:minimax-code",
+          "seed": "minimax-code",
+          "text": "MC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:minimax-code-cn",
+        "label": "minimax-code-cn",
+        "mark": {
+          "icon": "provider:minimax-code-cn",
+          "seed": "minimax-code-cn",
+          "text": "MC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:mistral",
+        "label": "mistral",
+        "mark": {
+          "icon": "provider:mistral",
+          "seed": "mistral",
+          "text": "Mi"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:modular",
+        "label": "modular",
+        "mark": {
+          "icon": "provider:modular",
+          "seed": "modular",
+          "text": "Mo"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:moonshot",
+        "label": "moonshot",
+        "mark": {
+          "icon": "provider:moonshot",
+          "seed": "moonshot",
+          "text": "Mo"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:muse-code",
+        "label": "muse-code",
+        "mark": {
+          "icon": "provider:muse-code",
+          "seed": "muse-code",
+          "text": "MC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:nace",
+        "label": "nace",
+        "mark": {
+          "icon": "provider:nace",
+          "seed": "nace",
+          "text": "Na"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:nanogpt",
+        "label": "nanogpt",
+        "mark": {
+          "icon": "provider:nanogpt",
+          "seed": "nanogpt",
+          "text": "Na"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:novita",
+        "label": "novita",
+        "mark": {
+          "icon": "provider:novita",
+          "seed": "novita",
+          "text": "No"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:nvidia",
+        "label": "nvidia",
+        "mark": {
+          "icon": "provider:nvidia",
+          "seed": "nvidia",
+          "text": "Nv"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:ollama-cloud",
+        "label": "ollama-cloud",
+        "mark": {
+          "icon": "provider:ollama-cloud",
+          "seed": "ollama-cloud",
+          "text": "OC"
+        }
+      },
+      {
+        "disabled": "Set OPENAI_API_KEY to sign in",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:openai",
+        "label": "openai",
+        "mark": {
+          "icon": "provider:openai",
+          "seed": "openai",
+          "text": "Op"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:openai-codex",
+        "label": "openai-codex",
+        "mark": {
+          "icon": "provider:openai-codex",
+          "seed": "openai-codex",
+          "text": "OC"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:opencode-go",
+        "label": "opencode-go",
+        "mark": {
+          "icon": "provider:opencode-go",
+          "seed": "opencode-go",
+          "text": "OG"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:opencode-zen",
+        "label": "opencode-zen",
+        "mark": {
+          "icon": "provider:opencode-zen",
+          "seed": "opencode-zen",
+          "text": "OZ"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:openrouter",
+        "label": "openrouter",
+        "mark": {
+          "icon": "provider:openrouter",
+          "seed": "openrouter",
+          "text": "Op"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:qianfan",
+        "label": "qianfan",
+        "mark": {
+          "icon": "provider:qianfan",
+          "seed": "qianfan",
+          "text": "Qi"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:qwen-portal",
+        "label": "qwen-portal",
+        "mark": {
+          "icon": "provider:qwen-portal",
+          "seed": "qwen-portal",
+          "text": "QP"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:sakana",
+        "label": "sakana",
+        "mark": {
+          "icon": "provider:sakana",
+          "seed": "sakana",
+          "text": "Sa"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:sambanova",
+        "label": "sambanova",
+        "mark": {
+          "icon": "provider:sambanova",
+          "seed": "sambanova",
+          "text": "Sa"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:scaleway",
+        "label": "scaleway",
+        "mark": {
+          "icon": "provider:scaleway",
+          "seed": "scaleway",
+          "text": "Sc"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:snowflake",
+        "label": "snowflake",
+        "mark": {
+          "icon": "provider:snowflake",
+          "seed": "snowflake",
+          "text": "Sn"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:stepfun",
+        "label": "stepfun",
+        "mark": {
+          "icon": "provider:stepfun",
+          "seed": "stepfun",
+          "text": "St"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:synthetic",
+        "label": "synthetic",
+        "mark": {
+          "icon": "provider:synthetic",
+          "seed": "synthetic",
+          "text": "Sy"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:together",
+        "label": "together",
+        "mark": {
+          "icon": "provider:together",
+          "seed": "together",
+          "text": "To"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:typesafe",
+        "label": "typesafe",
+        "mark": {
+          "icon": "provider:typesafe",
+          "seed": "typesafe",
+          "text": "Ty"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:umans",
+        "label": "umans",
+        "mark": {
+          "icon": "provider:umans",
+          "seed": "umans",
+          "text": "Um"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:venice",
+        "label": "venice",
+        "mark": {
+          "icon": "provider:venice",
+          "seed": "venice",
+          "text": "Ve"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:vercel-ai-gateway",
+        "label": "vercel-ai-gateway",
+        "mark": {
+          "icon": "provider:vercel-ai-gateway",
+          "seed": "vercel-ai-gateway",
+          "text": "VA"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:wafer-serverless",
+        "label": "wafer-serverless",
+        "mark": {
+          "icon": "provider:wafer-serverless",
+          "seed": "wafer-serverless",
+          "text": "WS"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:xai",
+        "label": "xai",
+        "mark": {
+          "icon": "provider:xai",
+          "seed": "xai",
+          "text": "Xa"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:xai-oauth",
+        "label": "xai-oauth",
+        "mark": {
+          "icon": "provider:xai-oauth",
+          "seed": "xai-oauth",
+          "text": "XO"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:xiaomi",
+        "label": "xiaomi",
+        "mark": {
+          "icon": "provider:xiaomi",
+          "seed": "xiaomi",
+          "text": "Xi"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:xiaomi-token-plan-ams",
+        "label": "xiaomi-token-plan-ams",
+        "mark": {
+          "icon": "provider:xiaomi-token-plan-ams",
+          "seed": "xiaomi-token-plan-ams",
+          "text": "XT"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:xiaomi-token-plan-cn",
+        "label": "xiaomi-token-plan-cn",
+        "mark": {
+          "icon": "provider:xiaomi-token-plan-cn",
+          "seed": "xiaomi-token-plan-cn",
+          "text": "XT"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:xiaomi-token-plan-sgp",
+        "label": "xiaomi-token-plan-sgp",
+        "mark": {
+          "icon": "provider:xiaomi-token-plan-sgp",
+          "seed": "xiaomi-token-plan-sgp",
+          "text": "XT"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:yolo-auto",
+        "label": "yolo-auto",
+        "mark": {
+          "icon": "provider:yolo-auto",
+          "seed": "yolo-auto",
+          "text": "YA"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:zai",
+        "label": "zai",
+        "mark": {
+          "icon": "provider:zai",
+          "seed": "zai",
+          "text": "Za"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:zenmux",
+        "label": "zenmux",
+        "mark": {
+          "icon": "provider:zenmux",
+          "seed": "zenmux",
+          "text": "Ze"
+        }
+      },
+      {
+        "disabled": "Sign in with /login",
+        "dot": "muted",
+        "group": "Not signed in",
+        "id": "provider:zhipu-coding-plan",
+        "label": "zhipu-coding-plan",
+        "mark": {
+          "icon": "provider:zhipu-coding-plan",
+          "seed": "zhipu-coding-plan",
+          "text": "ZC"
+        }
+      }
+    ],
+    "selected": "web/parallel",
+    "size": "lg",
+    "state": "ready",
+    "strip": {
+      "items": [
+        {
+          "id": "0",
+          "label": "web"
+        },
+        {
+          "id": "1",
+          "label": "fallbacks:parallel"
+        },
+        {
+          "id": "2",
+          "label": "fallbacks:web/*"
+        }
+      ],
+      "label": [
+        {
+          "s": "muted",
+          "t": "Assign "
+        },
+        {
+          "s": "mono",
+          "t": "parallel"
+        },
+        {
+          "s": "muted",
+          "t": " to"
+        }
+      ],
+      "selected": "0"
+    },
+    "tab": "all",
+    "tabs": [
+      {
+        "count": 40,
+        "id": "all",
+        "label": "All"
+      },
+      {
+        "count": 1,
+        "id": "chat",
+        "label": "Chat"
+      },
+      {
+        "count": 8,
+        "id": "tiny",
+        "label": "Tiny"
+      },
+      {
+        "count": 0,
+        "id": "image",
+        "label": "Image"
+      },
+      {
+        "count": 1,
+        "id": "tts",
+        "label": "TTS"
+      },
+      {
+        "count": 5,
+        "id": "stt",
+        "label": "STT"
+      },
+      {
+        "count": 25,
+        "id": "search",
+        "label": "Search"
+      },
+      {
+        "count": 0,
+        "id": "judge",
+        "label": "Judge"
+      },
+      {
+        "count": 0,
+        "id": "embedding",
+        "label": "Embedding"
+      },
+      {
+        "count": 0,
+        "id": "rerank",
+        "label": "Rerank"
+      },
+      {
+        "count": 0,
+        "id": "video",
+        "label": "Video"
+      }
+    ],
+    "title": "Models",
+    "total": 40
+  },
+  "c": [
+    {
+      "id": "n.0",
+      "k": "text",
+      "p": {
+        "role": "omp.picker.title",
+        "text": "Parallel"
+      }
+    },
+    {
+      "id": "n.1",
+      "k": "text",
+      "p": {
+        "actions": {
+          "click": "copy"
+        },
+        "spans": [
+          {
+            "s": "mono",
+            "t": "web/parallel"
+          }
+        ],
+        "title": "Copy model id",
+        "truncate": "middle"
+      }
+    },
+    {
+      "id": "n.2",
+      "k": "kv",
+      "p": {
+        "items": [
+          {
+            "k": [
+              {
+                "s": "muted",
+                "t": "Compacts at"
+              }
+            ],
+            "v": [
+              {
+                "s": "mono",
+                "t": "off"
+              },
+              {
+                "s": "dim",
+                "t": " \u00b7 default"
+              }
+            ]
+          },
+          {
+            "k": [
+              {
+                "s": "muted",
+                "t": "Price"
+              }
+            ],
+            "v": [
+              {
+                "s": "mono",
+                "t": "free"
+              }
+            ]
+          },
+          {
+            "k": [
+              {
+                "s": "muted",
+                "t": "Input"
+              }
+            ],
+            "v": [
+              {
+                "s": "mono",
+                "t": "text"
+              }
+            ]
+          },
+          {
+            "k": [
+              {
+                "s": "muted",
+                "t": "Reasoning"
+              }
+            ],
+            "v": [
+              {
+                "s": "mono",
+                "t": "no"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "n.3",
+      "k": "section",
+      "p": {
+        "head": "Roles"
+      },
+      "c": [
+        {
+          "id": "n.3/0",
+          "k": "row",
+          "p": {
+            "gap": "xs",
+            "wrap": true
+          },
+          "c": [
+            {
+              "id": "n.3/0/0",
+              "k": "badge",
+              "p": {
+                "text": "web",
+                "title": "Web search (auto-selected)",
+                "tone": "muted"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

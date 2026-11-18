@@ -42,7 +42,19 @@ struct RosterSection: View {
                 // On connecting: the machine is asked for a newer helper at most once a day.
                 .task(id: checksHelper) { if checksHelper { await helperUpdates?.checkIfDue(machine.id) } }
             status
-            ForEach(group.lines) { line in
+            ForEach(group.togoLines) { line in
+                sessionLine(line)
+            }
+            if group.showsTerminalOnlyHeader {
+                Text(ControlCenterCopy.terminalOnly)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.togoMute)
+                    .accessibilityAddTraits(.isHeader)
+                    .listRowInsets(EdgeInsets(top: 12, leading: 20, bottom: 4, trailing: 20))
+                    .listRowBackground(Color.togoInk)
+                    .listRowSeparator(.hidden)
+            }
+            ForEach(group.terminalOnlyLines) { line in
                 sessionLine(line)
             }
             if machine.reachability == .online {
@@ -87,6 +99,7 @@ struct RosterSection: View {
         RosterMachineHeading(
             name: machine.name, count: group.count,
             caption: AwakeCopy.caption(reach: caption, awake: machine.awake),
+            progress: machine.reachability == .online ? nil : ConnectionProgress.shared.summary(for: machine.id),
             onWake: WakeCopy.showsButton(for: machine, enabled: wakeEnabled) ? { perform(.wake(machine.id)) } : nil
         )
     }
@@ -106,7 +119,9 @@ struct RosterSection: View {
             return ControlCenterCopy.noNetwork
         case .hostKeyChanged:
             return ControlCenterCopy.keyChangedCaption
-        case .connecting, .online, .authNeeded, .failed, .keyMissing, .setUpHere:
+        case .connecting:
+            return ControlCenterCopy.connecting
+        case .online, .authNeeded, .failed, .keyMissing, .setUpHere:
             return helper == .missing ? ControlCenterCopy.noHelper : nil
         }
     }
@@ -125,8 +140,8 @@ struct RosterSection: View {
     /// user was about to tap moves away.
     private var stale: Bool {
         switch machine.reachability {
-        case .offline, .authNeeded, .failed, .keyMissing, .setUpHere, .hostKeyChanged, .deviceOffline: true
-        case .connecting, .waking, .online: false
+        case .offline, .authNeeded, .failed, .keyMissing, .setUpHere, .hostKeyChanged, .deviceOffline, .connecting, .waking: true
+        case .online: false
         }
     }
 
@@ -296,6 +311,7 @@ struct RosterMachineHeading: View {
     let name: String
     let count: Int
     var caption: String?
+    var progress: ConnectionProgress.Summary?
     /// Set on an offline machine that can be woken.
     var onWake: (() -> Void)?
 
@@ -310,8 +326,9 @@ struct RosterMachineHeading: View {
                     .foregroundStyle(Color.togoMute)
                     // A background count: it changes at once.
                     .monospacedDigit()
-                if let caption, !typeSize.isAccessibilitySize {
-                    captionText(caption)
+                if !typeSize.isAccessibilitySize {
+                    if let progress { ConnectionProgressLabel(summary: progress).font(.footnote).foregroundStyle(Color.togoMute) }
+                    else if let caption { captionText(caption) }
                 }
                 Spacer(minLength: 0)
                 if let onWake, !typeSize.isAccessibilitySize {
@@ -321,7 +338,8 @@ struct RosterMachineHeading: View {
             // At accessibility sizes the caption and the button each take a line of their own,
             // so the name keeps the row's width.
             if typeSize.isAccessibilitySize {
-                if let caption { captionText(caption) }
+                if let progress { ConnectionProgressLabel(summary: progress).font(.footnote).foregroundStyle(Color.togoMute) }
+                else if let caption { captionText(caption) }
                 if let onWake { wakeButton(onWake) }
             }
         }
@@ -420,95 +438,10 @@ enum SidebarCopy {
         return String(localized: "sidebar.machine.newSessionUnavailable", defaultValue: "Togo can't reach \(machine) right now.")
     }
 
-    static let newSessionHere = String(localized: "sidebar.machine.newSession", defaultValue: "New session here")
-    static let installHelper = String(localized: "sidebar.machine.installHelper", defaultValue: "Install or update helper")
-    static let signInAgain = String(localized: "sidebar.machine.signIn", defaultValue: "Sign in again")
-    static let editMachine = String(localized: "sidebar.machine.edit", defaultValue: "Edit machine")
-}
-
-/// A sentence about the machine with the one thing to do about it, as a trailing text button.
-/// At accessibility sizes the button goes under the sentence.
-private struct MachineMessage: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    let text: String
-    let action: String
-    let run: () -> Void
-
-    init(_ text: String, action: String, run: @escaping () -> Void) {
-        self.text = text
-        self.action = action
-        self.run = run
-    }
-
-    var body: some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 12))
-        layout {
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(Color.togoMute)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(action, action: run)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.togoSnow)
-                .buttonStyle(.borderless)
-                .frame(minHeight: 44)
-        }
-        // The 44-point button already gives the row its height; the list's own padding on top
-        // of it left a gap under the machine's heading.
-        .listRowInsets(.vertical, 0)
-        .listRowBackground(Color.togoInk)
-    }
-}
-
-/// A machine's helper update, done in place: the note offers Update, shows the update running,
-/// then its result for a moment before leaving.
-private struct HelperUpdateLine: View {
-    let machine: HostID
-    let name: String
-    let current: String
-    let updates: HelperUpdates
-
-    var body: some View {
-        let phase = updates.phase(machine)
-        switch phase {
-        case .idle:
-            if updates.available(machine, current: current) != nil {
-                MachineMessage(HelperUpdateCopy.available, action: HelperUpdateCopy.update) {
-                    Task { await updates.update(machine) }
-                }
-                .accessibilityLabel(HelperUpdateCopy.availableOn(name))
-                .accessibilityAction(named: HelperUpdateCopy.updateOn(name)) { Task { await updates.update(machine) } }
-            }
-        case .updating:
-            HStack(spacing: 12) {
-                Text(HelperUpdateCopy.updating)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.togoMute)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                ProgressView()
-            }
-            .frame(minHeight: 44)
-            .listRowInsets(.vertical, 0)
-            .listRowBackground(Color.togoInk)
-        case .updated(let version):
-            Text(HelperUpdateCopy.updated(version.map(HelperUpdate.display)))
-                .font(.subheadline)
-                .foregroundStyle(Color.togoMute)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .listRowInsets(.vertical, 0)
-                .listRowBackground(Color.togoInk)
-                .task {
-                    try? await Task.sleep(for: .seconds(4))
-                    updates.settle(machine)
-                }
-        case .failed(let message):
-            MachineMessage("\(HelperUpdateCopy.failed) \(message)", action: HelperUpdateCopy.tryAgain) {
-                Task { await updates.update(machine) }
-            }
-        }
-    }
+    static let newSessionHere = String(localized: "sidebar.machine.newSession", defaultValue: "New Session Here")
+    static let installHelper = String(localized: "sidebar.machine.installHelper", defaultValue: "Install or Update Helper")
+    static let signInAgain = String(localized: "sidebar.machine.signIn", defaultValue: "Sign In Again")
+    static let editMachine = String(localized: "sidebar.machine.edit", defaultValue: "Edit Machine")
 }
 
 /// Lets a line be dragged into a pane as its tab.

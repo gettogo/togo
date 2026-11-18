@@ -16,10 +16,10 @@ enum MissionMenu {
     }
 
     /// Terminal only while the chat shows: over the terminal it would go nowhere.
-    static func items(needsYou: Int, working: Bool, canCompact: Bool, chatShows: Bool = true) -> [Item] {
+    static func items(needsYou: Int, working: Bool, canCompact: Bool, chatShows: Bool = true, canInterrupt: Bool = true) -> [Item] {
         var items: [Item] = []
         if needsYou > 0 { items.append(.goToRequest) }
-        if working { items.append(.stop) }
+        if working, canInterrupt { items.append(.stop) }
         if canCompact { items.append(.compact) }
         if chatShows { items.append(.terminal) }
         return items
@@ -28,6 +28,16 @@ enum MissionMenu {
     /// The choices the session menu's mission section repeats: all but Terminal.
     static func inSessionMenu(_ items: [Item]) -> [Item] {
         items.filter { $0 != .terminal }
+    }
+
+    struct SessionEntries: Equatable {
+        var showsToggle: Bool
+        var actions: [Item]
+    }
+
+    /// Secondary actions always have a home, even when the toggle has its own toolbar item.
+    static func sessionEntries(_ items: [Item], missionInBar: Bool) -> SessionEntries {
+        .init(showsToggle: !missionInBar, actions: inSessionMenu(items))
     }
 
     static func title(_ item: Item) -> String {
@@ -49,10 +59,9 @@ enum MissionMenu {
     }
 }
 
-/// Mission control's bar item, on every size class: the system puts it in the vertical bar on
-/// a Duo and in the top bar elsewhere. Tap shows or hides mission control (Cmd-I); a long
-/// press is the system's menu, with its own lift and haptic. The badge is the needs-you count,
-/// and the item stays in the bar longest while it has one.
+/// A plain button on every size class, including the system's overflow. A Menu with a primary
+/// action loses that action in overflow. Secondary choices live in `MissionMenuSection`.
+/// The badge is the needs-you count; the item stays in the bar longest while it has one.
 struct MissionToolbarItem: ToolbarContent {
     let store: HarnessSessionStore
     let presentation: MissionPresentation
@@ -66,7 +75,8 @@ struct MissionToolbarItem: ToolbarContent {
     /// The long press's choices for the session now.
     var menuItems: [MissionMenu.Item] {
         MissionMenu.items(
-            needsYou: badge, working: summary.working, canCompact: compact != nil, chatShows: store.shownLayer == .chat
+            needsYou: badge, working: summary.working, canCompact: compact != nil, chatShows: store.shownLayer == .chat,
+            canInterrupt: store.has(HarnessCapability.interrupt)
         )
     }
 
@@ -80,16 +90,10 @@ struct MissionToolbarItem: ToolbarContent {
 
     private var item: some ToolbarContent {
         ToolbarItem(placement: .primaryAction) {
-            Menu {
-                ForEach(menuItems, id: \.self) { entry in
-                    Button(MissionMenu.title(entry), systemImage: MissionMenu.symbol(entry), role: entry == .stop ? .destructive : nil) {
-                        perform(entry)
-                    }
-                }
+            Button {
+                store.showsMission.toggle()
             } label: {
                 MissionItemLabel(session: MissionKey.of(store.subject), needsYou: badge, symbol: MissionPlacement.symbol(presentation))
-            } primaryAction: {
-                store.showsMission.toggle()
             }
             .badge(badge)
             .keyboardShortcut("i", modifiers: .command)
@@ -120,23 +124,28 @@ struct MissionToolbarItem: ToolbarContent {
     }
 }
 
-/// Mission control as a section of the session menu, where a compact horizontal bar keeps three
-/// items: the same toggle and the long press's choices, without Terminal, which the layer switch
-/// beside the menu already is. ⌘I is the workspace's (`WorkspaceView.shortcuts`).
+/// Secondary actions on every layout; the toggle also appears here where it has no bar item.
+/// Terminal stays on the layer switch. ⌘I is the workspace's (`WorkspaceView.shortcuts`).
 struct MissionMenuSection: View {
     let item: MissionToolbarItem
+    var missionInBar = false
 
     var body: some View {
-        Section {
-            Button(MissionCopy.title, systemImage: MissionPlacement.symbol(item.presentation)) {
-                item.store.showsMission.toggle()
-            }
-            .accessibilityValue(MissionText.spoken(item.summary))
-            .accessibilityHint(MissionCopy.openHint)
-            .accessibilityIdentifier("mission.menuItem")
-            ForEach(MissionMenu.inSessionMenu(item.menuItems), id: \.self) { entry in
-                Button(MissionMenu.title(entry), systemImage: MissionMenu.symbol(entry), role: entry == .stop ? .destructive : nil) {
-                    item.perform(entry)
+        let entries = MissionMenu.sessionEntries(item.menuItems, missionInBar: missionInBar)
+        if entries.showsToggle || !entries.actions.isEmpty {
+            Section {
+                if entries.showsToggle {
+                    Button(MissionCopy.title, systemImage: MissionPlacement.symbol(item.presentation)) {
+                        item.store.showsMission.toggle()
+                    }
+                    .accessibilityValue(MissionText.spoken(item.summary))
+                    .accessibilityHint(MissionCopy.openHint)
+                    .accessibilityIdentifier("mission.menuItem")
+                }
+                ForEach(entries.actions, id: \.self) { entry in
+                    Button(MissionMenu.title(entry), systemImage: MissionMenu.symbol(entry), role: entry == .stop ? .destructive : nil) {
+                        item.perform(entry)
+                    }
                 }
             }
         }

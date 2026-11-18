@@ -38,7 +38,7 @@ struct PickerItemDetail: View {
                 .padding(.vertical, 4)
                 .listRowBackground(Color.clear)
             }
-            if item.id != picker.selected, item.disabled != true {
+            if PickerModel.canSelect(item, in: picker) {
                 Section {
                     Button(action: onSelect) {
                         HStack {
@@ -56,7 +56,16 @@ struct PickerItemDetail: View {
                 }
             }
             let facts = PickerModel.facts(of: item, picker: picker)
-            if !facts.isEmpty || item.subtitle != nil {
+            if let preview = item.preview {
+                Section { DetailBody(content: preview.body).groupedRows() }
+                ForEach(Array((preview.sections ?? []).enumerated()), id: \.offset) { _, section in
+                    Section {
+                        DetailBody(content: section.body).groupedRows()
+                    } header: {
+                        if let title = section.title { Text(verbatim: title).textCase(nil) }
+                    }
+                }
+            } else if !facts.isEmpty || item.subtitle != nil {
                 Section(PrimitiveCopy.details) {
                     if let subtitle = item.subtitle, !subtitle.isEmpty {
                         Text(verbatim: subtitle)
@@ -78,6 +87,16 @@ struct PickerItemDetail: View {
                 }
             }
             roles
+            if !(picker.contextActions ?? []).isEmpty {
+                Section {
+                    ForEach(picker.contextActions ?? []) { ref in
+                        SourceActionButton(ref: ref, outcome: actions.outcome(ref.id, target: item.id), busy: actions.isBusy) {
+                            onAssign(ref)
+                        }
+                        .groupedRows()
+                    }
+                }
+            }
             Section {
                 Button(PrimitiveCopy.copyID, systemImage: "doc.on.doc") {
                     UIPasteboard.general.string = item.id

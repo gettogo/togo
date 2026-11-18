@@ -4,7 +4,7 @@ import Foundation
 /// can show and answer it. Only structured fields; never screen text.
 public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public enum Answered: String, Codable, Sendable {
-        case sending, approved, denied, elsewhere
+        case sending, approved, denied, elsewhere, sent, confirmed
     }
 
     public var id: String { requestId }
@@ -24,6 +24,10 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     /// When this device took the request's one answer (`PendingStore.claim`); set only while
     /// `answered` is `sending`. Absent in older records.
     public var claimedAt: Date?
+    /// Helper-supplied deadline, or nil for legacy records using receivedAt plus ten minutes.
+    public var expiresAt: Date?
+    public var answerReceipt: AnswerReceiptResult?
+    public var answerReceiptTS: Int64?
 
     /// How long a claim holds. A send is over well before this (the relay post and the live
     /// channel give up sooner), so a claim still sending after it was left by a process that
@@ -33,7 +37,7 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public init(
         requestId: String, hostId: String, sessionId: String?, bib: String?, agent: String?, host: String?,
         title: String, subject: PushSubject?, options: [PushOption], receivedAt: Date, answered: Answered?,
-        allowText: Bool? = nil, claimedAt: Date? = nil
+        allowText: Bool? = nil, claimedAt: Date? = nil, expiresAt: Date? = nil
     ) {
         self.requestId = requestId
         self.hostId = hostId
@@ -48,6 +52,7 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
         self.answered = answered
         self.allowText = allowText
         self.claimedAt = claimedAt
+        self.expiresAt = expiresAt
     }
 
     /// A claim nobody is finishing: still `sending` past `claimTimeout`, or a sending record
@@ -63,6 +68,9 @@ public struct PendingRequest: Codable, Sendable, Equatable, Identifiable {
     public func isOpen(at now: Date) -> Bool {
         answered == nil || claimAbandoned(at: now)
     }
+
+    public var expiry: Date { expiresAt ?? receivedAt.addingTimeInterval(RequestLifetime.seconds) }
+    public func isAnswerable(at now: Date) -> Bool { isOpen(at: now) && now < expiry }
 
     /// A record `claim` made for an id this device never got a push for: nothing to show.
     public var isPlaceholder: Bool {
@@ -92,7 +100,7 @@ public final class PendingStore: Sendable {
         self.onChange = onChange
     }
 
-    private func update(_ change: (inout [PendingRequest]) -> Void) {
+    func update(_ change: (inout [PendingRequest]) -> Void) {
         blob.update(change)
         onChange?()
     }
@@ -101,12 +109,25 @@ public final class PendingStore: Sendable {
 
     public func request(_ requestId: String) -> PendingRequest? { blob.read().first { $0.requestId == requestId } }
 
+    /// An unknown notification may supply its original delivery date. A remote Live Activity
+    /// without a local record has no trustworthy age, so absence alone is not expiry.
+    public func isExpired(_ requestId: String, deliveredAt: Date? = nil, expiresAt: Date? = nil) -> Bool {
+        let stored = request(requestId)?.expiry
+        let deadline = stored.map { max($0, expiresAt ?? $0) } ?? expiresAt
+            ?? deliveredAt?.addingTimeInterval(RequestLifetime.seconds)
+        return deadline.map { clock() >= $0 } ?? false
+    }
+
     /// Adds a request the store has not seen. A request it already holds keeps its state and
     /// receipt time, so a replayed push can neither reopen an answered request nor make an
     /// old one look new.
     public func upsert(_ request: PendingRequest) {
         update { values in
-            guard !values.contains(where: { $0.requestId == request.requestId }) else { return }
+            if let index = values.firstIndex(where: { $0.requestId == request.requestId }) {
+                if values[index].hostId == request.hostId, let deadline = request.expiresAt,
+                   deadline > values[index].expiry { values[index].expiresAt = deadline }
+                return
+            }
             values.append(request)
         }
     }
@@ -115,18 +136,21 @@ public final class PendingStore: Sendable {
     /// true, or returns false when it is already sending or answered, from any process. An id
     /// the store never saw is recorded so it too is answered once. A claim abandoned by a
     /// process stopped mid-send (`claimAbandoned`) is taken over.
-    public func claim(_ requestId: String, hostId: String) -> Bool {
+    public func claim(_ requestId: String, hostId: String, expiresAt: Date? = nil) -> Bool {
         var claimed = false
         let now = clock()
         update { values in
             if let index = values.firstIndex(where: { $0.requestId == requestId }) {
-                guard values[index].isOpen(at: now) else { return }
+                guard values[index].hostId == hostId else { return }
+                if let expiresAt, expiresAt > values[index].expiry { values[index].expiresAt = expiresAt }
+                guard values[index].isAnswerable(at: now) else { return }
                 values[index].answered = .sending
                 values[index].claimedAt = now
             } else {
+                guard expiresAt.map({ now < $0 }) ?? true else { return }
                 values.append(PendingRequest(
                     requestId: requestId, hostId: hostId, sessionId: nil, bib: nil, agent: nil, host: nil, title: "",
-                    subject: nil, options: [], receivedAt: now, answered: .sending, claimedAt: now
+                    subject: nil, options: [], receivedAt: now, answered: .sending, claimedAt: now, expiresAt: expiresAt
                 ))
             }
             claimed = true
@@ -150,6 +174,27 @@ public final class PendingStore: Sendable {
             guard let index = values.firstIndex(where: { $0.requestId == requestId }) else { return }
             values[index].answered = answered
             values[index].claimedAt = answered == .sending ? clock() : nil
+        }
+    }
+
+    /// Keeps a closed record even if its alert has not arrived yet. A late push cannot
+    /// reopen it. Refresh the retention window from the clear, not the original receipt.
+    public func close(_ requestId: String, hostId: String = "") {
+        let now = clock()
+        update { values in
+            if let index = values.firstIndex(where: { $0.requestId == requestId }) {
+                switch values[index].answered {
+                case .approved, .denied, .confirmed, .sent: break
+                default: values[index].answered = .elsewhere
+                }
+                values[index].claimedAt = nil
+                values[index].receivedAt = now
+            } else {
+                values.append(PendingRequest(
+                    requestId: requestId, hostId: hostId, sessionId: nil, bib: nil, agent: nil, host: nil,
+                    title: "", subject: nil, options: [], receivedAt: now, answered: .elsewhere
+                ))
+            }
         }
     }
 
@@ -196,10 +241,26 @@ public final class PendingStore: Sendable {
         update { $0.removeAll { $0.requestId == requestId } }
     }
 
-    /// Drops requests received more than `age` seconds ago. The helper refuses answers to them
-    /// by then anyway.
-    public func prune(olderThan age: TimeInterval = 600) {
+    /// Retains closed replay barriers beyond the answer window, including clock-skew slack.
+    /// Old open records are retained briefly for expiry feedback, never for new actions.
+    public static let retention: TimeInterval = 2 * RequestLifetime.seconds
+
+    /// Drops old records during push processing as well as foreground refresh.
+    @discardableResult
+    public func prune(olderThan age: TimeInterval = PendingStore.retention) -> Bool {
         let cutoff = clock().addingTimeInterval(-age)
-        update { $0.removeAll { $0.receivedAt < cutoff } }
+        let now = clock()
+        let removable: (PendingRequest) -> Bool = {
+            let receipt = $0.answerReceiptTS.map { Date(timeIntervalSince1970: Double($0) / 1000) } ?? $0.receivedAt
+            return max($0.receivedAt, receipt) < cutoff && $0.expiry <= now
+        }
+        guard blob.read().contains(where: removable) else { return false }
+        var removed = false
+        update { values in
+            let count = values.count
+            values.removeAll(where: removable)
+            removed = values.count != count
+        }
+        return removed
     }
 }

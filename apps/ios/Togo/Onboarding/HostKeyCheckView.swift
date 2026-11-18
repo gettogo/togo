@@ -26,7 +26,7 @@ struct HostKeyCheckView: View {
 
     private func newKey(_ prompt: HostKeyPrompt) -> some View {
         OnboardingStep(
-            title: String(localized: "onboard.hostKey.new.title", defaultValue: "Check this machine's key"),
+            title: String(localized: "onboard.hostKey.new.title", defaultValue: "Check This Machine's Key"),
             message: String(
                 localized: "onboard.hostKey.new.message",
                 defaultValue: "This is the first time Togo connects to \(machine). Compare this fingerprint with the one the machine shows, then trust it."
@@ -40,7 +40,7 @@ struct HostKeyCheckView: View {
                 CopyableText(text: "ssh-keygen -lf " + Self.publicKeyPath(prompt.keyType))
             }
         } actions: {
-            Button(String(localized: "onboard.hostKey.trust", defaultValue: "Trust this machine"), action: onTrust)
+            Button(String(localized: "onboard.hostKey.trust", defaultValue: "Trust This Machine"), action: onTrust)
                 .buttonStyle(.primary)
             Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), action: onCancel)
                 .buttonStyle(.secondary)
@@ -61,14 +61,14 @@ struct HostKeyCheckView: View {
             Button(String(localized: "onboard.cancel", defaultValue: "Cancel"), action: onCancel)
                 .buttonStyle(.primary)
                 .keyboardShortcut(.defaultAction)
-            Button(String(localized: "onboard.hostKey.forget", defaultValue: "Forget the old key")) { confirmingForget = true }
+            Button(String(localized: "onboard.hostKey.forget", defaultValue: "Forget the Old Key")) { confirmingForget = true }
                 .buttonStyle(.secondary)
                 .coordinated("onboarding.hostKey", .dialog, isPresented: $confirmingForget) { view, shown in
                     view.confirmationDialog(
                         String(localized: "onboard.hostKey.forget.confirm", defaultValue: "Forget the old key for \(machine)?"),
                         isPresented: shown, titleVisibility: .visible
                     ) {
-                        Button(String(localized: "onboard.hostKey.forget", defaultValue: "Forget the old key"), role: .destructive, action: onForget)
+                        Button(String(localized: "onboard.hostKey.forget", defaultValue: "Forget the Old Key"), role: .destructive, action: onForget)
                     } message: {
                         Text(String(
                             localized: "onboard.hostKey.forget.detail",

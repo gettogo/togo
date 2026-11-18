@@ -40,6 +40,26 @@ private final class CountingEvaluator: BiometricEvaluator {
 
 @MainActor
 struct ResumeLockControllerTests {
+    @Test func coldLaunchLocksBeforeTheFirstFrameAndAuthenticatesOnlyOnce() async {
+        let evaluator = CountingEvaluator()
+        let controller = ResumeLockController(biometrics: BiometricSession(evaluator: evaluator), isEnabled: { true })
+        #expect(controller.locked)
+        controller.scenePhaseChanged(to: .active)
+        controller.scenePhaseChanged(to: .active)
+        await controller.pending?.value
+        #expect(!controller.locked)
+        #expect(evaluator.calls.withLock { $0 } == 1)
+    }
+
+    @Test func coldLaunchHonorsTheDisabledPreference() async {
+        let evaluator = CountingEvaluator()
+        let controller = ResumeLockController(biometrics: BiometricSession(evaluator: evaluator), isEnabled: { false })
+        #expect(!controller.locked)
+        controller.scenePhaseChanged(to: .active)
+        await controller.pending?.value
+        #expect(evaluator.calls.withLock { $0 } == 0)
+    }
+
     @Test func engagingLockPromptsEvenWithCachedContext() async throws {
         let evaluator = CountingEvaluator()
         let biometrics = BiometricSession(evaluator: evaluator)
@@ -89,11 +109,13 @@ struct ResumeLockControllerTests {
     @Test func shortBackgroundDoesNotLock() async throws {
         let evaluator = CountingEvaluator()
         let controller = ResumeLockController(biometrics: BiometricSession(evaluator: evaluator), isEnabled: { true })
+        controller.scenePhaseChanged(to: .active)
+        await controller.pending?.value
         let now = Date()
         controller.scenePhaseChanged(to: .background, now: now)
         controller.scenePhaseChanged(to: .active, now: now.addingTimeInterval(0.5))
         await controller.pending?.value
         #expect(!controller.locked)
-        #expect(evaluator.calls.withLock { $0 } == 0)
+        #expect(evaluator.calls.withLock { $0 } == 1)
     }
 }

@@ -39,6 +39,8 @@ import TogoKit
     var pastedImage: PastedImage?
     /// A session link waiting for its machine to report.
     var pendingLink: DeepLink?
+    @ObservationIgnored var linkGeneration = UUID()
+    @ObservationIgnored var pendingLinkTask: Task<Void, Never>?
     /// What a link asked the next new-session sheet to start with. The sheet that reads it
     /// takes it, so it is not observed.
     @ObservationIgnored var newSessionPrefill: NewSessionPrefill?
@@ -202,7 +204,8 @@ import TogoKit
     }
 
     func answer(_ cardID: String, _ decision: Decision) async {
-        guard let card = controlCenter.requests.first(where: { $0.id == cardID }), card.phase == .open else { return }
+        guard let card = controlCenter.requests.first(where: { $0.id == cardID }), card.phase == .open,
+              card.answerable, !card.options.isEmpty || card.allowText else { return }
         answerFailures[cardID] = nil
         setPhase(.sending(decision), of: cardID)
         do {
@@ -248,9 +251,11 @@ import TogoKit
         do {
             try await services.kill(hostID: row.hostID, sessionID: row.id)
             closeEndedTab(TabID(hostID: row.hostID, sessionID: row.id))
+            controlCenter.archived.removeAll { $0.hostID == row.hostID && $0.id == row.id }
         } catch let error as HelperError where error.isSessionGone {
             // Already ended: that is what the user asked for.
             closeEndedTab(TabID(hostID: row.hostID, sessionID: row.id))
+            controlCenter.archived.removeAll { $0.hostID == row.hostID && $0.id == row.id }
         } catch {
             notice = Notice(text: String(
                 localized: "cc.kill.failed", defaultValue: "Couldn't end \(Self.label(row)): \(ServiceErrors.message(error))"
@@ -289,6 +294,7 @@ import TogoKit
     func open(hostID: HostID, sessionID: String, transport: TransportPreference? = nil, agent: String? = nil) {
         let id = TabID(hostID: hostID, sessionID: sessionID)
         if let index = workspace.tabs.firstIndex(where: { $0.id == id }) {
+            workspace.tabs[index].restored = false
             if let transport {
                 workspace.tabs[index].transport = transport
             }
@@ -349,7 +355,7 @@ import TogoKit
         var live: [SessionRow] = []
         var archived: [SessionRow] = []
         for row in rows {
-            if row.status.isFinished && now.timeIntervalSince(row.statusSince) > archiveAfter {
+            if row.status.hasEnded && now.timeIntervalSince(row.statusSince) > archiveAfter {
                 archived.append(row)
             } else {
                 live.append(row)

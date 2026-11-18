@@ -6,15 +6,20 @@ import Security
 /// another device, so a backup cannot carry an SSH key off the phone.
 public final class KeychainSecretStore: SecretStore {
     private let service: String
+    private let operations: KeychainSecretOperations
 
     public init(service: String = "app.togo.keys") {
         self.service = service
+        operations = .live
+    }
+
+    init(service: String, operations: KeychainSecretOperations) {
+        self.service = service
+        self.operations = operations
     }
 
     public func set(_ data: Data, for account: String, requireUserPresence: Bool) throws {
-        try delete(account)
-        var query = baseQuery(account)
-        query[kSecValueData] = data
+        var attributes: [CFString: Any] = [kSecValueData: data]
         if requireUserPresence {
             var error: Unmanaged<CFError>?
             guard let access = SecAccessControlCreateWithFlags(
@@ -22,11 +27,20 @@ public final class KeychainSecretStore: SecretStore {
             ) else {
                 throw SecretStoreError(status: errSecParam)
             }
-            query[kSecAttrAccessControl] = access
+            attributes[kSecAttrAccessControl] = access
         } else {
-            query[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            attributes[kSecAttrAccessible] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         }
-        let status = SecItemAdd(query as CFDictionary, nil)
+        let query = baseQuery(account)
+        var status = operations.update(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            status = operations.add(query.merging(attributes, uniquingKeysWith: { _, new in new }) as CFDictionary)
+            // Another writer may have inserted the same account after our lookup. Retry
+            // only that atomic update, never delete an existing value to make room.
+            if status == errSecDuplicateItem {
+                status = operations.update(query as CFDictionary, attributes as CFDictionary)
+            }
+        }
         guard status == errSecSuccess else { throw SecretStoreError(status: status) }
     }
 
@@ -45,8 +59,22 @@ public final class KeychainSecretStore: SecretStore {
     }
 
     public func delete(_ account: String) throws {
-        let status = SecItemDelete(baseQuery(account) as CFDictionary)
+        let status = operations.delete(baseQuery(account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw SecretStoreError(status: status) }
+    }
+
+    public func contains(_ account: String) throws -> Bool {
+        var query = baseQuery(account)
+        query[kSecReturnAttributes] = true
+        query[kSecMatchLimit] = kSecMatchLimitOne
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext] = context
+        switch operations.find(query as CFDictionary) {
+        case errSecSuccess: return true
+        case errSecItemNotFound: return false
+        case let status: throw SecretStoreError(status: status)
+        }
     }
 
     private func baseQuery(_ account: String) -> [CFString: Any] {
@@ -57,4 +85,17 @@ public final class KeychainSecretStore: SecretStore {
             kSecUseDataProtectionKeychain: true,
         ]
     }
+}
+
+/// System calls are kept together so error paths can be exercised without touching a
+/// developer's real keychain. Calls remain synchronous and preserve Security's statuses.
+struct KeychainSecretOperations: Sendable {
+    var add: @Sendable (CFDictionary) -> OSStatus
+    var update: @Sendable (CFDictionary, CFDictionary) -> OSStatus
+    var delete: @Sendable (CFDictionary) -> OSStatus
+    var find: @Sendable (CFDictionary) -> OSStatus = { SecItemCopyMatching($0, nil) }
+
+    static let live = Self(
+        add: { SecItemAdd($0, nil) }, update: { SecItemUpdate($0, $1) }, delete: { SecItemDelete($0) }
+    )
 }

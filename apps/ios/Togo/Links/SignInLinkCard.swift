@@ -101,7 +101,7 @@ enum SignInPageCopy {
     )
     static let ready = String(localized: "signInPage.ready", defaultValue: "The sign-in page is ready")
     static let browsing = String(localized: "signInPage.browsing", defaultValue: "Signing in")
-    static let openAgain = String(localized: "signInPage.openAgain", defaultValue: "Open again")
+    static let openAgain = String(localized: "signInPage.openAgain", defaultValue: "Open Again")
     static let sentToMac = String(localized: "signInPage.sentToMac", defaultValue: "Opened on the machine. Finish signing in there.")
 
     static func confirming(_ agent: String) -> String {

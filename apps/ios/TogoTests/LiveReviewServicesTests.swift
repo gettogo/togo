@@ -16,7 +16,8 @@ import TogoKit
     }
 
     private func services(
-        helper: ScriptedHelper = ScriptedHelper(), opener: @escaping @Sendable () -> any TCPChannelOpener
+        helper: ScriptedHelper = ScriptedHelper(), beforeOpen: @escaping @MainActor () async -> Void = {},
+        opener: @escaping @Sendable () -> any TCPChannelOpener
     ) -> LiveReviewServices {
         let record = HostRecord(
             id: Samples.studio,
@@ -26,7 +27,7 @@ import TogoKit
             symbol: "desktop"
         )
         return LiveReviewServices(
-            channels: helper, records: { $0 == record.id ? record : nil }, opener: { _ in opener() }
+            channels: helper, records: { $0 == record.id ? record : nil }, opener: { _ in await beforeOpen(); return opener() }
         )
     }
 
@@ -159,6 +160,76 @@ import TogoKit
         #expect(LoopbackProbe.accepts(first.localPort) && LoopbackProbe.accepts(second.localPort))
         await services.stopForward(localPort: first.localPort)
         await services.stopForward(localPort: second.localPort)
+    }
+
+    @Test func backgroundWhileResumeOpensStopsTheReturnedListener() async throws {
+        let opener = RefusingOpener()
+        var calls = 0
+        var waiting: CheckedContinuation<Void, Never>?
+        let services = services(beforeOpen: {
+            calls += 1
+            if calls == 2 { await withCheckedContinuation { waiting = $0 } }
+        }) { opener }
+        let info = try await services.forward(subject, port: port(3000))
+        services.setForeground(false)
+        await services.settle()
+        services.setForeground(true)
+        for _ in 0..<100 where waiting == nil { try? await Task.sleep(for: .milliseconds(10)) }
+        let resume = try #require(waiting)
+        services.setForeground(false)
+        resume.resume()
+        await services.settle()
+        #expect(services.openLocalPorts.isEmpty)
+        #expect(!LoopbackProbe.accepts(info.localPort))
+        services.setForeground(true)
+        await services.settle()
+        #expect(services.openLocalPorts == [info.localPort])
+        await services.stopForward(localPort: info.localPort)
+    }
+
+    @Test func fatalUpstreamFailureStopsTheListener() async throws {
+        let services = services(opener: RefusingOpener(.failed("Forward rejected")))
+        let events = services.forwardEvents()
+        let info = try await services.forward(subject, port: port(3000))
+        let browser = try #require(LoopbackProbe.connect(info.localPort))
+        defer { close(browser) }
+        var iterator = events.makeAsyncIterator()
+        let event = try #require(await iterator.next())
+        #expect(event.localPort == info.localPort)
+        #expect(services.openLocalPorts.isEmpty)
+        for _ in 0..<100 {
+            if !LoopbackProbe.accepts(info.localPort) { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!LoopbackProbe.accepts(info.localPort))
+        await services.stopForward(localPort: info.localPort)
+    }
+
+    @Test func newPortsModelDoesNotLoseAnOldModelsOpeningForward() async throws {
+        var waiting: CheckedContinuation<Void, Never>?
+        var calls = 0
+        let services = services(beforeOpen: {
+            calls += 1
+            if calls == 1 { await withCheckedContinuation { waiting = $0 } }
+        }) { RefusingOpener() }
+        let old = PortsModel(subject: subject, services: services)
+        let first = Task { await old.open(port(3000)) }
+        for _ in 0..<100 where waiting == nil { try? await Task.sleep(for: .milliseconds(10)) }
+        let release = try #require(waiting)
+        old.disappear()
+        let next = PortsModel(subject: subject, services: services)
+        var secondStarted = false
+        let second = Task { secondStarted = true; await next.open(port(3000)) }
+        for _ in 0..<100 where !secondStarted { await Task.yield() }
+        release.resume()
+        await first.value
+        await second.value
+        let local = try #require(next.localPort(3000))
+        #expect(services.openLocalPorts == [local])
+        #expect(LoopbackProbe.accepts(local))
+        #expect(old.preview == nil)
+        next.disappear()
+        await services.stopForward(localPort: local)
     }
 
     @Test func refusedUpstreamBecomesMessage() async throws {
@@ -324,6 +395,8 @@ private final class ScriptedChannel: ExecChannel, @unchecked Sendable {
 
 /// An SSH connection that never goes away and whose machine refuses every forwarded connection.
 final class RefusingOpener: TCPChannelOpener {
+    private let failure: DirectTCPIPError
+    init(_ failure: DirectTCPIPError = .refused) { self.failure = failure }
     private let made = Mutex(0)
 
     var opens: Int { made.withLock { $0 } }
@@ -337,7 +410,7 @@ final class RefusingOpener: TCPChannelOpener {
 
     func openDirectTCPIP(host: String, port: Int) async throws -> any ExecChannel {
         dials.withLock { $0 += 1 }
-        throw DirectTCPIPError.refused
+        throw failure
     }
 
     func waitUntilClosed() async {

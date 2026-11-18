@@ -26,7 +26,7 @@ struct RootSheet: View {
     @ViewBuilder private var presented: some View {
         switch sheet {
         case .newSession: content
-        case .signIn: content.togoSheet(.prompt)
+        case .signIn, .requestPrompt: content.togoSheet(.prompt)
         case .settings: content.togoSheet(.page)
         default: content.togoSheet(.form)
         }
@@ -47,6 +47,8 @@ struct RootSheet: View {
             AddMachineSheet(store: store, services: onboarding, tutorial: tutorial)
         case .addMachineFilled(let draft):
             AddMachineSheet(flow: AddMachineFlow.filled(draft, store: store, services: onboarding, tutorial: tutorial))
+        case .requestPrompt(let hostID, let requestID):
+            RequestPromptSheet(store: store, hostID: hostID, requestID: requestID).id(sheet)
         case .editMachine(let id):
             if let record = store.services.hostRecord(id) {
                 AddMachineSheet(flow: AddMachineFlow.editing(record, store: store, services: onboarding, tutorial: tutorial))
@@ -59,6 +61,7 @@ struct RootSheet: View {
             NewSessionSheet(
                 model: NewSessionModel(
                     services: store.services, hostID: hostID, machines: store.controlCenter.machines,
+                    machinesNow: { [weak store] in store?.controlCenter.machines ?? [] },
                     library: agentLibrary ?? .inMemory(),
                     open: { hostID, sessionID, agent in
                         store.sheet = nil
@@ -70,7 +73,7 @@ struct RootSheet: View {
         case .signIn(let id):
             SignInSheet(model: SignInModel(
                 hostID: id, machine: store.machineName(for: id), services: store.services,
-                finish: { store.sheet = nil }
+                finish: { if store.sheet == .signIn(id) { store.sheet = nil } }
             ))
         case .settings:
             settings?()
@@ -86,7 +89,7 @@ private extension AppSheet {
     var changesMachine: Bool {
         switch self {
         case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .signIn: true
-        case .newSession, .review, .settings: false
+        case .newSession, .review, .settings, .requestPrompt: false
         }
     }
 }
@@ -114,6 +117,7 @@ extension AddMachineFlow {
             store.sheet = nil
         }
         flow.originalDraft = flow.draft
+        flow.updateMetadata = { try await store.services.updateHostMetadata(record.id, change: $0) }
         return flow
     }
 
@@ -158,6 +162,7 @@ extension AddMachineFlow {
         switch profile.auth {
         case .password:
             draft.auth = .password
+            draft.savePassword = services.hasSavedPassword(for: record.id)
         case .key(let id) where id == LiveOnboardingServices.storedDeviceKeyID:
             draft.auth = .deviceKey
         case .key(let id):

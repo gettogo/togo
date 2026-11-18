@@ -17,7 +17,7 @@ import TogoKit
         fileprivate let reply: CheckedContinuation<AuthAnswer?, Never>
     }
 
-    /// Past this many waiting questions the oldest is declined, so a machine that asks and
+    /// Past this many waiting questions the newest is declined, so a machine that asks and
     /// hangs up over and over cannot pile them up.
     static let limit = 4
 
@@ -64,8 +64,8 @@ import TogoKit
                 queue.append(Question(
                     id: id, request: request, hostID: hostID, address: address, owner: owner, attempt: attempt, reply: reply
                 ))
-                while queue.count > Self.limit {
-                    resolve(queue[0].id, with: nil)
+                if queue.count > Self.limit {
+                    resolve(id, with: nil)
                 }
             }
         } onCancel: {

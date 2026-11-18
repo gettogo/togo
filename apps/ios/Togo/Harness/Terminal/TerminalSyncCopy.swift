@@ -5,7 +5,7 @@ enum TerminalSyncCopy {
     // MARK: Subagents
 
     static let subagent = String(localized: "sync.subagent", defaultValue: "Subagent")
-    static let mainChat = String(localized: "sync.subagent.main", defaultValue: "Main chat")
+    static let mainChat = String(localized: "sync.subagent.main", defaultValue: "Main Chat")
     static let subagentEmpty = String(localized: "sync.subagent.empty", defaultValue: "Nothing yet")
     static let subagentEmptyDetail = String(
         localized: "sync.subagent.empty.detail", defaultValue: "What this agent does shows here as it works."
@@ -22,11 +22,11 @@ enum TerminalSyncCopy {
 
     // MARK: Background
 
-    static let openTerminal = String(localized: "sync.background.open", defaultValue: "Open terminal")
+    static let openTerminal = String(localized: "sync.background.open", defaultValue: "Open Terminal")
     static let openTerminalHint = String(
         localized: "sync.background.open.hint", defaultValue: "Opens a live terminal on this process"
     )
-    static let showOutput = String(localized: "sync.background.output", defaultValue: "Show output")
+    static let showOutput = String(localized: "sync.background.output", defaultValue: "Show Output")
     static let noOutput = String(localized: "sync.background.noOutput", defaultValue: "No output yet")
     static let backgroundGone = String(
         localized: "sync.background.gone", defaultValue: "This process is no longer listed."
@@ -36,8 +36,8 @@ enum TerminalSyncCopy {
 
     static let loading = String(localized: "sync.capture.loading", defaultValue: "Reading the terminal")
     static let captureFailed = String(localized: "sync.capture.failed", defaultValue: "Couldn't read the terminal")
-    static let tryAgain = String(localized: "sync.capture.retry", defaultValue: "Try again")
-    static let copyAll = String(localized: "sync.capture.copy", defaultValue: "Copy all")
+    static let tryAgain = String(localized: "sync.capture.retry", defaultValue: "Try Again")
+    static let copyAll = String(localized: "sync.capture.copy", defaultValue: "Copy All")
     static let done = String(localized: "sync.capture.done", defaultValue: "Done")
     static let marked = String(localized: "sync.capture.marked", defaultValue: "Marked line")
     /// The history sheet's title: the lines come from the machine, not the phone.
@@ -46,8 +46,8 @@ enum TerminalSyncCopy {
     // MARK: Command blocks
 
     static let command = String(localized: "sync.block.command", defaultValue: "Command")
-    static let copyOutput = String(localized: "sync.block.copyOutput", defaultValue: "Copy output")
-    static let copyCommand = String(localized: "sync.block.copyCommand", defaultValue: "Copy command")
+    static let copyOutput = String(localized: "sync.block.copyOutput", defaultValue: "Copy Output")
+    static let copyCommand = String(localized: "sync.block.copyCommand", defaultValue: "Copy Command")
     static let rerun = String(localized: "sync.block.rerun", defaultValue: "Rerun")
     static let collapse = String(localized: "sync.block.collapse", defaultValue: "Collapse")
     static let expand = String(localized: "sync.block.expand", defaultValue: "Expand")

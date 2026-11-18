@@ -4,32 +4,22 @@ import SwiftUI
 import TogoKit
 import UIKit
 
-/// One session's native harness state: what the adapter can do, the conversation, mission
-/// control and the composer's queue. One store per open tab; the chat, the pill, mission
-/// control and the primitives read it.
+/// One store per open tab: the conversation, native interfaces, mission control
+/// and composer queue share this session's state.
 @MainActor @Observable final class HarnessSessionStore {
-    /// Where the conversation stands.
-    enum Phase: Equatable {
-        /// Asking the helper what serves the session.
-        case describing
-        /// Opening the conversation.
-        case opening
-        case live
-        /// The connection dropped; trying again.
-        case reconnecting
-        /// No adapter, no chat, or its source failed: the terminal only.
-        case terminalOnly
-    }
-
     let subject: HarnessSubject
     @ObservationIgnored let services: any HarnessServices
-
     /// nil until described; a descriptor with a nil adapter means terminal only.
     private(set) var descriptor: HarnessDescriptor?
-    private(set) var phase: Phase = .describing
+    private(set) var phase: Phase = .describing {
+        didSet {
+            if phase == .live { liveWork?.pausedAt = nil }
+            else if liveWork?.pausedAt == nil { liveWork?.pausedAt = .now }
+        }
+    }
     /// Not observed as a whole: a streamed note changes it several times a second, and views
     /// read the narrower `timeline`, `mission` and `working`, which say when they change.
-    @ObservationIgnored private(set) var feed = HarnessFeedState() {
+    @ObservationIgnored var feed = HarnessFeedState() {
         didSet { mirrorFeed() }
     }
     /// The main conversation folded into rows, rebuilt on every change.
@@ -50,13 +40,14 @@ import UIKit
     @ObservationIgnored private var mirroredMission: HarnessMission?
     @ObservationIgnored private var mirroredWorking = false
     /// Prompts the phone holds: waiting for the turn to end, on their way, or failed.
-    private(set) var queue = PromptQueue()
-    private(set) var loadingOlder = false
+    var queue = PromptQueue()
+    var loadingOlder = false
     /// The layer the user wants for this tab. Setting it is the user's choice, which the
     /// adapter's default never overrides afterwards.
     var layer: SessionLayer {
         get { chosenLayer }
         set {
+            if newValue != .chat { nativeInteractions.terminalWatch.cancel() }
             chosenLayer = newValue
             layerChosen = true
         }
@@ -84,6 +75,8 @@ import UIKit
     var composerMenuOpen = false
     /// A scroll the chat should make: to a needs card ("Go to request", the capsule).
     var scrollRequest: ChatScrollRequest?
+    /// A notification's request waits for its full timeline item on a cold open.
+    var pendingNeedsRequestID: String?
     /// Bumped on every prompt this phone sends, so the chat scrolls to it.
     private(set) var sends = 0
     /// A subagent whose own conversation is shown (its agent item id), or nil for the main one.
@@ -91,7 +84,12 @@ import UIKit
     /// Set by "Show in terminal"; the terminal layer consumes and clears it.
     var pendingJump: TerminalJump?
     /// The pill asked for mission control.
-    var showsMission = false
+    var showsMission = false {
+        didSet { missionVisibilityChanged() }
+    }
+    var missionSection: MissionSectionKind?
+    let nativeInteractions = NativeChatState()
+    @ObservationIgnored let surfaceDrafts = SurfaceDrafts()
     /// Why the native layers are not showing, when they fell back to the terminal.
     private(set) var fallback: String?
     /// When this phone last sent a prompt the helper has not reported work for yet.
@@ -99,7 +97,11 @@ import UIKit
     /// When the phone first saw the current stretch of work, for adapters without turn items.
     private(set) var localWorkSince: Date?
     /// The last mode the session reported, kept while later updates leave it out.
-    private(set) var rememberedMode: String?
+    private(set) var rememberedMode: String? {
+        didSet { if rememberedMode != oldValue { modeRevision &+= 1 } }
+    }
+    /// Invalidates optimistic choices even when the view missed an intermediate mode.
+    private(set) var modeRevision: UInt64 = 0
     /// When this phone saw each request answered, for the turn's stopwatch (`TurnClock`).
     private(set) var resolvedAt: [String: Date] = [:]
     @ObservationIgnored private var ledger = ResolutionLedger()
@@ -112,23 +114,30 @@ import UIKit
     /// The harness's commands as the palette last read them: the state chip and "With
     /// instructions…" find their choices and lines here.
     var commandList: [HarnessCompletion] = []
+    var commandRevision = UUID()
     /// Changes held for the end of the turn ("After this reply").
     @ObservationIgnored var deferred: [DeferredAction] = []
+    @ObservationIgnored var deferredTask: Task<Void, Never>?
+
+    @ObservationIgnored private(set) var conversation = UUID()
+    @ObservationIgnored private var changingConversation = false
 
     @ObservationIgnored private var layerChosen = false
     /// The helper said "working" since the last send.
     @ObservationIgnored private var sawWorking = false
     @ObservationIgnored private var graceTask: Task<Void, Never>?
+    var isRunning: Bool { runTask != nil }
+    @ObservationIgnored private var runID: UUID?
     @ObservationIgnored private var runTask: Task<Void, Never>?
     /// Delivers held prompts after a change; cancelled with the feed.
-    @ObservationIgnored private var pumpTask: Task<Void, Never>?
-    @ObservationIgnored private var pumpToken: UUID?
+    @ObservationIgnored var pumpTask: Task<Void, Never>?
+    @ObservationIgnored var pumpToken: UUID?
     @ObservationIgnored private var needsDescribe = true
-    @ObservationIgnored private let retryFloor: Duration
-    @ObservationIgnored private let retryCeiling: Duration
+    @ObservationIgnored private(set) var hasConnected = false
+    @ObservationIgnored let retryFloor: Duration
+    @ObservationIgnored let retryCeiling: Duration
     @ObservationIgnored private let pendingTimeout: Duration
     @ObservationIgnored private var waitTask: Task<Void, Never>?
-
     init(
         subject: HarnessSubject, services: any HarnessServices,
         retry: (floor: Duration, ceiling: Duration) = (.milliseconds(500), .seconds(10)),
@@ -155,7 +164,7 @@ import UIKit
 
     var mission: MissionState {
         access(keyPath: \.mission)
-        return feed.mission
+        return MissionNeedsPresentation.state(mirroredMission)
     }
 
     /// A turn is running, so a prompt waits and Interrupt shows.
@@ -168,8 +177,9 @@ import UIKit
     /// working only when they did.
     private func mirrorFeed() {
         withMutation(keyPath: \.timeline) {}
-        if feed.mission.mission != mirroredMission {
-            mirroredMission = feed.mission.mission
+        let presented = MissionNeedsPresentation.snapshot(feed.mission.mission, in: feed.timeline)
+        if presented != mirroredMission {
+            mirroredMission = presented
             withMutation(keyPath: \.mission) {}
         }
         let nowWorking = feed.mission.summary.working
@@ -177,13 +187,13 @@ import UIKit
             withMutation(keyPath: \.working) { mirroredWorking = nowWorking }
         }
     }
-
     private func updateLiveWork(_ conversation: [HarnessItem], now: Date = .now) {
-        let next = WorkingLogic.state(
+        var next = WorkingLogic.state(
             items: conversation, working: working, awaitingSince: awaitingSince,
             localSince: localWorkSince, now: now, needsYou: feed.mission.summary.needsYou,
             resolvedAt: resolvedAt
         )
+        if phase != .live { next?.pausedAt = liveWork?.pausedAt ?? now }
         if next != liveWork { liveWork = next }
     }
 
@@ -226,13 +236,66 @@ import UIKit
         if !working, !deferred.isEmpty { runDeferred() }
     }
 
+    /// Retires work owned by the old conversation before another await can run.
+    private func invalidateConversation() {
+        guard !changingConversation else { return }
+        changingConversation = true
+        if hasLoaded { pendingNeedsRequestID = nil }
+        missionSection = nil
+        retireNativeInteractions(pumpQueue: false)
+        nativeInteractions.requests.reset()
+        commandList = []
+        commandRevision = UUID()
+        conversation = UUID()
+        phase = .opening
+        pumpTask?.cancel()
+        pumpTask = nil
+        pumpToken = nil
+        queue.conversationChanged()
+        let changeWasInFlight = deferredTask != nil
+        let canceledChanges = changeWasInFlight || !deferred.isEmpty
+        deferredTask?.cancel()
+        deferredTask = nil
+        deferred = []
+        notes = []
+        if canceledChanges {
+            notes.append(SessionNote(id: "note-\(UUID().uuidString)", text: changeWasInFlight ? ChatCopy.changeUnconfirmed : ChatCopy.changesCanceled,
+                                     code: "info", after: nil, at: .now))
+        }
+        undo = nil
+        draftRequest = nil
+        focusedAgent = nil
+        pendingJump = nil
+        scrollRequest = nil
+        chatScroll.prepareReload(ids: Set(rows.map(\.id)))
+        ledger = ResolutionLedger()
+        resolvedAt = [:]
+        awaitingSince = nil
+        localWorkSince = nil
+        sawWorking = false
+        liveWork = nil
+        loadingOlder = false
+        rememberedMode = nil
+        modeRevision &+= 1
+        graceTask?.cancel()
+        graceTask = nil
+    }
+
     // MARK: Feed
 
     /// Runs `start` until `stop`. Calling it again while it runs does nothing. The task holds
     /// the store only for one step at a time, so a store nobody keeps goes, and its loop with it.
     func launch() {
         guard runTask == nil else { return }
-        runTask = Task { [weak self] in await HarnessSessionStore.run(weak: self) }
+        let id = UUID()
+        runID = id
+        needsDescribe = true
+        runTask = Task { [weak self] in
+            await HarnessSessionStore.run(weak: self)
+            guard self?.runID == id else { return }
+            self?.runTask = nil
+            self?.runID = nil
+        }
         startWaitClock()
     }
 
@@ -253,20 +316,9 @@ import UIKit
         await Self.run(weak: self)
     }
 
-    /// One store's loop. Each pass takes the store afresh and ends once it is gone, so the loop
-    /// never keeps a closed tab's store, and its connections, alive.
-    private static func run(weak store: HarnessSessionStore?) async {
-        weak let weakStore = store
-        var delay = weakStore?.retryFloor ?? .zero
-        var reopenDelay = delay
-        while !Task.isCancelled {
-            guard let store = weakStore, await store.step(delay: &delay, reopenDelay: &reopenDelay) else { return }
-        }
-    }
-
     /// One pass of the loop: describe if needed, follow the feed, wait before the next pass.
     /// False when the loop should end.
-    private func step(delay: inout Duration, reopenDelay: inout Duration) async -> Bool {
+    func step(delay: inout Duration, reopenDelay: inout Duration) async -> Bool {
         guard subject.available else {
             endNative(nil)
             return false
@@ -275,6 +327,7 @@ import UIKit
             phase = .describing
             do {
                 adopt(try await services.describe(subject))
+                hasConnected = true
                 needsDescribe = false
                 describeFailed = false
             } catch {
@@ -297,6 +350,7 @@ import UIKit
             return await pause(&reopenDelay)
         case .dropped(let opened):
             if opened { delay = retryFloor }
+            nativeInteractions.terminalWatch.cancel()
             phase = .reconnecting
             return await pause(&delay)
         case .refused:
@@ -306,15 +360,17 @@ import UIKit
     }
 
     func stop() {
+        if phase == .live { phase = .opening }
+        retireNativeInteractions(pumpQueue: false)
         runTask?.cancel()
         runTask = nil
+        runID = nil
         pumpTask?.cancel()
         pumpTask = nil
         graceTask?.cancel()
         waitTask?.cancel()
         waitTask = nil
     }
-
     private enum FollowEnd {
         case reopen
         case dropped(opened: Bool)
@@ -325,19 +381,30 @@ import UIKit
         phase = .opening
         var opened = false
         do {
-            for try await element in services.feed(subject, after: feed.openAfter) {
+            let requestedAfter = feed.openAfter
+            for try await element in services.feed(subject, after: requestedAfter) {
                 switch element {
                 case .opened(let incoming):
+                    if feed.isLoaded, feed.timeline.epoch != incoming.epoch {
+                        invalidateConversation()
+                        if requestedAfter > 0 {
+                            feed.reopenFromStart()
+                            return .reopen
+                        }
+                    }
                     let result = try await completeOpen(incoming)
                     try Task.checkCancellation()
                     opened = true
-                    phase = .live
+                    changingConversation = false
                     let outcome = feed.load(result)
+                    phase = .live
                     changed(arrivals: false)
+                    chatScroll.finishReload(ids: Set(rows.map(\.id)))
                     hasLoaded = true
                     if outcome == .reopen { return .reopen }
                 case .note(let note):
                     if apply(note) == .reopen {
+                        phase = .opening
                         if note.kind == .reset, note.reason == "adapter" { needsDescribe = true }
                         return .reopen
                     }
@@ -351,22 +418,6 @@ import UIKit
         } catch {
             return .dropped(opened: opened)
         }
-    }
-
-    /// Waits before trying again, doubling the wait up to the ceiling. False once cancelled.
-    private func pause(_ delay: inout Duration) async -> Bool {
-        do {
-            try await Task.sleep(for: delay)
-        } catch {
-            return false
-        }
-        delay = min(delay * 2, retryCeiling)
-        return !Task.isCancelled
-    }
-
-    /// The session's current mode id for the mode chip; empty only while truly unknown.
-    var currentMode: String {
-        ModeMemory.current(status: ModeMemory.status(mission.mission), remembered: rememberedMode, described: descriptor?.mode)
     }
 
     private func rememberMode() {
@@ -384,6 +435,7 @@ import UIKit
     }
 
     private func endNative(_ reason: String?) {
+        retireNativeInteractions(pumpQueue: false)
         if descriptor == nil { descriptor = HarnessDescriptor() }
         fallback = reason
         phase = .terminalOnly
@@ -393,6 +445,9 @@ import UIKit
     /// arrival transaction, so new rows, a subagent's thread and the live line move together;
     /// updates to items already shown (streamed text) land without animation.
     private func apply(_ note: HarnessNotification) -> HarnessApply {
+        if let outcome = applyNativeNotification(note) { return outcome }
+        let replacement = note.kind == .reset && !["history", "overflow"].contains(note.reason ?? "")
+        if feed.isLoaded, replacement || note.epoch != feed.timeline.epoch { invalidateConversation() }
         let arrives = feed.isLoaded && (note.items ?? []).contains { feed.timeline.item($0.id) == nil }
         guard arrives else {
             let outcome = feed.apply(note)
@@ -411,7 +466,7 @@ import UIKit
     /// Rebuilds the rows after the feed changed. Rows that arrive while the chat is open reveal
     /// in one `resize` transaction keyed on the row ids only (spec §2.5): streamed text and
     /// other changes inside a row land without animation, and a fresh open never animates.
-    private func changed(arrivals: Bool = true) {
+    func changed(arrivals: Bool = true) {
         if ledger.observe(feed.timeline.items, now: .now) { resolvedAt = ledger.resolvedAt }
         // The main conversation once per change; the rows, the live line and the queue count
         // all read it.
@@ -423,28 +478,13 @@ import UIKit
         if queued != queuedItems { queuedItems = queued }
         rememberMode()
         refreshWorking(conversation)
+        updateNativeQuestion()
+        resolveNeedsReveal()
         pump()
     }
 
-    // MARK: Older items
-
-    func loadOlder() async {
-        guard has(HarnessCapability.history), feed.timeline.hasOlder, !loadingOlder,
-              let before = feed.timeline.oldestSeq else { return }
-        let epoch = feed.timeline.epoch
-        loadingOlder = true
-        defer { loadingOlder = false }
-        guard let page = try? await services.history(subject, before: before) else { return }
-        // The session was opened again meanwhile (a reset, a new epoch): the page belongs to a
-        // conversation that is gone, and its items must not land above the new one.
-        guard feed.timeline.epoch == epoch else { return }
-        feed.prepend(page)
-        // Rows from "Earlier" land without animation; the scroll keeps its place.
-        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: false)
-    }
-
     /// Rows and queued prompts arrive and leave on `resize`; under Reduce Motion a fade.
-    private static var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
+    static var reduceMotion: Bool { UIAccessibility.isReduceMotionEnabled }
 
     func setRows(_ fed: [ChatRow], arrivals: Bool) {
         let next = SessionNote.merge(notes, into: fed)
@@ -456,109 +496,4 @@ import UIKit
         withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { rows = next }
     }
 
-    /// The rows again from the feed, with this phone's notes in place: after a note is added.
-    func refreshRows() {
-        setRows(SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt), arrivals: true)
-    }
-
-    /// Changes the phone's own queue in the arrival transaction, so a held prompt's row
-    /// reveals and leaves like any other row.
-    private func changeQueue(_ change: (inout PromptQueue) -> Void) {
-        // motion: preventing a jump — a held prompt's row comes and goes while the rows around it make room.
-        withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) { change(&queue) }
-    }
-
-    // MARK: Composer
-
-    struct QueueFull: Error {}
-
-    /// Sends a prompt. `.queue` (the default) holds it on the phone while the agent works on a
-    /// harness that cannot queue, and sends it when the turn ends; `.now` goes at once and
-    /// throws when the helper refuses it.
-    func send(_ text: String, mode: HarnessSendParams.Mode = .queue, images: [String] = []) async throws {
-        if mode == .now {
-            let item = try await services.send(subject, text: text, mode: .now, images: images)
-            feed.insertSent(item)
-            markSent()
-            changed()
-            return
-        }
-        var added: UUID?
-        changeQueue { added = $0.add(text, images: images) }
-        guard added != nil else {
-            if queue.isFull { throw QueueFull() }
-            return
-        }
-        await deliverNext()
-    }
-
-    /// Stops the whole turn; the helper presses until the session is idle and says whether it got there.
-    @discardableResult
-    func interrupt() async throws -> HarnessActionResult {
-        try await services.interrupt(subject)
-    }
-
-    func cancelQueued(_ id: UUID) {
-        changeQueue { _ = $0.cancel(id) }
-        // A failed prompt holds the ones after it; taking it away lets them go now, rather
-        // than wait for a change an idle session may never send.
-        pump()
-    }
-
-    /// Takes back a prompt the harness holds in its own queue: `stop` aimed at the queued user
-    /// item, which the engine drops from the send queue. False when the helper refused.
-    @discardableResult
-    func cancelQueued(item: HarnessItem) async -> Bool {
-        guard let result = try? await run(action: "stop", target: item.id) else { return false }
-        return result.result != .failed
-    }
-
-    func retryQueued(_ id: UUID) {
-        changeQueue { $0.retry(id) }
-        pump()
-    }
-
-    /// True when a prompt sent now reaches the session: the agent is idle, or the harness holds
-    /// prompts itself while it works.
-    var canSendNow: Bool {
-        feed.isLoaded && (!working || has(HarnessCapability.queue))
-    }
-
-    /// Sends what the queue holds once the session can take it. Only while the feed runs: a
-    /// stopped store sends nothing until it is launched again.
-    private func pump() {
-        guard runTask != nil, pumpTask == nil, !queue.isEmpty else { return }
-        let token = UUID()
-        pumpToken = token
-        pumpTask = Task { [weak self] in
-            await self?.deliverNext()
-            if self?.pumpToken == token { self?.pumpTask = nil }
-        }
-    }
-
-    private func deliverNext() async {
-        guard let prompt = queue.next(canSend: canSendNow) else { return }
-        do {
-            let item = try await services.send(subject, text: prompt.text, mode: .queue, images: prompt.images)
-            // motion: continuity — one transaction: the held row leaves as the delivered prompt arrives in its place.
-            withAnimation(Motion.animation(.resize, reduce: Self.reduceMotion)) {
-                queue.sent(prompt.id)
-                feed.insertSent(item)
-                rows = SessionNote.merge(notes, into: SubagentThread.mainRows(feed.timeline, resolvedAt: resolvedAt))
-            }
-            markSent()
-        } catch let error as HelperError where error.conflictReason == "busy" {
-            // The turn is still going; the next change of the mission tries again.
-            queue.requeue(prompt.id)
-            return
-        } catch is CancellationError {
-            // Stopped on the way: it waits for the next launch rather than reading as failed.
-            queue.requeue(prompt.id)
-            return
-        } catch {
-            changeQueue { $0.failed(prompt.id, message: ServiceErrors.message(error)) }
-            return
-        }
-        await deliverNext()
-    }
 }

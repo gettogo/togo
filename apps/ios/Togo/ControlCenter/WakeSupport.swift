@@ -28,7 +28,7 @@ enum WakeCopy {
         String(localized: "wake.failed", defaultValue: "Couldn't send a wake signal to \(machine). Check that you are on the same network.")
     }
 
-    static let formLabel = String(localized: "wake.form.label", defaultValue: "Wake address")
+    static let formLabel = String(localized: "wake.form.label", defaultValue: "Wake Address")
 
     /// The button shows on an offline machine that has a stored target.
     static func showsButton(for machine: MachineSection, enabled: Bool) -> Bool {
@@ -54,9 +54,12 @@ enum WakeLearning {
 
 extension HostRecord {
     /// The record as the monitor sees it: a changed wake target or route list does not restart
-    /// a connection. Routes reach running connections through the route book instead.
+    /// a connection. Display names and symbols do not change connections either.
+    /// Routes reach running connections through the route book instead.
     var withoutLearned: HostRecord {
         var copy = self
+        copy.profile.name = ""
+        copy.symbol = ""
         copy.wake = nil
         copy.profile.routes = []
         copy.profile.lastRoute = nil

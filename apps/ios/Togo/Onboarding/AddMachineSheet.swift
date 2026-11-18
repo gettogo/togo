@@ -63,7 +63,8 @@ struct AddMachineSheet: View {
         MachineForm(
             draft: $flow.draft, showsErrors: flow.showsErrors, importError: flow.importError,
             onImportKey: { text, label, source in Task { await flow.importKey(text, label: label, source: source) } },
-            isEditing: flow.isEditing, isWorking: flow.isWorking, canSave: flow.hasChanges, onConnect: flow.connect
+            isEditing: flow.isEditing, isWorking: flow.isWorking, canSave: flow.hasChanges,
+            validatesConnection: flow.validatesConnection, onConnect: flow.connect
         )
     }
 
@@ -77,8 +78,8 @@ struct AddMachineSheet: View {
                 String(localized: "onboard.discard.title", defaultValue: "Discard your changes?"),
                 isPresented: $confirmingDiscard, titleVisibility: .visible
             ) {
-                Button(String(localized: "onboard.discard.confirm", defaultValue: "Discard changes"), role: .destructive) { dismiss() }
-                Button(String(localized: "onboard.discard.keep", defaultValue: "Keep editing"), role: .cancel) {}
+                Button(String(localized: "onboard.discard.confirm", defaultValue: "Discard Changes"), role: .destructive) { dismiss() }
+                Button(String(localized: "onboard.discard.keep", defaultValue: "Keep Editing"), role: .cancel) {}
             }
         }
     }
@@ -138,7 +139,7 @@ struct NotificationAskView: View {
 
     var body: some View {
         OnboardingStep(
-            title: String(localized: "onboard.notifications.title", defaultValue: "Get notified when an agent needs you"),
+            title: String(localized: "onboard.notifications.title", defaultValue: "Get Notified When an Agent Needs You"),
             message: String(
                 localized: "onboard.notifications.message",
                 defaultValue: "Togo can tell you when an agent on \(machine) is waiting for an answer, even while the app is closed."
@@ -146,9 +147,9 @@ struct NotificationAskView: View {
         ) {
             EmptyView()
         } actions: {
-            Button(String(localized: "onboard.notifications.turnOn", defaultValue: "Turn on notifications"), action: onTurnOn)
+            Button(String(localized: "onboard.notifications.turnOn", defaultValue: "Turn on Notifications"), action: onTurnOn)
                 .buttonStyle(.primary)
-            Button(String(localized: "onboard.notifications.notNow", defaultValue: "Not now"), action: onNotNow)
+            Button(String(localized: "onboard.notifications.notNow", defaultValue: "Not Now"), action: onNotNow)
                 .buttonStyle(.secondary)
         }
         .background(Color.togoInk)
@@ -215,7 +216,8 @@ struct ConnectPhaseView: View {
     @ViewBuilder private var content: some View {
         switch phase {
         case .connecting:
-            PawWalk(String(localized: "onboard.connect.connecting", defaultValue: "Connecting to \(machine)"))
+            PawWalk(saving ? String(localized: "onboard.save.saving", defaultValue: "Saving changes")
+                : String(localized: "onboard.connect.connecting", defaultValue: "Connecting to \(machine)"))
         case .hostKeyNew(let prompt):
             HostKeyCheckView(machine: machine, kind: .new(prompt), onTrust: actions.trust, onCancel: actions.cancel, onForget: {})
         case .hostKeyChanged(let change):
@@ -242,7 +244,7 @@ struct ConnectPhaseView: View {
                         localized: "onboard.connect.unreachable.message",
                         defaultValue: "\(machine) didn't answer within 30 seconds. It may be asleep, or on a network this \(DeviceName.model) can't reach."
                     ),
-                    action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: actions.retry)
+                    action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try Again"), run: actions.retry)
                 )
             }
         case .failed(let message):
@@ -252,7 +254,7 @@ struct ConnectPhaseView: View {
                     kind: .error,
                     title: String(localized: "onboard.connect.failed.title", defaultValue: "Couldn't connect to \(machine)"),
                     message: message,
-                    action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: actions.retry)
+                    action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try Again"), run: actions.retry)
                 )
             }
         }

@@ -33,7 +33,6 @@ public actor HostMonitor {
     private var syncingGeneration: Int?
     private var syncAgain = false
     private var held: [EventEnvelope] = []
-
     private var attempt: Task<Void, Never>?
     /// Tags the current run of attempts. A cancelled run may still be scheduled after its
     /// replacement started, so it must not touch `attempt` once this has moved on.
@@ -46,6 +45,7 @@ public actor HostMonitor {
     /// reconnecting at once in a loop.
     private var liveSince: ContinuousClock.Instant?
     private var quickDrops = 0
+    private var hasConnected = false
     private var feed: Task<Void, Never>?
     private var backgroundClose: Task<Void, Never>?
     private var pathTask: Task<Void, Never>?
@@ -195,8 +195,7 @@ public actor HostMonitor {
     private func runAttempts(_ run: Int, failures start: Int) async {
         var failures = start
         while isCurrent(run), isForeground {
-            let delay = failures >= Self.failuresBeforeOffline
-                ? Self.offlineRetry : Self.backoff[min(failures, Self.backoff.count - 1)]
+            let delay = Self.retryDelay(failures: failures, hasConnected: hasConnected, deviceOffline: path.isOffline && state.reach == .deviceOffline)
             do { try await clock.sleep(for: delay) } catch { return }
             guard isCurrent(run) else { return }
             guard isForeground else { break }
@@ -215,6 +214,7 @@ public actor HostMonitor {
                     await connected.source.close()
                     return
                 }
+                hasConnected = true
                 endAttempts(run)
                 await adopt(connected)
                 return

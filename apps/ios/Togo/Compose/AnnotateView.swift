@@ -55,7 +55,7 @@ struct AnnotateView: View {
             }
             .padding(16)
             .background(Color.togoDeepest)
-            .navigationTitle(String(localized: "compose.annotate.title", defaultValue: "Mark up"))
+            .navigationTitle(String(localized: "compose.annotate.title", defaultValue: "Mark Up"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

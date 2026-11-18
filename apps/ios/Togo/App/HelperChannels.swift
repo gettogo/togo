@@ -12,7 +12,7 @@ import TogoKit
 /// connections, so they end too and reopen from their cursor over a new one. A call that times
 /// out is followed by a ping, and a connection that does not answer it is dropped as well.
 actor HelperChannels {
-    private struct Channel {
+    private struct Channel: Sendable {
         let connection: SSHConnection
         let client: HelperClient
     }
@@ -41,29 +41,37 @@ actor HelperChannels {
         pathTask?.cancel()
     }
 
-    /// A connection that closed under a request is opened again once, since the host may
-    /// have dropped an idle channel.
+    /// Opening a connection may be retried before the body starts. Once the body starts,
+    /// loss of its reply is uncertain delivery and must never replay a mutation.
     func call<T: Sendable>(
         _ record: HostRecord, prompter: (any ConnectionPrompter)?, _ body: @Sendable (HelperClient) async throws -> T
     ) async throws -> T {
-        let opened: Channel
+        let kept: Channel
         do {
-            opened = try await channel(for: record, prompter: prompter)
+            kept = try await channel(for: record, prompter: prompter)
         } catch HelperError.closed {
             await drop(record.id)
+            kept = try await channel(for: record, prompter: prompter)
+        }
+        // A kept channel that ended while idle (the machine slept, the network dropped it)
+        // has sent nothing for this request, so opening another is not a replay.
+        let opened: Channel
+        if await kept.client.hasEnded {
+            await drop(record.id, ifStill: kept)
             opened = try await channel(for: record, prompter: prompter)
+        } else {
+            opened = kept
         }
         do {
-            return try await body(opened.client)
-        } catch HelperError.closed {
-            await drop(record.id, ifStill: opened)
-            return try await body(try await channel(for: record, prompter: prompter).client)
-        } catch HelperError.timeout(let method) {
-            // Slow, or dead without knowing it: one more ping tells which.
-            if await HelperLiveness.isDead(ping: { try await opened.client.keepalive() }) {
-                await drop(record.id, ifStill: opened)
-            }
-            throw HelperError.timeout(method: method)
+            return try await HelperRequestExecution.once({ try await body(opened.client) }, onClosed: {
+                await self.drop(record.id, ifStill: opened)
+            }, onTimedOut: { _ in
+                // A timeout does not prove a mutation failed. Check the connection for the
+                // next request, then preserve uncertain delivery for this one.
+                if await HelperLiveness.isDead(ping: { try await opened.client.keepalive() }) {
+                    await self.drop(record.id, ifStill: opened)
+                }
+            })
         } catch {
             if error is SSHError { await drop(record.id, ifStill: opened) }
             throw error
@@ -93,8 +101,16 @@ actor HelperChannels {
     }
 
     func dropAll() async {
-        for id in Array(channels.keys) {
-            await drop(id)
+        guard !Task.isCancelled else { return }
+        // Detach the entire old generation before awaiting close. A new call may open a
+        // replacement while an earlier channel is still draining.
+        let retired = Array(channels.values)
+        channels.removeAll()
+        for task in retired {
+            if let channel = try? await task.value {
+                await channel.client.close()
+                await channel.connection.close()
+            }
         }
     }
 

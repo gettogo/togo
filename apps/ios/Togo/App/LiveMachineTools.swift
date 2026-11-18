@@ -18,8 +18,18 @@ import TogoKit
     }
 
     func call<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
+        try await perform(host, mayAsk: true, body)
+    }
+
+    func quietCall<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
+        try await perform(host, mayAsk: false, body)
+    }
+
+    private func perform<T: Sendable>(
+        _ host: HostID, mayAsk: Bool, _ body: @Sendable (HelperClient) async throws -> T
+    ) async throws -> T {
         guard let record = records(host) else { throw LiveServiceError.unknownMachine }
         guard !record.noHelper else { throw LiveServiceError.needsHelper }
-        return try await channels.call(record, prompter: prompter(record), body)
+        return try await channels.call(record, prompter: mayAsk ? prompter(record) : nil, body)
     }
 }

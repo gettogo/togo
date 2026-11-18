@@ -19,10 +19,12 @@ public struct Pairing: Codable, Sendable, Equatable, Identifiable {
     public var liveContextReceipts: Bool?
     /// Fingerprint binding a request-data receipt to this notification registration.
     public var apnsTokenHash: String?
+    public var answerReceipts: Bool?
 
     public init(
         hostId: String, hostKey: String, relayURL: URL, machineName: String, appHostID: UUID?, pairedAt: Date,
-        tokenHash: String, liveActivityCommand: Bool, liveContextReceipts: Bool? = nil, apnsTokenHash: String? = nil
+        tokenHash: String, liveActivityCommand: Bool, liveContextReceipts: Bool? = nil, apnsTokenHash: String? = nil,
+        answerReceipts: Bool? = nil
     ) {
         self.hostId = hostId
         self.hostKey = hostKey
@@ -34,6 +36,7 @@ public struct Pairing: Codable, Sendable, Equatable, Identifiable {
         self.liveActivityCommand = liveActivityCommand
         self.liveContextReceipts = liveContextReceipts
         self.apnsTokenHash = apnsTokenHash
+        self.answerReceipts = answerReceipts
     }
 }
 

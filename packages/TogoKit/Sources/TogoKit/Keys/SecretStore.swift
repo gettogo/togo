@@ -7,6 +7,13 @@ public protocol SecretStore: Sendable {
     /// main actor. A context already evaluated by `BiometricSession` suppresses the prompt.
     func get(_ account: String, context: LAContext?) throws -> Data?
     func delete(_ account: String) throws
+    /// Checks metadata only; must never read secret bytes or request authentication.
+    func contains(_ account: String) throws -> Bool
+}
+
+extension SecretStore {
+    /// Unknown stores cannot implicitly opt a user into saving a password.
+    public func contains(_ account: String) throws -> Bool { false }
 }
 
 /// A keychain call that failed. The status is the error code, so diagnostics name the

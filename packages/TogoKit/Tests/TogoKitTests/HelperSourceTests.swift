@@ -158,7 +158,11 @@ struct HelperStartTests {
 
     @Test func notFoundReadsAsMissing() async throws {
         #expect(try await Self.open(status: 127) == .missing)
-        #expect(try await Self.open(status: nil) == .missing)
+    }
+
+    @Test(arguments: [nil, Int32(0)] as [Int32?])
+    func aChannelClosedBeforeHelloDoesNotProveTheHelperIsMissing(_ status: Int32?) async {
+        await #expect(throws: HelperError.closed) { _ = try await Self.open(status: status) }
     }
 
     /// Installed but the daemon would not start: a distinct, retryable failure, not "not installed".

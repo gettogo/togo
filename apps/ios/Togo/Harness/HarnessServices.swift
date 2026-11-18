@@ -39,12 +39,24 @@ enum HarnessFeed: Sendable {
     func interrupt(_ s: HarnessSubject) async throws -> HarnessActionResult
     func complete(_ s: HarnessSubject, kind: HarnessCompleteParams.Kind, query: String) async throws -> [HarnessCompletion]
     func locate(_ s: HarnessSubject, anchor: HarnessAnchor) async throws -> HarnessLocation
+    /// A separate connection owns the native interface until its sheet closes.
+    func surfaceConnection(_ s: HarnessSubject) async throws -> any SurfaceConnection
+    /// Keeps the same connection from terminal command through handback.
+    func terminalConnection(_ s: HarnessSubject) async throws -> any TerminalNativeConnection
     /// Where the composer keeps the lines sent and the commands starred.
     var composerMemory: CommandMemory { get }
 }
 
 extension HarnessServices {
     var composerMemory: CommandMemory { .shared }
+
+    func surfaceConnection(_ s: HarnessSubject) async throws -> any SurfaceConnection {
+        throw HarnessUnavailable()
+    }
+
+    func terminalConnection(_ s: HarnessSubject) async throws -> any TerminalNativeConnection {
+        throw HarnessUnavailable()
+    }
 }
 
 struct HarnessUnavailable: Error {}

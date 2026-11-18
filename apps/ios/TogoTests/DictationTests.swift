@@ -129,6 +129,7 @@ struct DictationTests {
         #expect(inserted == ["add a retry around the upload"])
         // Listening stopped without being asked to, so the bar says so in words.
         #expect(dictation.phase == .failed(DictationCopy.stoppedKept))
+        #expect(engine.cancelCalls == 1, "A failed result stream must release its audio engine before ownership is cleared")
     }
 
     @Test func deniedShowsSettingsLink() async {
@@ -162,7 +163,7 @@ struct DictationTests {
         #expect(dictation.phase == .listening(partial: "", level: 0))
         #expect(
             DictationCopy.needsModel(language: "English (US)", bytes: 64_000_000)
-                == "Download speech for English (US), 64 MB"
+                == "Download Speech for English (US), 64 MB"
         )
         #expect(DictationCopy.language(for: Locale(identifier: "en-US"), in: Locale(identifier: "en-US")) == "English (US)")
         #expect(DictationCopy.unsupported == "Dictation isn't available for this language.")

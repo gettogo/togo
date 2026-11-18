@@ -154,7 +154,8 @@ struct WorkspaceComposeBar: View {
             // composer takes nothing from it.
             if let tab = store.composeTab, let model = chatComposer(for: tab.id) {
                 let shown = SessionInput(store.layer(for: tab.id)) == .composer
-                SmartCommandLine(model: model)
+                ChatComposerBar(model: model,
+                    agentsReconciled: store.machine(for: tab.hostID)?.capabilities.contains(Capability.liveAgents) == true)
                     // The terminal under the chat, for the composer's terminal peek.
                     .onAppear { model.peekTerminal = .live { [terminals] in terminals.handle(for: tab.id) } }
                     // The palette and the screens it opens follow links as the chat does.
@@ -195,7 +196,10 @@ struct WorkspaceComposeBar: View {
             guard let item, let id = picking, let model = tools[id] else { return }
             photo = nil
             picking = nil
-            Task { await model.images.load { try await item.loadTransferable(type: Data.self) } }
+            Task {
+                guard !model.retired else { return }
+                await model.images.load { try await item.loadTransferable(type: Data.self) }
+            }
         }
         .onChange(of: store.attaching, initial: true) { _, id in
             guard let id else { return }
@@ -206,6 +210,9 @@ struct WorkspaceComposeBar: View {
             } else {
                 model.images.explainUnsupported()
             }
+        }
+        .onChange(of: store.workspace.tabs.map(\.id)) { _, ids in
+            TerminalInputModel.prune(&tools, keeping: Set(ids))
         }
         .onChange(of: terminalTab) { old, _ in
             // A terminal that leaves the screen, or goes under its chat, stops listening; what
@@ -222,7 +229,10 @@ struct WorkspaceComposeBar: View {
             // Taken here, before any await, so the request is used exactly once.
             guard store.takeDictationRequest(for: id, shown: true) else { return }
             let dictation = model.dictation
-            Task { await dictation?.toggle() }
+            Task {
+                guard !model.retired else { return }
+                await dictation?.toggle()
+            }
         }
         .onChange(of: store.services.settings, initial: true) { _, settings in
             SpeechEngines.select(settings)
@@ -235,7 +245,10 @@ struct WorkspaceComposeBar: View {
         .onChange(of: store.pastedImage) {
             guard let pasted = store.pastedImage, let model = model(for: pasted.tab) else { return }
             store.pastedImage = nil
-            Task { await model.images.begin(pasted.data) }
+            Task {
+                guard !model.retired else { return }
+                await model.images.begin(pasted.data)
+            }
         }
         .onChange(of: waitingKey, initial: true) { deliverPendingInput() }
     }
@@ -297,10 +310,9 @@ struct WorkspaceComposeBar: View {
     /// The tab's input tools, made the first time they are needed. Nil when the tab is gone or
     /// has no terminal attached.
     private func model(for id: TabID) -> TerminalInputModel? {
+        guard let tab = store.workspace.tabs.first(where: { $0.id == id }) else { return nil }
         if let model = tools[id] { return model }
-        guard let tab = store.workspace.tabs.first(where: { $0.id == id }), let handle = terminals.handle(for: id) else {
-            return nil
-        }
+        guard let handle = terminals.handle(for: id) else { return nil }
         let store = self.store
         // The tools outlive the terminal they were made for: Try again, a transport change or a
         // tab let go past the pool's limit attaches a new one. Text goes to the terminal the
@@ -311,7 +323,8 @@ struct WorkspaceComposeBar: View {
             upload: { name, data in
                 try await store.services.upload(hostID: tab.hostID, sessionID: tab.sessionID, name: name, data: data)
             },
-            paste: { current().paste($0) }
+            paste: { current().paste($0) },
+            supportNow: { store.imageSupport(for: tab.hostID) }
         )
         let speech = DictationSpeech(
             engine: SpeechEngines.shared, locale: SpeechEngines.locale(store.services.settings.dictationLocale),

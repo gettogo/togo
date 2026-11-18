@@ -64,8 +64,8 @@ struct WorkspaceChrome: Equatable {
 }
 
 enum ZenCopy {
-    static let zenMode = String(localized: "zen.mode", defaultValue: "Zen mode")
-    static let showControls = String(localized: "zen.showControls", defaultValue: "Show controls")
+    static let zenMode = String(localized: "zen.mode", defaultValue: "Zen Mode")
+    static let showControls = String(localized: "zen.showControls", defaultValue: "Show Controls")
 }
 
 extension AppStore {

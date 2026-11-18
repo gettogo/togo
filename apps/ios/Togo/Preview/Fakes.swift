@@ -20,6 +20,7 @@ import UIKit
     }
 
     var hosts: [HostRecordView]
+    var hostsLoaded = true
     var settings = AppSettings()
     var failure: (any Error)?
     /// Per-path wait before `listDir` answers, to reorder responses in tests.
@@ -154,6 +155,16 @@ import UIKit
             hosts.append(view)
         }
         calls.append(.saveHost(record.id))
+    }
+
+    var beforeMetadataSave: (@MainActor () async throws -> Void)?
+    func updateHostMetadata(_ id: HostID, change: HostDisplayEdit) async throws -> HostRecord {
+        try await beforeMetadataSave?()
+        guard var record = hostRecord(id) else { throw LiveServiceError.unknownMachine }
+        if let name = change.name { record.profile.name = name }
+        if let symbol = change.symbol { record.symbol = symbol }
+        try await saveHost(record)
+        return record
     }
 
     func removeHost(_ id: HostID) async throws {

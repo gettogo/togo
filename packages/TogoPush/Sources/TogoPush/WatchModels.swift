@@ -8,13 +8,16 @@ public struct WatchDevice: Codable, Equatable, Sendable {
     public var x25519: String
     public var approvalKey: String
     public var apnsToken: String
+    /// A new Watch advertises this before the phone opts it into answer pushes.
+    public var answerReceipts: Bool?
 
-    public init(deviceId: String, name: String, x25519: String, approvalKey: String, apnsToken: String) {
+    public init(deviceId: String, name: String, x25519: String, approvalKey: String, apnsToken: String, answerReceipts: Bool? = nil) {
         self.deviceId = deviceId
         self.name = name
         self.x25519 = x25519
         self.approvalKey = approvalKey
         self.apnsToken = apnsToken
+        self.answerReceipts = answerReceipts
     }
 }
 
@@ -133,7 +136,7 @@ public enum RequestLifetime {
     /// Requests still waiting on the user at `now`, oldest first.
     public static func waiting(_ requests: [PendingRequest], now: Date) -> [PendingRequest] {
         requests
-            .filter { $0.isOpen(at: now) && now.timeIntervalSince($0.receivedAt) < seconds }
+            .filter { $0.isAnswerable(at: now) }
             .sorted { $0.receivedAt < $1.receivedAt }
     }
 }

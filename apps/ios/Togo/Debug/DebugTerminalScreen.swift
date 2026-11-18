@@ -178,7 +178,7 @@ struct DebugTerminalScreen: View {
 
     private var actions: some View {
         Menu {
-            Button("Copy last 500 lines") { Task { message = await model.copyLastLines() } }
+            Button("Copy Last 500 Lines") { Task { message = await model.copyLastLines() } }
             Button("Find") { finding = true }
             Picker("Theme", selection: Binding(
                 get: { model.settings.themeID },

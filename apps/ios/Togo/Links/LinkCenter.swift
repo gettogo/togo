@@ -29,6 +29,9 @@ import UIKit
     /// Whether a session's agent shows a prompt for a code or key now.
     var awaitsCode: ((HostID, String) -> Bool)?
 
+    /// The existing Ports screen for a known, connected session with ports support.
+    var portPreviewModel: ((Origin) -> PortsModel?)?
+
     /// Pages agents asked to open, until used or expired.
     let requests = OpenRequests()
 
@@ -70,37 +73,45 @@ import UIKit
 
     /// Opens a pending request here: a sign-in in the authentication browser, else Safari's view.
     func use(_ open: PendingOpen) {
-        requests.resolve(open.id)
-        if SignInRoute.isSignIn(open.url) {
-            signIn(open.url, from: open.origin)
+        if SessionWebLink.destination(open.url) == .signIn {
+            signIn(open.url, from: open.origin, onOpened: { [weak self] in self?.requests.resolve(open.id) })
         } else {
             self.open(open.url, from: open.origin)
+            requests.resolve(open.id)
         }
     }
 
     /// A sign-in page, from an agent's request or the bar's Open: the system's authentication
     /// browser, with the callback forward first when it returns to the machine. Its outcome
     /// comes up as a sheet when it closes.
-    func signIn(_ url: URL, from origin: Origin) {
+    func signIn(_ url: URL, from origin: Origin, onOpened: (@MainActor () -> Void)? = nil) {
         guard LinkPolicy.allows(url) else { return }
         let runner = makeRunner(url, hostID: origin.hostID, sessionID: origin.sessionID)
+        runner.onOpened = onOpened
         let id = ObjectIdentifier(runner)
         running[id] = runner
         var shown = false
         runner.onEnd = { [weak self, weak runner] phase in
             guard let self, let runner else { return }
-            if phase == .signedIn, !shown { shown = true; self.presentOutcome(runner) }
+            if Self.hasOutcome(phase), !shown { shown = true; self.presentOutcome(runner) }
             self.running[id] = nil
         }
         runner.onBrowserClosed = { [weak self, weak runner] in
             guard let self, let runner, !shown else { return }
-            if runner.phase == .needsCode || runner.phase == .delivered {
+            if Self.hasOutcome(runner.phase) {
                 shown = true
                 self.presentOutcome(runner)
             }
             self.running[id] = nil
         }
         runner.begin()
+    }
+
+    static func hasOutcome(_ phase: WebAuthFlow.Phase) -> Bool {
+        switch phase {
+        case .signedIn, .delivered, .needsCode, .failed: true
+        default: false
+        }
     }
 
     /// A runner for `url`, with this app's tunnel.
@@ -132,9 +143,15 @@ import UIKit
     /// A link the user chose: tapped in a terminal or picked from a list.
     func open(_ url: URL, from origin: Origin) {
         guard LinkPolicy.allows(url) else { return }
-        if SignInRoute.returnsToLoopback(url) {
+        switch SessionWebLink.destination(url) {
+        case .localPreview:
+            openLocalPage(url, from: origin)
+            return
+        case .signIn:
             signIn(url, from: origin)
             return
+        case .web:
+            break
         }
         let configuration = SFSafariViewController.Configuration()
         configuration.entersReaderIfAvailable = false
@@ -142,6 +159,32 @@ import UIKit
         let safari = SFSafariViewController(url: url, configuration: configuration)
         safari.dismissButtonStyle = .done
         LinkPresenter.present(safari, height: nil, name: "link.safari")
+    }
+
+    private func openLocalPage(_ url: URL, from origin: Origin) {
+        guard let model = portPreviewModel?(origin) else {
+            let alert = UIAlertController(
+                title: String(localized: "links.localPage.unavailable", defaultValue: "Cannot open this local page"),
+                message: String(localized: "links.localPage.needsSession", defaultValue:
+                    "Connect the session and try again, or open the page on the machine."), preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: LinkCopy.done, style: .default))
+            LinkPresenter.present(alert, height: nil, name: "link.localPageUnavailable")
+            return
+        }
+        let handle = SheetHandle()
+        let view = NavigationStack {
+            PortsView(model: model, initialURL: url)
+                .navigationTitle(ReviewCopy.tabName(.ports))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(LinkCopy.done, systemImage: "checkmark", role: .confirm) { handle.close() }
+                    }
+                }
+        }
+        let controller = LinkSheetController(rootView: AnyView(view.togoControls()))
+        handle.controller = controller
+        LinkPresenter.present(controller, height: nil, name: "link.localPage")
     }
 
     /// Every link on a terminal's screen and recent scrollback, newest first.

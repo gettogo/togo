@@ -177,7 +177,7 @@ extension CommandLineModel {
             return
         }
         delegate.onImages = { @MainActor @Sendable (datas: [Data]) in
-            Task { await attachments.add(datas) }
+            attachments.enqueue(datas.map { data in { data } })
         }
         delegate.onFile = { @MainActor @Sendable [weak self] (name: String, data: Data) in
             Task { @MainActor [weak self] in

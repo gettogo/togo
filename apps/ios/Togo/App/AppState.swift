@@ -69,8 +69,17 @@ struct SessionRow: Identifiable, Equatable, Sendable {
 }
 
 extension SessionStatus {
-    /// The agent is no longer running: it finished its turn and the session ended, or it
-    /// exited, crashed or stopped on a limit. These rows archive and count as done.
+    /// A finished turn can leave a live agent at its prompt. Only lifecycle
+    /// termination, not `.done`, makes its session eligible for the archive.
+    var hasEnded: Bool {
+        switch self {
+        case .exited, .ended, .failed: true
+        case .done, .working, .needsYou, .idle, .unknown: false
+        }
+    }
+
+    /// A completed turn or ended process counts as done. A completed turn can still
+    /// belong to a live session, so archive eligibility uses `hasEnded` instead.
     var isFinished: Bool {
         switch self {
         case .done, .exited, .ended, .failed: true
@@ -92,6 +101,7 @@ struct RequestCard: Identifiable, Equatable, Sendable {
     var phase: Phase
     /// The sign-in step the request is, when it is one.
     var signIn: SignInStep?
+    var answerable = true
 
     enum Phase: Equatable, Sendable {
         case open
@@ -164,6 +174,8 @@ struct WorkspaceTab: Identifiable, Equatable, Sendable {
     /// The agent's id when the tab was opened before the roster listed it (a session just
     /// created), so the tab can expect its chat instead of showing the terminal first.
     var agentID: String? = nil
+    /// Restored without a fresh user request; automatic attachment must not ask for credentials.
+    var restored = false
 }
 
 enum LinkPhase: Equatable, Sendable {
@@ -197,6 +209,7 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     case editMachine(HostID)
     case newSession(HostID?)
     case signIn(HostID)
+    case requestPrompt(HostID, String)
     /// Adding this device's key to a machine that came from another device.
     case setUpHere(HostID)
     case review(ReviewSubject, ReviewTab)
@@ -209,7 +222,7 @@ enum AppSheet: Identifiable, Hashable, Sendable {
     /// from the keyboard) must not replace it and lose what was typed.
     var isForm: Bool {
         switch self {
-        case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .newSession, .signIn: true
+        case .addMachine, .addMachineFilled, .editMachine, .setUpHere, .newSession, .signIn, .requestPrompt: true
         case .review, .settings: false
         }
     }

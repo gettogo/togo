@@ -219,6 +219,12 @@ struct HarnessScreenLoader: View {
         context.reload = { await load(showingProgress: false) }
         context.settled = onSettled
         context.readScreen = { [store, screenID] in try? await store.screen(screenID) }
+        context.searchScreen = { [store, screenID, binding = store.conversation] query in
+            guard store.conversation == binding else { throw CancellationError() }
+            let screen = try await store.screen(screenID, query: ["search": query])
+            guard store.conversation == binding else { throw CancellationError() }
+            return screen
+        }
         // A root's sign-in pushes onto its own stack, turning a split view into one first.
         let pushPage: @MainActor (SignInPageModel) -> Void = { page in
             stacked = true

@@ -15,16 +15,18 @@ public struct LiveContext: Codable, Sendable, Equatable {
     public var ask: String?
     public var subject: PushSubject?
     public var answer: Answer?
+    public var expires: Int64?
 
     public init(
         title: String? = nil, step: String? = nil, ask: String? = nil, subject: PushSubject? = nil,
-        answer: Answer? = nil
+        answer: Answer? = nil, expires: Int64? = nil
     ) {
         self.title = title
         self.step = step
         self.ask = ask
         self.subject = subject
         self.answer = answer
+        self.expires = expires
     }
 
     /// An answer word a newer helper adds reads as no buttons, never as a failed decode.
@@ -35,6 +37,7 @@ public struct LiveContext: Codable, Sendable, Equatable {
         ask = try? c.decodeIfPresent(String.self, forKey: .ask)
         subject = try? c.decodeIfPresent(PushSubject.self, forKey: .subject)
         answer = try? c.decodeIfPresent(Answer.self, forKey: .answer)
+        expires = try c.decodeIfPresent(Int64.self, forKey: .expires)
     }
 
     /// The request as the notification service extension stored it: what the activity shows
@@ -43,13 +46,14 @@ public struct LiveContext: Codable, Sendable, Equatable {
     public init(pending: PendingRequest, now: Date = Date()) {
         let age = now.timeIntervalSince(pending.receivedAt)
         var answer: Answer?
-        if pending.isOpen(at: now), age >= -NotificationServiceCore.maxSkew, age < RequestLifetime.seconds {
+        if pending.isAnswerable(at: now), age >= -NotificationServiceCore.maxSkew {
             let roles = Set(pending.options.map(\.role))
             if roles.contains("deny") {
                 answer = roles.contains("approve") ? .approveDeny : .deny
             }
         }
-        self.init(ask: pending.title.isEmpty ? nil : pending.title, subject: pending.subject, answer: answer)
+        self.init(ask: pending.title.isEmpty ? nil : pending.title, subject: pending.subject, answer: answer,
+                  expires: Int64(pending.expiry.timeIntervalSince1970))
     }
 
     /// Opens a context sealed for this device by the machine `hostId`. Nil when the keys are

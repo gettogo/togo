@@ -80,10 +80,10 @@ struct HelperCheckView: View {
             notes
         } actions: {
             if needsTmux {
-                Button(String(localized: "onboard.checkAgain", defaultValue: "Check again"), action: onCheckAgain)
+                Button(String(localized: "onboard.checkAgain", defaultValue: "Check Again"), action: onCheckAgain)
                     .buttonStyle(.primary)
                     .disabled(saving)
-                Button(String(localized: "onboard.helper.saveAnyway", defaultValue: "Save and install tmux later"), action: onSave)
+                Button(String(localized: "onboard.helper.saveAnyway", defaultValue: "Save and Install tmux Later"), action: onSave)
                     .buttonStyle(.secondary)
                     .disabled(saving)
             } else {
@@ -135,7 +135,7 @@ struct HelperCheckView: View {
             Label(
                 copied
                     ? String(localized: "onboard.copied", defaultValue: "Copied")
-                    : String(localized: "onboard.copyCommand", defaultValue: "Copy command"),
+                    : String(localized: "onboard.copyCommand", defaultValue: "Copy Command"),
                 systemImage: copied ? "checkmark" : "doc.on.doc"
             )
         }
@@ -147,12 +147,12 @@ struct HelperCheckView: View {
         let install = HelperProbe.installCommand(os: report.os)
         return OnboardingStep(
             title: outdated
-                ? String(localized: "onboard.helper.outdated.title", defaultValue: "Update the Togo helper")
-                : String(localized: "onboard.helper.missing.title", defaultValue: "Add the Togo helper"),
+                ? String(localized: "onboard.helper.outdated.title", defaultValue: "Update the Togo Helper")
+                : String(localized: "onboard.helper.missing.title", defaultValue: "Add the Togo Helper"),
             message: outdated
                 ? String(
                     localized: "onboard.helper.outdated.message",
-                    defaultValue: "The helper on \(machine) is too old for this version of Togo. The current one adds:"
+                    defaultValue: "Togo couldn't check the helper on \(machine). Update it to use:"
                 )
                 : String(
                     localized: "onboard.helper.missing.message",
@@ -176,10 +176,10 @@ struct HelperCheckView: View {
             VStack(alignment: .leading, spacing: 14) { machineLines }
             notes
         } actions: {
-            Button(String(localized: "onboard.checkAgain", defaultValue: "Check again"), action: onCheckAgain)
+            Button(String(localized: "onboard.checkAgain", defaultValue: "Check Again"), action: onCheckAgain)
                 .buttonStyle(.primary)
                 .disabled(saving)
-            Button(String(localized: "onboard.helper.skip", defaultValue: "Use without the helper"), action: onUseWithoutHelper)
+            Button(String(localized: "onboard.helper.skip", defaultValue: "Use without the Helper"), action: onUseWithoutHelper)
                 .buttonStyle(.secondary)
                 .disabled(saving)
         }

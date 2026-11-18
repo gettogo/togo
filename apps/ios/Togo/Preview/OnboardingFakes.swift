@@ -9,11 +9,14 @@ import TogoKit
     var outcomes: [ConnectOutcome]
     var newKey: HostKeyPrompt?
     private(set) var connected: [HostProfile] = []
+    private(set) var passwords: [String?] = []
     private(set) var trustAnswers: [Bool] = []
     /// The answers sent with each connect, nil when there were none.
     private(set) var answered: [[String]?] = []
     private(set) var forgotten: [String] = []
     private(set) var savedPasswords: [SavedPassword] = []
+    var storedPasswords: Set<UUID> = []
+    var passwordCheckFails = false
     var keyLabels: [String: String] = [:]
 
     init(events: [DiscoveryEvent] = [.hosts(OnboardingSamples.hosts)], outcomes: [ConnectOutcome] = [], newKey: HostKeyPrompt? = nil) {
@@ -51,6 +54,7 @@ import TogoKit
         trustNewKey: @escaping @Sendable (HostKeyPrompt) async -> Bool
     ) async -> ConnectOutcome {
         connected.append(profile)
+        passwords.append(password)
         answered.append(answers)
         if let prompt = newKey {
             newKey = nil
@@ -67,7 +71,10 @@ import TogoKit
 
     func setSavedPassword(_ password: String?, for machine: UUID) throws {
         savedPasswords.append(SavedPassword(machine: machine, password: password))
+        if password == nil { storedPasswords.remove(machine) } else { storedPasswords.insert(machine) }
     }
+
+    func hasSavedPassword(for machine: UUID) -> Bool { !passwordCheckFails && storedPasswords.contains(machine) }
 
     func keyLabel(id: String) -> String? {
         keyLabels[id]

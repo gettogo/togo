@@ -16,6 +16,34 @@ import TogoKit
         #expect(ActionGate.decide(confirm: relaunch.text, effect: .relaunch, working: false) == .run)
     }
 
+    @Test func undoSurvivesTheDismissedPickerRunner() async {
+        var runs: [[String: JSONValue]?] = []
+        var saved: SessionUndo?
+        let context = context(working: false, results: ["set_model": .relaunched],
+                              runs: { _, args in runs.append(args) }, notes: { _, undo in saved = undo })
+        var actions: PrimitiveActions? = PrimitiveActions()
+        weak let dismissed = actions
+        await actions?.change(modelChange("Sonnet"), context: context)
+        let undo = saved
+        actions = nil
+        #expect(dismissed == nil)
+        await undo?.run()
+        #expect(runs == [["id": .string("sonnet")], ["id": .string("opus")]])
+    }
+
+    @Test func cancellingAChangeCompletesWithoutApplyingIt() async throws {
+        var runs = 0
+        var results: [HarnessActionResult?] = []
+        let context = context(working: true, runs: { _, _ in runs += 1 })
+        let actions = PrimitiveActions()
+        await actions.change(modelChange("Sonnet"), context: context) { results.append($0) }
+        let request = try #require(actions.asking)
+        request.cancel?()
+        #expect(results.count == 1)
+        #expect(results.first.flatMap { $0 } == nil)
+        #expect(runs == 0)
+    }
+
     @Test func aRelaunchWhileWorkingAsksWithAfterThisReply() {
         let decision = ActionGate.decide(confirm: relaunch.text, effect: .relaunch, working: true, agent: "Auggie", previous: "Opus")
         guard case .confirm(let dialog) = decision else {
@@ -152,6 +180,17 @@ import TogoKit
         // Restart now runs it.
         await request.run()
         #expect(runs == ["set_model"])
+    }
+
+    @Test func aQueuedSettingIsWaitingForItsEffect() async {
+        var notes: [String] = []
+        var waiting: [Bool] = []
+        var context = context(working: false, results: ["set_effort": .queued])
+        context.note = { text, echo, _ in notes.append(text); waiting.append(echo?.waiting ?? false) }
+        let change = GatedChange(action: "set_effort", args: ["value": .string("high")], confirm: nil, setting: "Effort", value: "high")
+        await PrimitiveActions().change(change, context: context)
+        #expect(notes == [PrimitiveCopy.setWaiting("Effort", "high", agent: "Auggie")])
+        #expect(waiting == [true])
     }
 
     @Test func anAppliedChangeNotesTheNewValue() async {

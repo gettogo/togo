@@ -32,7 +32,7 @@ struct SnapshotMapper {
                 bib: approval.bib ?? approval.sessionId.flatMap { bibs[$0] ?? nil },
                 agentName: Self.agentName(approval.agent, names: names), title: approval.title,
                 detail: approval.detail, options: approval.options, allowText: approval.allowText, phase: .open,
-                signIn: approval.signIn
+                signIn: approval.signIn, answerable: approval.answerable
             )
         }
         return HostViewSnapshot(

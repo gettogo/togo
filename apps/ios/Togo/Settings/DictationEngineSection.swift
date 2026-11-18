@@ -10,9 +10,10 @@ import TogoKit
     private(set) var fraction: Double?
     private(set) var failure: String?
     private(set) var isInstalled: Bool
-    /// The settings as they are now, kept current by the page, so a download that finishes
-    /// minutes later changes only the engine and keeps every other setting as it is then.
+    /// The page's display snapshot. Downloads can outlive the page, so writes use the live
+    /// reader below rather than treating this snapshot as the current settings.
     var settings = AppSettings()
+    @ObservationIgnored var currentSettings: (() -> AppSettings)?
     @ObservationIgnored let whisper: WhisperEngine
     @ObservationIgnored private var task: Task<Void, Never>?
 
@@ -88,7 +89,7 @@ import TogoKit
     }
 
     private func apply(_ engine: DictationEngineChoice, model: String?, update: (AppSettings) -> Void) {
-        var changed = settings
+        var changed = currentSettings?() ?? settings
         changed.dictationEngine = engine
         changed.whisperModel = model
         settings = changed
@@ -200,8 +201,8 @@ extension DictationCopy {
         localized: "dictation.whisper.footer", defaultValue: "Downloaded once from Hugging Face, then runs on this device."
     )
     static let whisperDownloaded = String(localized: "dictation.whisper.downloaded", defaultValue: "Downloaded")
-    static let whisperCancel = String(localized: "dictation.whisper.cancel", defaultValue: "Cancel download")
-    static let whisperDelete = String(localized: "dictation.whisper.delete", defaultValue: "Delete model")
+    static let whisperCancel = String(localized: "dictation.whisper.cancel", defaultValue: "Cancel Download")
+    static let whisperDelete = String(localized: "dictation.whisper.delete", defaultValue: "Delete Model")
     static let whisperFailed = String(
         localized: "dictation.whisper.failed",
         defaultValue: "The download didn't finish. Dictation keeps using Apple speech."

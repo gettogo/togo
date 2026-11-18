@@ -103,6 +103,10 @@ public enum NotificationTextBuilder {
     ) -> NotificationText? {
         let thread = p.sessionId ?? hostId
         switch p.kind {
+        case .answer:
+            guard let result = p.result.flatMap(AnswerReceiptResult.init(rawValue:)), let message = result.message else { return nil }
+            return NotificationText(title: "Togo", subtitle: PromptText.clean(hostName ?? "", maxLines: 1),
+                                    body: message, category: NotificationCategoryID.info, threadID: hostId, interruption: .active)
         case .clear:
             return nil
         case .needsYou:

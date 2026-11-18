@@ -15,7 +15,7 @@ struct NeedsMark: Hashable, Sendable {
 /// layout and for every size change). The composer growing a line, the keyboard coming or
 /// going, a fold, a streaming reply: the scroll view keeps its foot by itself, and nothing
 /// here scrolls for a size change. The chat scrolls only for an event: a needs card arriving
-/// or growing its answers, the user's own send and the live line that follows it, a field a
+/// or growing its answers, the user's own send from history, a field a
 /// card revealed, a "Go to request". Never while the user's finger is on the chat.
 enum ChatScroll {
     enum Target: Equatable {
@@ -25,9 +25,9 @@ enum ChatScroll {
 
     /// What happens to a chat, as its scrolling sees it.
     enum Event: Equatable {
-        /// The user's own send.
+        /// The user's own send: scroll only from history to its last real row.
         case sent
-        /// The live line appeared; `afterSend` says the user's own prompt started the turn.
+        /// The live line appeared. Its size change never requests a second scroll.
         case liveAppeared(afterSend: Bool)
         /// The open needs cards changed.
         case needsChanged(old: [NeedsMark], new: [NeedsMark])
@@ -54,13 +54,16 @@ enum ChatScroll {
 
     /// The one decision: given what happened and whether a finger is on the chat, where the
     /// chat scrolls, or nowhere. A size change is never a reason: the anchor keeps the foot.
-    static func decide(_ event: Event, dragging: Bool) -> Target? {
+    static func decide(_ event: Event, dragging: Bool, pinned: Bool = false, lastRow: String? = nil) -> Target? {
         guard !dragging else { return nil }
         switch event {
         case .sent:
-            return .bottom
-        case .liveAppeared(let afterSend):
-            return afterSend ? .bottom : nil
+            // At the foot the size-change anchor already follows both the appended row and
+            // the composer shrinking. A second animated offset change fights that anchor.
+            return pinned ? nil : lastRow.map(Target.row)
+        case .liveAppeared:
+            // The send made the one navigation request. The live line is a size change.
+            return nil
         case .needsChanged(let old, let new):
             return newest(old: old, new: new).map(Target.row)
         case .reveal(let id):
@@ -72,8 +75,7 @@ enum ChatScroll {
 
     /// The open needs cards in row order. `ready` says whether an approval's card has arrived.
     static func marks(_ rows: [ChatRow], ready: (HarnessItem.Approval) -> Bool) -> [NeedsMark] {
-        rows.compactMap { row in
-            guard case .needs(let item) = row, WorkingLogic.hasOpenNeeds([item]) else { return nil }
+        WorkingLogic.openNeeds(rows: rows).map { item in
             if case .approval(let approval) = item.body { return NeedsMark(id: item.id, ready: ready(approval)) }
             return NeedsMark(id: item.id, ready: true)
         }
@@ -122,8 +124,14 @@ enum ChatScroll {
     struct Request: Equatable {
         var target: ChatScroll.Target
         var reduce: Bool
+        var anchor: UnitPoint
         var seed: Int
     }
+
+    /// Transport epochs can change while the same conversation is replayed. Only a
+    /// genuinely different set of rows needs a fresh native scroll view.
+    private(set) var identity = UUID()
+    @ObservationIgnored private var beforeReload: Set<String>?
 
     /// The latest scroll asked for; the chat applies it once.
     private(set) var request: Request?
@@ -137,22 +145,53 @@ enum ChatScroll {
     @ObservationIgnored var pinned = true
     /// The row at the chat's bottom edge, so a rebuilt chat returns to it.
     @ObservationIgnored private(set) var settledRow: String?
+    @ObservationIgnored private var conversation = UUID()
+
+    func reset() {
+        identity = UUID()
+        beforeReload = nil
+        conversation = UUID()
+        request = nil
+        visibleNeeds = []
+        capsule = nil
+        dragging = false
+        pinned = true
+        settledRow = nil
+    }
+
+    /// Retire pending scroll requests, but keep the native viewport while history reloads.
+    /// A reconnect is not a request to move the reader to the end.
+    func prepareReload(ids: Set<String>) {
+        conversation = UUID()
+        request = nil
+        beforeReload = ids
+    }
+
+    func finishReload(ids: Set<String>) {
+        guard let previous = beforeReload else { return }
+        beforeReload = nil
+        let keptReadingRow = pinned || settledRow.map { !previous.contains($0) || ids.contains($0) } ?? true
+        guard !previous.isDisjoint(with: ids), keptReadingRow else { reset(); return }
+        visibleNeeds.formIntersection(ids)
+        if let capsule, !ids.contains(capsule) { self.capsule = nil }
+    }
 
     /// Scrolls on `resize`, the same role that grows a card, so the chat makes room and brings
     /// the card up as one movement. A card still growing is followed once more when it has
     /// grown (`settle`), unless the user has taken the scroll meanwhile.
-    func go(_ target: ChatScroll.Target, reduce: Bool, settle: Bool = false) {
-        ask(target, reduce: reduce)
+    func go(_ target: ChatScroll.Target, reduce: Bool, settle: Bool = false, anchor: UnitPoint = ChatScroll.foot) {
+        ask(target, reduce: reduce, anchor: anchor)
         guard settle else { return }
+        let binding = conversation
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(400))
-            guard let self, !self.dragging else { return }
-            self.ask(target, reduce: reduce)
+            guard let self, self.conversation == binding, !self.dragging else { return }
+            self.ask(target, reduce: reduce, anchor: anchor)
         }
     }
 
-    private func ask(_ target: ChatScroll.Target, reduce: Bool) {
-        request = Request(target: target, reduce: reduce, seed: (request?.seed ?? 0) &+ 1)
+    private func ask(_ target: ChatScroll.Target, reduce: Bool, anchor: UnitPoint) {
+        request = Request(target: target, reduce: reduce, anchor: anchor, seed: (request?.seed ?? 0) &+ 1)
     }
 
     /// The row at the chat's bottom edge is `row`. Writes only a change. Returns whether it changed.
@@ -226,7 +265,7 @@ struct NeedsScrolling: ViewModifier {
                 }
                 .onChange(of: scroll.request) { _, request in
                     guard let request else { return }
-                    move(request.target, reduce: request.reduce, proxy: proxy)
+                    move(request.target, reduce: request.reduce, proxy: proxy, anchor: request.anchor)
                 }
                 // A chat made again returns to the reader's row once, after its first layout; a
                 // row that has gone sends it to the foot.
@@ -242,7 +281,7 @@ struct NeedsScrolling: ViewModifier {
                     guard loaded,
                           let target = ChatScroll.decide(.needsChanged(old: old, new: new), dragging: scroll.dragging)
                     else { return }
-                    scroll.go(target, reduce: reduceMotion, settle: true)
+                    scroll.go(target, reduce: reduceMotion, settle: true, anchor: .top)
                 }
                 // A field a card just revealed rises above the composer, and once more after the
                 // keyboard has come up (`settle`).
@@ -254,10 +293,10 @@ struct NeedsScrolling: ViewModifier {
     }
 
     /// One scroll, through the proxy: a one-shot ask the scroll view does not keep.
-    private func move(_ target: ChatScroll.Target, reduce: Bool, proxy: ScrollViewProxy) {
+    private func move(_ target: ChatScroll.Target, reduce: Bool, proxy: ScrollViewProxy, anchor: UnitPoint = ChatScroll.foot) {
         let apply = {
             switch target {
-            case .row(let id): proxy.scrollTo(id, anchor: ChatScroll.foot)
+            case .row(let id): proxy.scrollTo(id, anchor: anchor)
             case .bottom: proxy.scrollTo(ChatScroll.contentID, anchor: ChatScroll.foot)
             }
         }
@@ -284,12 +323,12 @@ struct ChatScrolling: ViewModifier {
     let has: (String) -> Bool
 
     func body(content: Content) -> some View {
-        let candidate = ChatScroll.capsule(open: marks, visible: scroll.visibleNeeds, loaded: store.hasLoaded)
+        let candidate = scroll.visibleNeeds.isEmpty ? ChatScroll.capsule(open: marks, visible: scroll.visibleNeeds, loaded: store.hasLoaded) : nil
         content
             .modifier(NeedsScrolling(marks: marks, loaded: store.hasLoaded, scroll: scroll, has: has))
             // The chat ends at the composer's top edge (`ChatPanes`); the capsule sits just above it.
             .overlay(alignment: .bottom) {
-                if let target = scroll.capsule {
+                if let target = scroll.capsule, scroll.visibleNeeds.isEmpty {
                     // motion: attention — fades in place, never rises (timed by the task below).
                     NeedsJumpPill { store.revealNeeds(id: target) }
                         .padding(.bottom, 10)
@@ -297,13 +336,15 @@ struct ChatScrolling: ViewModifier {
                 }
             }
             .onChange(of: store.sends) {
-                guard let target = ChatScroll.decide(.sent, dragging: scroll.dragging) else { return }
-                scroll.go(target, reduce: reduceMotion)
+                guard let target = ChatScroll.decide(.sent, dragging: scroll.dragging, pinned: scroll.pinned, lastRow: store.rows.last?.id) else { return }
+                // A long lazy conversation has estimated heights: never animate a far jump.
+                // Resolve a real row once; the anchor owns all subsequent size changes.
+                scroll.go(target, reduce: true)
             }
             .onChange(of: store.scrollRequest) { _, request in
                 guard let request else { return }
                 if let target = ChatScroll.decide(.reveal(request.row), dragging: scroll.dragging) {
-                    scroll.go(target, reduce: reduceMotion, settle: true)
+                    scroll.go(target, reduce: reduceMotion, settle: true, anchor: .top)
                 }
                 store.scrollRequest = nil
             }
@@ -316,7 +357,7 @@ struct ChatScrolling: ViewModifier {
                 // A card scrolled past for a moment is not news; one that stays off screen is.
                 try? await Task.sleep(for: .milliseconds(600))
                 guard !Task.isCancelled else { return }
-                // motion: attention — a card that needs you is below, off screen; the capsule
+                // motion: attention — a card that needs you is off screen; the capsule
                 // fades in place above the composer and leaves once the card is in view.
                 withAnimation(Motion.animation(.respond, reduce: reduceMotion)) { scroll.capsule = candidate }
             }
@@ -374,7 +415,7 @@ extension View {
 
     /// Reports whether a needs card is on screen, for the "Needs you" capsule.
     func needsVisibility(_ id: String, in scroll: ChatScrollModel) -> some View {
-        onScrollVisibilityChange(threshold: 0.25) { visible in scroll.setVisible(id, visible) }
+        onScrollVisibilityChange(threshold: 0) { visible in scroll.setVisible(id, visible) }
     }
 }
 

@@ -24,7 +24,11 @@ enum CodeSendResult: Equatable {
         case failed(String)
     }
 
-    var text = ""
+    var text = "" {
+        didSet {
+            if phase == .sent, text != oldValue, !text.isEmpty { phase = .editing }
+        }
+    }
     private(set) var phase: Phase = .editing
     let hostID: HostID
     let sessionID: String
@@ -141,13 +145,13 @@ struct PasteCodeField: View {
 }
 
 enum PasteCodeCopy {
-    static let title = String(localized: "pasteCode.title", defaultValue: "Paste code")
+    static let title = String(localized: "pasteCode.title", defaultValue: "Paste Code")
     static let detail = String(
         localized: "pasteCode.detail",
         defaultValue: "If the sign-in page shows a code, copy it and paste it here. It goes straight to the agent and is not kept."
     )
     static let placeholder = String(localized: "pasteCode.placeholder", defaultValue: "Code")
-    static let send = String(localized: "pasteCode.send", defaultValue: "Send code")
+    static let send = String(localized: "pasteCode.send", defaultValue: "Send Code")
     static let sending = String(localized: "pasteCode.sending", defaultValue: "Sending…")
     static let sent = String(localized: "pasteCode.sent", defaultValue: "Sent. Waiting for the agent to confirm.")
     static let failed = String(localized: "pasteCode.failed", defaultValue: "The code didn't reach the agent. Try again.")

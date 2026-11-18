@@ -96,6 +96,10 @@ enum SessionActions {
     /// which it names with this prefix.
     static let plainSessionPrefix = "togo-"
 
+    static func wasStartedInTogo(_ row: SessionRow, on machine: MachineSection) -> Bool {
+        row.managed || (machine.helper == .missing && row.name.hasPrefix(plainSessionPrefix))
+    }
+
     private static let changesSession: Set<SessionAction> = [.rename, .mute, .kill]
 
     static func actions(for row: SessionRow, on machine: MachineSection? = nil) -> SessionActionSet {

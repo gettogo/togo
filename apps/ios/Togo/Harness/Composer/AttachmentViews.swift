@@ -16,7 +16,11 @@ struct AttachmentStrip: View {
                 ForEach(Array(attachments.items.enumerated()), id: \.element.id) { index, item in
                     AttachmentChip(
                         item: item, index: index, count: attachments.items.count,
-                        onPreview: { previewing = ImageViewerRequest(index: index) },
+                        onPreview: {
+                            if let at = attachments.items.filter({ $0.preview != nil }).firstIndex(where: { $0.id == item.id }) {
+                                previewing = ImageViewerRequest(index: at)
+                            }
+                        },
                         onRemove: { attachments.remove(item.id) },
                         onRetry: { Task { await attachments.retry(item.id) } }
                     )
@@ -31,11 +35,13 @@ struct AttachmentStrip: View {
         }
         .scrollIndicators(.hidden)
         .presentCover("composer.attachmentPreview", item: $previewing) { request in
-            let items = attachments.items
+            let items = attachments.items.filter { $0.preview != nil }
             ChatImageViewer(
                 images: items.map { HarnessImage(path: $0.path) },
                 index: min(request.index, max(0, items.count - 1)),
-                preloaded: Dictionary(uniqueKeysWithValues: items.enumerated().map { ($0.offset, $0.element.preview) })
+                preloaded: Dictionary(uniqueKeysWithValues: items.enumerated().compactMap { index, item in
+                    item.preview.map { (index, $0) }
+                })
             )
         }
     }
@@ -53,9 +59,13 @@ private struct AttachmentChip: View {
 
     var body: some View {
         Button(action: failed ? onRetry : onPreview) {
-            Image(uiImage: item.preview)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
+            Group {
+                if let preview = item.preview {
+                    Image(uiImage: preview).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Image(systemName: "photo").font(.title3).foregroundStyle(.secondary)
+                }
+            }
                 .frame(width: Self.side, height: Self.side)
                 .clipShape(.rect(cornerRadius: 10, style: .continuous))
                 .overlay { overlay }
@@ -64,6 +74,7 @@ private struct AttachmentChip: View {
                 }
         }
         .buttonStyle(.plain)
+        .disabled(item.preview == nil && !failed)
         .overlay(alignment: .topTrailing) {
             Button(ComposerCopy.removeImage, systemImage: "xmark", action: onRemove)
                 .labelStyle(.iconOnly)
@@ -89,7 +100,7 @@ private struct AttachmentChip: View {
             if failed { Button(ComposerCopy.retryImage, action: onRetry) }
         }
         .contextMenu {
-            Button(ComposerCopy.previewImage, systemImage: "eye", action: onPreview)
+            if item.preview != nil { Button(ComposerCopy.previewImage, systemImage: "eye", action: onPreview) }
             if failed { Button(ComposerCopy.retryImage, systemImage: "arrow.clockwise", action: onRetry) }
             Button(ComposerCopy.removeImage, systemImage: "trash", role: .destructive, action: onRemove)
         }
@@ -99,15 +110,16 @@ private struct AttachmentChip: View {
 
     private var stateWord: String? {
         switch item.state {
+        case .loading: ComposerCopy.loadingPhoto
         case .uploading: ComposerCopy.uploading
-        case .failed: ComposerCopy.uploadFailed
+        case .failed(let message): message
         case .ready: nil
         }
     }
 
     @ViewBuilder private var overlay: some View {
         switch item.state {
-        case .uploading:
+        case .loading, .uploading:
             ZStack {
                 Color.black.opacity(0.35)
                 ProgressView().controlSize(.small).tint(Color.togoSnow)
@@ -155,18 +167,14 @@ struct AttachMenu: View {
         .onChange(of: selection) { _, picked in
             guard !picked.isEmpty else { return }
             selection = []
-            Task {
-                var datas: [Data] = []
-                for item in picked {
-                    if let data = try? await item.loadTransferable(type: Data.self) { datas.append(data) }
-                }
-                await attachments.add(datas)
+            let loads: [ComposerAttachments.Load] = picked.map { item in
+                { try await item.loadTransferable(type: Data.self) }
             }
+            attachments.enqueue(loads)
         }
         .presentCover("composer.camera", isPresented: $camera) {
             CameraPicker { image in
-                guard let data = image.jpegData(compressionQuality: 0.9) else { return }
-                Task { await attachments.add([data]) }
+                attachments.enqueue([{ image.jpegData(compressionQuality: 0.9) }])
             }
             .ignoresSafeArea()
         }
@@ -180,7 +188,7 @@ struct AttachMenu: View {
             return item[type] as? Data ?? (item[type] as? UIImage)?.pngData()
         }
         guard !datas.isEmpty else { return }
-        Task { await attachments.add(datas) }
+        attachments.enqueue(datas.map { data in { data } })
     }
 }
 

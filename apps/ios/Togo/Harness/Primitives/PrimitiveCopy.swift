@@ -3,45 +3,48 @@ import Foundation
 /// Every string the native harness screens show. Keys share the `primitive.` prefix.
 enum PrimitiveCopy {
     static let terminal = String(localized: "primitive.terminal", defaultValue: "Terminal")
-    static let openTerminal = String(localized: "primitive.openTerminal", defaultValue: "Open terminal")
+    static let openTerminal = String(localized: "primitive.openTerminal", defaultValue: "Open Terminal")
     static let done = String(localized: "primitive.done", defaultValue: "Done")
     static let dismiss = String(localized: "primitive.dismiss", defaultValue: "Dismiss")
     static let sent = String(localized: "primitive.sent", defaultValue: "Sent")
     static let queued = String(localized: "primitive.queued", defaultValue: "Queued")
     static let restarted = String(localized: "primitive.restarted", defaultValue: "Restarted the agent")
+    static let changeUnavailable = String(localized: "primitive.changeUnavailable", defaultValue: "The change couldn’t be applied here. Check the terminal.")
     static let failed = String(localized: "primitive.failed", defaultValue: "That didn't work")
     static let openedTerminal = String(localized: "primitive.openedTerminal", defaultValue: "Opened in the terminal")
-    static let noAnswer = String(localized: "primitive.noAnswer", defaultValue: "The machine didn't answer")
+    static let noAnswer = String(localized: "primitive.noAnswer", defaultValue: "No response. Try again.")
     static let cancel = String(localized: "primitive.cancel", defaultValue: "Cancel")
     static let close = String(localized: "primitive.close", defaultValue: "Close")
     static let select = String(localized: "primitive.select", defaultValue: "Select")
     static let selected = String(localized: "primitive.selected", defaultValue: "Selected")
     static let details = String(localized: "primitive.details", defaultValue: "Details")
-    static let copyID = String(localized: "primitive.copyID", defaultValue: "Copy id")
+    static let copyID = String(localized: "primitive.copyID", defaultValue: "Copy ID")
     static let copied = String(localized: "primitive.copied", defaultValue: "Copied")
     static let all = String(localized: "primitive.all", defaultValue: "All")
     static let other = String(localized: "primitive.other", defaultValue: "Other")
     static let filters = String(localized: "primitive.filters", defaultValue: "Filters")
     static let actions = String(localized: "primitive.actions", defaultValue: "Actions")
     static let search = String(localized: "primitive.search", defaultValue: "Search")
-    static let showAll = String(localized: "primitive.showAll", defaultValue: "Show all")
+    static let showAll = String(localized: "primitive.showAll", defaultValue: "Show All")
+    static let showMore = String(localized: "primitive.showMore", defaultValue: "Show More")
+    static let loadingMore = String(localized: "primitive.loadingMore", defaultValue: "Loading more items")
     static let noMatches = String(localized: "primitive.noMatches", defaultValue: "No matches")
     static let tryShorter = String(localized: "primitive.tryShorter", defaultValue: "Try a shorter search or clear the filters.")
     static let nothingHere = String(localized: "primitive.nothingHere", defaultValue: "Nothing here yet")
-    static let useAs = String(localized: "primitive.useAs", defaultValue: "Use as")
+    static let useAs = String(localized: "primitive.useAs", defaultValue: "Use As")
     static let set = String(localized: "primitive.set", defaultValue: "Set")
     static let notSet = String(localized: "primitive.notSet", defaultValue: "Not set")
     static let replace = String(localized: "primitive.replace", defaultValue: "Replace")
     static let save = String(localized: "primitive.save", defaultValue: "Save")
-    static let newValue = String(localized: "primitive.newValue", defaultValue: "New value")
+    static let newValue = String(localized: "primitive.newValue", defaultValue: "Enter a value")
     static let secretFooter = String(
         localized: "primitive.secretFooter",
-        defaultValue: "Stored on the machine. Togo never shows it and keeps no copy."
+        defaultValue: "Sent to the machine. Togo never shows it and keeps no copy."
     )
     static let running = String(localized: "primitive.running", defaultValue: "Running")
     static let notSetUp = String(localized: "primitive.notSetUp", defaultValue: "Not set up")
-    static let apiKey = String(localized: "primitive.apiKey", defaultValue: "API key")
-    static let submit = String(localized: "primitive.submit", defaultValue: "Send answer")
+    static let apiKey = String(localized: "primitive.apiKey", defaultValue: "API Key")
+    static let submit = String(localized: "primitive.submit", defaultValue: "Send Answer")
     static let confirm = String(localized: "primitive.confirm", defaultValue: "Confirm")
     static let yourAnswer = String(localized: "primitive.yourAnswer", defaultValue: "Or type an answer")
     static let answered = String(localized: "primitive.answered", defaultValue: "Answered")
@@ -59,15 +62,15 @@ enum PrimitiveCopy {
     static let unknownTitle = String(localized: "primitive.unknownTitle", defaultValue: "Shown in the terminal")
     static let unknownMessage = String(
         localized: "primitive.unknownMessage",
-        defaultValue: "This version of Togo can't draw this screen. The terminal has it."
+        defaultValue: "Open Terminal to continue."
     )
-    static let couldNotLoad = String(localized: "primitive.couldNotLoad", defaultValue: "Couldn't read this screen")
+    static let couldNotLoad = String(localized: "primitive.couldNotLoad", defaultValue: "Couldn't load this screen")
     static let fallbackMessage = String(
-        localized: "primitive.fallbackMessage", defaultValue: "The agent didn't answer in a way Togo can show. The terminal has it."
+        localized: "primitive.fallbackMessage", defaultValue: "Open Terminal to continue with this request."
     )
-    static let tryAgain = String(localized: "primitive.tryAgain", defaultValue: "Try again")
-    static let loading = String(localized: "primitive.loading", defaultValue: "Reading")
-    static let noBody = String(localized: "primitive.noBody", defaultValue: "Nothing to show")
+    static let tryAgain = String(localized: "primitive.tryAgain", defaultValue: "Try Again")
+    static let loading = String(localized: "primitive.loading", defaultValue: "Loading…")
+    static let noBody = String(localized: "primitive.noBody", defaultValue: "No details")
     static let moreLines = String(localized: "primitive.moreLines", defaultValue: "More in the terminal")
     static let changes = String(localized: "primitive.changes", defaultValue: "Changes")
     static let on = String(localized: "primitive.on", defaultValue: "on")
@@ -75,8 +78,8 @@ enum PrimitiveCopy {
     static let restart = String(localized: "primitive.restart", defaultValue: "Restart")
     static let restartedShort = String(localized: "primitive.restartedShort", defaultValue: "Restarted")
     static let didntWork = String(localized: "primitive.didntWork", defaultValue: "Didn't work")
-    static let afterThisReply = String(localized: "primitive.afterThisReply", defaultValue: "After this reply")
-    static let withInstructions = String(localized: "primitive.withInstructions", defaultValue: "With instructions…")
+    static let afterThisReply = String(localized: "primitive.afterThisReply", defaultValue: "After This Reply")
+    static let withInstructions = String(localized: "primitive.withInstructions", defaultValue: "With Instructions…")
 
     /// "Restart Claude now? The current reply stops."
     static func restartNow(_ agent: String) -> String {
@@ -87,7 +90,7 @@ enum PrimitiveCopy {
 
     /// "Compact now", the confirm button when the dialog also offers instructions.
     static func runNow(_ label: String) -> String {
-        String(localized: "primitive.runNow", defaultValue: "\(label) now")
+        String(localized: "primitive.runNow", defaultValue: "\(label) Now")
     }
 
     /// "Clear?", a dialog's title for a destructive action with no line of its own.

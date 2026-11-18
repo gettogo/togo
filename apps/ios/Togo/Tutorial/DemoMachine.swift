@@ -135,6 +135,7 @@ import UIKit
     func signIn(hostID: HostID, prompter: any ConnectionPrompter) async throws { try refuse(.signIn) }
     func saveHost(_ record: HostRecord) async throws { try refuse(.saveHost) }
     func removeHost(_ id: HostID) async throws { try refuse(.removeHost) }
+    func updateHostMetadata(_ id: HostID, change: HostDisplayEdit) async throws -> HostRecord { throw ReadOnly() }
 
     func rename(hostID: HostID, sessionID: String, name: String) async throws {
         attempts.append(.rename)
@@ -220,6 +221,10 @@ import UIKit
 
 /// Tools for the demo machine's settings pages: there is no helper to ask.
 @MainActor final class DemoMachineTools: MachineTools {
+    func quietCall<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
+        try await call(host, body)
+    }
+
     func call<T: Sendable>(_ host: HostID, _ body: @Sendable (HelperClient) async throws -> T) async throws -> T {
         throw DemoServices.ReadOnly()
     }

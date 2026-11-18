@@ -22,6 +22,7 @@ import TogoKit
     /// closes, and a question it asks then would wait for an answer nobody can give, keeping
     /// every later Sign in for the machine waiting on it too.
     @ObservationIgnored private var isOpen = true
+    @ObservationIgnored private var generation = UUID()
 
     init(hostID: HostID, machine: String, services: any AppServices, finish: @escaping @MainActor () -> Void) {
         self.hostID = hostID
@@ -35,17 +36,22 @@ import TogoKit
     static let minimumAttempt: Duration = .milliseconds(700)
 
     func run() async {
+        guard !Task.isCancelled else { return }
+        let current = UUID()
+        generation = current
+        resume(nil)
         isOpen = true
         phase = .connecting
         let started = ContinuousClock.now
-        let prompter = SheetPrompter { [weak self] prompt in await self?.ask(prompt) }
+        let prompter = SheetPrompter { [weak self] prompt in await self?.ask(prompt, generation: current) }
         do {
             try await services.signIn(hostID: hostID, prompter: prompter)
+            guard isOpen, generation == current, !Task.isCancelled else { return }
             finish()
         } catch {
             let shown = ContinuousClock.now - started
             if shown < Self.minimumAttempt { try? await Task.sleep(for: Self.minimumAttempt - shown) }
-            guard !Task.isCancelled else { return }
+            guard isOpen, generation == current, !Task.isCancelled else { return }
             phase = .failed(ServiceErrors.message(error))
         }
     }
@@ -58,12 +64,13 @@ import TogoKit
 
     /// Leaving the sheet answers a waiting question with nothing, which ends the attempt.
     func cancel() {
+        generation = UUID()
         isOpen = false
         resume(nil)
     }
 
-    private func ask(_ prompt: AuthPrompt) async -> AuthAnswer? {
-        guard isOpen, let request = SignInRequest(prompt, machine: machine) else { return nil }
+    private func ask(_ prompt: AuthPrompt, generation current: UUID) async -> AuthAnswer? {
+        guard isOpen, generation == current, !Task.isCancelled, let request = SignInRequest(prompt, machine: machine) else { return nil }
         resume(nil)
         phase = .asking(request)
         return await withCheckedContinuation { pending = $0 }
@@ -136,7 +143,7 @@ struct SignInPhaseView: View {
                 kind: .error,
                 title: String(localized: "onboard.signIn.failed", defaultValue: "Couldn't sign in to \(machine)"),
                 message: message,
-                action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try again"), run: onRetry)
+                action: .init(String(localized: "onboard.tryAgain", defaultValue: "Try Again"), run: onRetry)
             )
         }
     }

@@ -37,9 +37,24 @@ struct LiveAnswerTests {
             #expect(trace.state.withLock { $0.feedback } == [.sending])
             trace.state.withLock { $0.sends += 1 }
         } refresh: { feedback in trace.state.withLock { $0.feedback.append(feedback) } }
-        #expect(pending.request(answerRequest)?.answered == (decision == "deny" ? .denied : .approved))
+        #expect(pending.request(answerRequest)?.answered == .sent)
         #expect(trace.state.withLock { $0.sends } == 1)
         #expect(trace.state.withLock { $0.feedback } == [.sending, .sent])
+    }
+
+    @Test func expiredLiveActivityDoesNotReportASend() async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let old = PendingStore(directory: directory, clock: { Date().addingTimeInterval(3600) })
+        let trace = AnswerTrace()
+        await #expect(throws: LiveAnswer.Failure.expired) {
+            try await LiveAnswer.perform("approve", hostId: answerHost, requestId: answerRequest, pending: old) {
+                trace.state.withLock { $0.sends += 1 }
+            } refresh: { feedback in trace.state.withLock { $0.feedback.append(feedback) } }
+        }
+        #expect(trace.state.withLock { $0.sends } == 0)
+        #expect(trace.state.withLock { $0.feedback } == [.failed])
+        #expect(pending.request(answerRequest)?.answered == nil)
     }
 
     @Test func failedSendShowsFailureAndCanBeRetried() async throws {
@@ -106,5 +121,62 @@ struct LiveAnswerTests {
         #expect(try JSONDecoder().decode(State.self, from: JSONEncoder().encode(state)).answerFeedback == .sent)
         let old = Data(#"{"status":"needs_you","requestId":"r_aaaaaaaaaa"}"#.utf8)
         #expect(try JSONDecoder().decode(State.self, from: old).answerFeedback == nil)
+    }
+}
+
+extension LiveAnswerTests {
+    @Test func anUnknownActivityWithoutATrustworthyAgeCannotSend() async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let trace = AnswerTrace()
+        await #expect(throws: LiveAnswer.Failure.unavailable) {
+            try await LiveAnswer.perform("approve", hostId: answerHost, requestId: "r_unknown", pending: pending) {
+                trace.state.withLock { $0.sends += 1 }
+            } refresh: { _ in }
+        }
+        #expect(trace.state.withLock { $0.sends } == 0)
+    }
+
+    @Test func anUnknownActivityCarriesItsSealedDeadlineIntoTheClaim() async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let deadline = Date().addingTimeInterval(-1)
+        let trace = AnswerTrace()
+        await #expect(throws: LiveAnswer.Failure.expired) {
+            try await LiveAnswer.perform("approve", hostId: answerHost, requestId: "r_unknown", pending: pending,
+                                         expiresAt: deadline) {
+                trace.state.withLock { $0.sends += 1 }
+            } refresh: { _ in }
+        }
+        #expect(trace.state.withLock { $0.sends } == 0)
+        #expect(pending.request("r_unknown") == nil)
+    }
+}
+
+extension LiveAnswerTests {
+    @Test func relayAcceptanceDoesNotClaimThatTheMachineApproved() async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try await LiveAnswer.perform("approve", hostId: answerHost, requestId: answerRequest, pending: pending) {} refresh: { _ in }
+        #expect(pending.request(answerRequest)?.answered?.rawValue == "sent")
+    }
+}
+
+extension LiveAnswerTests {
+    @Test(arguments: [false, true])
+    func aHelperReceiptWinsEvenIfThePostFinishesLaterOrLosesItsReply(_ losesReply: Bool) async throws {
+        let (pending, directory) = answerStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let trace = AnswerTrace()
+        try await LiveAnswer.perform("approve", hostId: answerHost, requestId: answerRequest, pending: pending) {
+            let now = Date()
+            let payload = PushPayload(kind: .answer, title: "", body: "", requestId: answerRequest,
+                                      ts: Int64(now.timeIntervalSince1970 * 1000), result: "applied")
+            let event = try #require(AnswerReceiptEvent(payload: payload, hostId: answerHost, now: now))
+            pending.receive(event, now: now)
+            if losesReply { throw Failure.offline }
+        } refresh: { feedback in trace.state.withLock { $0.feedback.append(feedback) } }
+        #expect(pending.request(answerRequest)?.answered == .confirmed)
+        #expect(trace.state.withLock { $0.feedback } == [.sending, .applied])
     }
 }

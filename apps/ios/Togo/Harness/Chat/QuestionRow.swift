@@ -16,6 +16,7 @@ struct QuestionRow: View {
     let question: HarnessItem.Question
     /// The way to the question in the terminal, when the item has a place there.
     var showInTerminal: (() -> Void)?
+    var openNative: (() -> Void)?
     /// Sends `{"answers": …}` and returns what the helper said; nil when nothing came back.
     let send: ([String: JSONValue]) async -> HarnessActionResult?
 
@@ -33,12 +34,13 @@ struct QuestionRow: View {
     static let sendSource = "send"
 
     init(
-        item: HarnessItem, question: HarnessItem.Question, showInTerminal: (() -> Void)?,
+        item: HarnessItem, question: HarnessItem.Question, showInTerminal: (() -> Void)?, openNative: (() -> Void)? = nil,
         send: @escaping ([String: JSONValue]) async -> HarnessActionResult?
     ) {
         self.item = item
         self.question = question
         self.showInTerminal = showInTerminal
+        self.openNative = openNative
         self.send = send
         _model = State(initialValue: ConfirmModel(confirm: Self.confirm(question), arms: false))
         _shown = State(initialValue: Mirrored(Self.isAnswered(question)))
@@ -181,10 +183,13 @@ struct QuestionRow: View {
     /// A line saying where to finish, with the way there when the item has a place in the terminal.
     private func terminalOnly(_ text: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(text)
+            Text(openNative == nil ? text : SurfaceCopy.openForm)
                 .font(.subheadline)
                 .foregroundStyle(Color.togoMute)
-            if let showInTerminal {
+            if let openNative {
+                Button(SurfaceCopy.open, action: openNative)
+                    .buttonStyle(PlainAnswerStyle())
+            } else if let showInTerminal {
                 Button(ChatCopy.showInTerminal, systemImage: "terminal", action: showInTerminal)
                     .buttonStyle(PlainAnswerStyle())
                     .font(.subheadline)

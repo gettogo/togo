@@ -67,7 +67,7 @@ struct CommandMenuPanel: View {
                                 CommandRow(
                                     item: item, file: isFiles, highlighted: index == model.highlight,
                                     favourite: !isFiles && model.isFavourite(item),
-                                    value: choiceValue(item)
+                                    value: choiceValue(item), alias: CommandLineLogic.matchingAlias(item, query: CommandLineLogic.trigger(in: model.draft)?.query ?? "")
                                 )
                             }
                             .buttonStyle(.plain)
@@ -155,6 +155,7 @@ struct CommandRow: View {
     let favourite: Bool
     /// A choice's current value, in mono before its glyph.
     var value: String?
+    var alias: String? = nil
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -171,6 +172,10 @@ struct CommandRow: View {
                     if let hint = item.hint, !hint.isEmpty {
                         Text(verbatim: hint).font(.mono(.caption)).foregroundStyle(Color.togoMute)
                     }
+                }
+                if let alias {
+                    Text(String(localized: "composer.commandAlias", defaultValue: "Also \(alias)"))
+                        .font(.caption).foregroundStyle(Color.togoMute)
                 }
                 if let detail = item.detail, !detail.isEmpty {
                     Text(verbatim: detail)

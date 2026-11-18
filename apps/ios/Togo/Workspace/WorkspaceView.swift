@@ -23,7 +23,8 @@ struct WorkspaceView: View {
     let terminals: TerminalPool
 
     @State private var status: String?
-    @State private var finding = false
+    @State private var find = WorkspaceFindState()
+    private var finding: Bool { find.isPresented }
     @State private var findFocused = false
     /// `showsStrip` as the rows follow it: a second tab's strip reveals in a `resize`
     /// transaction, and the terminal under it lands once.
@@ -56,6 +57,7 @@ struct WorkspaceView: View {
         BarEdgeReader { verticalBar in
             workspace(.choose(horizontal: sizeClass, vertical: verticalSizeClass, verticalBar: verticalBar), verticalBar: verticalBar)
                 .environment(\.terminalBarVertical, verticalBar)
+                .onDisappear { endFind() }
         }
     }
 
@@ -111,7 +113,7 @@ struct WorkspaceView: View {
             // The bar item opens it: a sheet on a phone, an inspector when wide.
             .modifier(FocusedMissionControl(app: store))
             .modifier(MissionWorkspace(app: store, model: mission))
-            .background { shortcuts(layout) }
+            .background { WorkspaceShortcuts(store: store, layout: layout, chips: chips) }
             // Drags on the terminal scroll its history, so a pull down must not close the workspace.
             .interactiveDismissDisabled()
             // Sign-in questions and the review are the root's (`RootView`), above the split view
@@ -230,7 +232,7 @@ struct WorkspaceView: View {
                 )
             }
             if finding {
-                WorkspaceFindBar(search: focusedSearch, focused: $findFocused, onDone: endFind)
+                WorkspaceFindBar(search: find.search, focused: $findFocused, onDone: endFind)
                     // motion: origin — the user asked for find: its row opens under the strip
                     // and uncovers the field in place.
                     .transition(Motion.unfold(reduce: reduceMotion))
@@ -347,10 +349,10 @@ struct WorkspaceView: View {
                 Text(title.title)
             }
         }
-        // A compact horizontal bar keeps three items; mission control is the menu's first. With
-        // the controller in a vertical bar, the layer switch and Settings join it here too.
-        if !layout.sessionItemsInBar || inMenu, let item = bar.mission {
-            MissionMenuSection(item: item)
+        // Mission's secondary actions stay reachable on every layout. Its toggle is repeated
+        // here only when it has no bar item (compact bars or the terminal controller's rail).
+        if let item = bar.mission {
+            MissionMenuSection(item: item, missionInBar: layout.sessionItemsInBar && !inMenu)
         }
         if inMenu {
             Section {
@@ -462,78 +464,21 @@ struct WorkspaceView: View {
         store.focusedTab.flatMap { terminals.handle(for: $0.id)?.search }
     }
 
-    /// The find row reveals above the terminal in a `resize` transaction.
     private func openFind() {
         findFocused = true
-        guard !finding else { return }
-        // motion: preventing a jump — space opens above the terminal for the find row.
-        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { finding = true }
+        guard !finding, let search = focusedSearch else { return }
+        // motion: preventing a jump — the Find row opens space above its terminal.
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { find.open(search) }
     }
 
-    /// Clears the marks and the field; the row conceals as the space above the terminal closes.
     private func endFind() {
         guard finding else { return }
-        focusedSearch?.clear()
         findFocused = false
-        // motion: preventing a jump — the find row conceals, then its space closes.
-        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { finding = false }
-    }
-
-    // MARK: Shortcuts
-
-    /// ⌘1 to ⌘9 while the terminal does not have focus. With focus the terminal claims the
-    /// keys first and passes them up through `TerminalHandle.onShortcut`. ⌘I is mission
-    /// control's bar item's own; where the item is in the session menu, it is here.
-    private func shortcuts(_ layout: WorkspaceBarLayout) -> some View {
-        ZStack {
-            ForEach(Array(chips.prefix(9).enumerated()), id: \.element.id) { index, chip in
-                Button(WorkspaceCopy.goTo([chip.bib, chip.name].compactMap(\.self).joined(separator: " "))) {
-                    // A cut, like a chip tap (`show`).
-                    store.selectTab(number: index + 1)
-                }
-                .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
-            }
-            if !layout.sessionItemsInBar, let mission = store.missionStore {
-                Button(MissionCopy.title) { mission.showsMission.toggle() }
-                    .keyboardShortcut("i", modifiers: .command)
-            }
-        }
-        .opacity(0)
-        .accessibilityHidden(true)
+        // motion: preventing a jump — clear the owning terminal as the Find row closes.
+        withAnimation(Motion.animation(.resize, reduce: reduceMotion)) { find.close() }
     }
 
     private func presented<T>(_ target: Binding<T?>) -> Binding<Bool> {
         Binding { target.wrappedValue != nil } set: { if !$0 { target.wrappedValue = nil } }
-    }
-}
-
-#if DEBUG
-#Preview("Three tabs") {
-    let store = AppStore(services: FakeAppServices(), controlCenter: Samples.controlCenter)
-    store.open(hostID: Samples.studio, sessionID: "s-01")
-    store.open(hostID: Samples.studio, sessionID: "s-scratch")
-    store.open(hostID: Samples.studio, sessionID: "s-04")
-    store.select(TabID(hostID: Samples.studio, sessionID: "s-01"))
-    let terminals = TerminalPool()
-    terminals.sync(with: store)
-    return WorkspaceView(store: store, terminals: terminals)
-        .tint(Color.togoSnow)
-}
-#endif
-
-/// In book posture the header and tab strip keep to the page before the fold, so no button or
-/// chip sits on it. Read from the fold itself rather than the panes' report, so the chrome is
-/// laid out once and does not move when the report arrives.
-private struct LeadingPageOnly: ViewModifier {
-    @Environment(\.fold) private var fold
-
-    func body(content: Content) -> some View {
-        if fold.posture == .book, let division = fold.division, division.minX > 0 {
-            content
-                .frame(width: division.minX)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            content
-        }
     }
 }

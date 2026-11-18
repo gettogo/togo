@@ -27,6 +27,8 @@ import UIKit
     @ObservationIgnored private let send: @MainActor () async -> HarnessActionResult?
     @ObservationIgnored private let read: (@MainActor () async -> HarnessScreen?)?
     @ObservationIgnored private let refresh: (@MainActor () async -> Void)?
+    @ObservationIgnored private let watchEvery: Duration
+    @ObservationIgnored private let watchChecks: Int
     @ObservationIgnored private var watching: Task<Void, Never>?
     /// The page left its stack.
     @ObservationIgnored private var left = false
@@ -37,8 +39,11 @@ import UIKit
     init(
         provider: String, itemID: String, agent: String, hostID: HostID, sessionID: String,
         send: @escaping @MainActor () async -> HarnessActionResult?,
-        read: (@MainActor () async -> HarnessScreen?)?, refresh: (@MainActor () async -> Void)?
+        read: (@MainActor () async -> HarnessScreen?)?, refresh: (@MainActor () async -> Void)?,
+        watchEvery: Duration? = nil, watchChecks: Int = 200
     ) {
+        self.watchEvery = watchEvery ?? Self.checkEvery
+        self.watchChecks = max(1, min(watchChecks, 200))
         self.provider = provider
         self.itemID = itemID
         self.agent = agent
@@ -147,13 +152,17 @@ import UIKit
 
     private func watch() {
         watching?.cancel()
+        let interval = watchEvery, checks = watchChecks
         watching = Task { [weak self] in
             // The agent stops listening for the sign-in long before this.
-            for _ in 0..<200 {
-                try? await Task.sleep(for: Self.checkEvery)
+            for _ in 0..<checks {
+                try? await Task.sleep(for: interval)
                 guard !Task.isCancelled, let self, self.progress.watching else { return }
                 await self.checkNow()
             }
+            guard !Task.isCancelled, let self, !self.left else { return }
+            self.progress.expired(String(localized: "signIn.unconfirmed", defaultValue:
+                "The agent has not confirmed this sign-in. Try again, or check the terminal."))
         }
     }
 

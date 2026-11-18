@@ -7,8 +7,8 @@ enum HistoryCopy {
     static let title = String(localized: "review.history.title", defaultValue: "History")
     static let branch = String(localized: "review.history.branch", defaultValue: "Branch")
     static let detached = String(localized: "review.history.detached", defaultValue: "Detached HEAD")
-    static let showFiles = String(localized: "review.history.showFiles", defaultValue: "Show changed files")
-    static let copyHash = String(localized: "review.history.copyHash", defaultValue: "Copy hash")
+    static let showFiles = String(localized: "review.history.showFiles", defaultValue: "Show Changed Files")
+    static let copyHash = String(localized: "review.history.copyHash", defaultValue: "Copy Hash")
     static let merge = String(localized: "review.history.merge", defaultValue: "Merge")
     static let loading = String(localized: "review.history.loading", defaultValue: "Reading the history")
     static let loadingFiles = String(localized: "review.history.loadingFiles", defaultValue: "Listing the files")
@@ -17,16 +17,16 @@ enum HistoryCopy {
     static let emptyMessage = String(
         localized: "review.history.emptyMessage", defaultValue: "Commits show up here once the first one is made."
     )
-    static let tryAgain = String(localized: "review.history.tryAgain", defaultValue: "Try again")
+    static let tryAgain = String(localized: "review.history.tryAgain", defaultValue: "Try Again")
     static let localOnly = String(localized: "review.history.localOnly", defaultValue: "Local only")
-    static let showMore = String(localized: "review.history.showMore", defaultValue: "Show more")
+    static let showMore = String(localized: "review.history.showMore", defaultValue: "Show More")
     static let loadingMore = String(localized: "review.history.loadingMore", defaultValue: "Loading more")
     static let moreFailed = String(
         localized: "review.history.moreFailed", defaultValue: "Couldn't load more commits."
     )
     static let latest200 = String(localized: "review.history.latest200", defaultValue: "Showing the latest 200 commits")
-    static let browse = String(localized: "review.history.browse", defaultValue: "Browse files at this commit")
-    static let changedFiles = String(localized: "review.history.changedFiles", defaultValue: "Changed files")
+    static let browse = String(localized: "review.history.browse", defaultValue: "Browse Files at This Commit")
+    static let changedFiles = String(localized: "review.history.changedFiles", defaultValue: "Changed Files")
     static let noChanges = String(localized: "review.history.noChanges", defaultValue: "No file changes")
     static let noChangesMessage = String(
         localized: "review.history.noChangesMessage", defaultValue: "This commit doesn't change any files."
@@ -135,7 +135,7 @@ extension GitBranches.Branch {
     var reachedLimit: Bool { limit >= Self.maxCommits && commits.count >= Self.maxCommits }
 
     func loadIfNeeded() async {
-        guard commits.isEmpty, branches.isEmpty, state == .loading else { return }
+        // Re-entry must include commits made while Changes or another tab was visible.
         await load()
     }
 
@@ -145,17 +145,23 @@ extension GitBranches.Branch {
         let mine = generation
         limit = Self.pageSize
         moreFailed = false
-        let ref = selectedRef
+        let picked = selectedRef
         do {
             let result = try await services.branches(subject)
+            guard mine == generation, !Task.isCancelled else { return }
+            let current = result.current ?? result.branches.first(where: \.current)?.name
+            let ref = picked.flatMap { name in
+                name != current && result.branches.contains(where: { $0.name == name }) ? name : nil
+            }
             let page = try await services.log(subject, ref: ref, limit: limit)
-            guard mine == generation else { return }
+            guard mine == generation, !Task.isCancelled else { return }
             branches = Self.ordered(result)
-            currentBranch = result.current ?? result.branches.first(where: \.current)?.name
+            currentBranch = current
+            selectedRef = ref
             commits = page
             state = .ready
         } catch {
-            guard mine == generation else { return }
+            guard mine == generation, !Task.isCancelled else { return }
             state = .failed(ServiceErrors.message(error))
         }
     }

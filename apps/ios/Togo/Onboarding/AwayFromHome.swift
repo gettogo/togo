@@ -79,7 +79,7 @@ struct AwayFromHomeNote: View {
                 .padding(.top, 8)
             } label: {
                 Label(
-                    String(localized: "routes.away.title", defaultValue: "Reach it away from home"),
+                    String(localized: "routes.away.title", defaultValue: "Reach It Away from Home"),
                     systemImage: "globe"
                 )
                 .foregroundStyle(Color.togoSnow)

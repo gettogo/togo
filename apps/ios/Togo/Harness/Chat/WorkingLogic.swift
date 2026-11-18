@@ -6,11 +6,13 @@ import TogoKit
 /// while the agent is idle.
 struct WorkingState: Equatable {
     var clock: TurnClock
-    /// "Reading src/auth/sign-in.ts", from the newest step still running; nil when the step is
-    /// not known or the reply is already streaming in above.
+    /// The current step, last finished step, or Thinking; nil while waiting on the user.
     var step: String?
+    var completedStep = false
     /// The agent waits on an approval or a question: the row says so instead of "Working".
     var waiting = false
+    /// The feed stopped reporting: hold the display, without marking the agent idle.
+    var pausedAt: Date?
 }
 
 /// Pure rules behind the working row, so they are tested without a view.
@@ -35,7 +37,9 @@ enum WorkingLogic {
             in: scope(main, turnID: turn?.id), resolvedAt: resolvedAt, turnEnd: nil
         ))
         let waiting = needsYou > 0 || hasOpenNeeds(items)
-        return WorkingState(clock: clock, step: waiting ? nil : step(main), waiting: waiting)
+        let activity = activity(main)
+        return WorkingState(clock: clock, step: waiting ? nil : activity.text,
+                            completedStep: !waiting && activity.finished, waiting: waiting)
     }
 
     /// The items whose requests pause the clock: the running turn's own, as the fold line
@@ -58,14 +62,15 @@ enum WorkingLogic {
     /// An approval or a question, the main agent's or a subagent's, still waits for an answer.
     /// Only requests since the newest sent prompt count, so an old one the helper never closed
     /// does not hold the row.
-    static func hasOpenNeeds(_ items: [HarnessItem]) -> Bool {
+    static func hasOpenNeeds(_ items: [HarnessItem]) -> Bool { !openNeeds(items).isEmpty }
+
+    static func openNeeds(_ items: [HarnessItem]) -> [HarnessItem] {
         let lastPrompt = items.lastIndex { item in
             guard item.parent == nil, case .user(let user) = item.body else { return false }
             return !user.queued
         } ?? -1
-        return items.indices.contains { index in
-            guard index > lastPrompt else { return false }
-            switch items[index].body {
+        return items.suffix(from: lastPrompt + 1).filter { item in
+            switch item.body {
             case .approval(let approval): return approval.resolved == nil
             case .question(let question): return (question.answered ?? [:]).isEmpty
             default: return false
@@ -73,10 +78,17 @@ enum WorkingLogic {
         }
     }
 
-    /// The same for a conversation already folded into rows, such as a subagent's thread.
-    static func hasOpenNeeds(rows: [ChatRow]) -> Bool {
-        hasOpenNeeds(rows.compactMap { row in if case .needs(let item) = row { item } else { nil } })
+    static func openNeeds(rows: [ChatRow]) -> [HarnessItem] {
+        openNeeds(rows.compactMap { row in
+            switch row {
+            case .prompt(let item), .needs(let item): item
+            default: nil
+            }
+        })
     }
+
+    /// The same cutoff applies to a folded conversation, including its prompt rows.
+    static func hasOpenNeeds(rows: [ChatRow]) -> Bool { !openNeeds(rows: rows).isEmpty }
 
     /// True when a sent prompt no longer holds the row up by itself.
     static func awaitingEnded(
@@ -110,32 +122,65 @@ enum WorkingLogic {
         return nil
     }
 
-    /// What the agent is doing now: the newest live step of the current turn, after the last
-    /// prompt. A reply already streaming in says enough itself.
-    static func step(_ items: [HarnessItem]) -> String? {
-        for item in items.reversed() {
+    struct Activity {
+        var text: String
+        var finished = false
+    }
+
+    /// Running work wins over finished work. Bound by both the prompt and turn, so a new
+    /// prompt or a helper-only turn never borrows the previous turn's last tool.
+    static func activity(_ items: [HarnessItem]) -> Activity {
+        let main = items.filter { $0.parent == nil }
+        let afterPrompt = scope(main, turnID: nil)
+        let ids = Set(afterPrompt.map(\.id))
+        var current = scope(main, turnID: runningTurn(main)?.id).filter { ids.contains($0.id) }
+        if let end = current.lastIndex(where: {
+            if case .turn(let turn) = $0.body { return !turn.state.isLive }
+            return false
+        }) { current = Array(current.suffix(from: end + 1)) }
+        for item in current.reversed() {
             switch item.body {
-            case .user(let user) where !user.queued:
-                return nil
-            case .assistant(let text) where text.partial:
-                return nil
             case .tool(let tool) where tool.state.isLive:
-                return phrase(tool)
+                return Activity(text: phrase(tool))
             case .agent(let agent) where agent.state.isLive:
-                return WorkingCopy.agent(AgentLabel.name(agent))
-            case .thinking(let text) where text.partial:
-                return WorkingCopy.thinking
-            default:
-                continue
+                return Activity(text: WorkingCopy.agent(AgentLabel.name(agent)))
+            default: continue
             }
         }
-        return nil
+        for item in current.reversed() {
+            guard case .tool(let tool) = item.body else { continue }
+            switch tool.state {
+            case .ok, .done: return Activity(text: completedPhrase(tool), finished: true)
+            case .failed, .denied: return Activity(text: WorkingCopy.failed(firstLine(tool.title)), finished: true)
+            case .cancelled, .interrupted: return Activity(text: WorkingCopy.stopped(firstLine(tool.title)), finished: true)
+            default: continue
+            }
+        }
+        return Activity(text: WorkingCopy.thinking)
+    }
+
+    static func step(_ items: [HarnessItem]) -> String { activity(items).text }
+
+    static func completedPhrase(_ tool: HarnessItem.Tool) -> String {
+        let subject = tool.subject.map { firstLine($0.text) }.flatMap { $0.isEmpty ? nil : $0 }
+        guard let subject else { return WorkingCopy.completed(firstLine(tool.title)) }
+        switch tool.category {
+        case .read: return WorkingCopy.read(subject)
+        case .edit: return WorkingCopy.edited(subject)
+        case .write: return WorkingCopy.wrote(subject)
+        case .search: return WorkingCopy.searched(subject)
+        case .shell: return WorkingCopy.ran(subject)
+        case .web: return WorkingCopy.fetched(subject)
+        default: return WorkingCopy.completed(firstLine(tool.title))
+        }
     }
 
     /// "Reading src/a.ts", "Running npm test"; the tool's own title when there is no subject.
     static func phrase(_ tool: HarnessItem.Tool) -> String {
         let subject = tool.subject.map { firstLine($0.text) }.flatMap { $0.isEmpty ? nil : $0 }
-        guard let subject else { return firstLine(tool.title) }
+        let title = firstLine(tool.title)
+        let fallback = title.isEmpty ? WorkingCopy.thinking : title
+        guard let subject else { return fallback }
         switch tool.category {
         case .read: return WorkingCopy.reading(subject)
         case .edit: return WorkingCopy.editing(subject)
@@ -143,7 +188,7 @@ enum WorkingLogic {
         case .search: return WorkingCopy.searching(subject)
         case .shell: return WorkingCopy.running(subject)
         case .web: return WorkingCopy.fetching(subject)
-        default: return firstLine(tool.title)
+        default: return fallback
         }
     }
 
@@ -170,14 +215,26 @@ enum WorkingCopy {
     static func fetching(_ s: String) -> String { String(localized: "chat.live.fetching", defaultValue: "Fetching \(s)") }
     static func agent(_ name: String) -> String { String(localized: "chat.live.agent", defaultValue: "Working with \(name)") }
 
+    static func read(_ s: String) -> String { String(localized: "chat.live.read", defaultValue: "Read \(s)") }
+    static func edited(_ s: String) -> String { String(localized: "chat.live.edited", defaultValue: "Edited \(s)") }
+    static func wrote(_ s: String) -> String { String(localized: "chat.live.wrote", defaultValue: "Wrote \(s)") }
+    static func searched(_ s: String) -> String { String(localized: "chat.live.searched", defaultValue: "Searched \(s)") }
+    static func ran(_ s: String) -> String { String(localized: "chat.live.ran", defaultValue: "Ran \(s)") }
+    static func fetched(_ s: String) -> String { String(localized: "chat.live.fetched", defaultValue: "Fetched \(s)") }
+    static func completed(_ s: String) -> String { String(localized: "chat.live.completed", defaultValue: "Finished \(s)") }
+    static func failed(_ s: String) -> String { String(localized: "chat.live.failed", defaultValue: "Failed: \(s)") }
+    static func stopped(_ s: String) -> String { String(localized: "chat.live.stopped", defaultValue: "Stopped: \(s)") }
+
     /// The words before the clock: "Working", or "Waiting for you" while a request is open.
     static func word(_ state: WorkingState) -> String {
-        state.waiting ? waiting : working
+        if state.pausedAt != nil { return ChatCopy.reconnecting }
+        return state.waiting ? waiting : working
     }
 
     /// The seconds the line shows: the current wait while waiting, the working time otherwise.
     /// nil while waiting on a request the clock cannot place.
     static func seconds(_ state: WorkingState, now: Date) -> TimeInterval? {
+        let now = min(now, state.pausedAt ?? now)
         guard state.waiting else { return state.clock.worked(at: now) }
         return state.clock.currentWait(at: now)
     }
@@ -196,7 +253,7 @@ enum WorkingCopy {
     /// "Working, 12 seconds, Reading src/a.ts"; "Waiting for you, 12 seconds" while a request
     /// is open.
     static func spoken(_ state: WorkingState, now: Date) -> String {
-        [word(state), seconds(state, now: now).map(ChatCopy.spokenClock), state.step]
+        [word(state), seconds(state, now: now).map(ChatCopy.spokenClock), state.pausedAt == nil ? state.step : nil]
             .compactMap { $0 }.joined(separator: ", ")
     }
 }

@@ -9,8 +9,9 @@ import WidgetKit
 /// mailbox. The pending store claims the request first, so a second tap, or the notification's
 /// own button, sends nothing more. Anything else is answered in the app.
 enum LiveAnswer {
-    enum Failure: Error {
+    enum Failure: Error, Equatable {
         case unavailable
+        case expired
         /// Approving without unlocking was turned off after the card was drawn.
         case needsUnlock
     }
@@ -28,7 +29,14 @@ enum LiveAnswer {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.waiting)
         }
         let sender = RelayAnswerSender(keys: KeychainDeviceKeys(accessGroup: nil), pending: pending, clock: { Date() })
-        try await perform(decision, hostId: hostId, requestId: requestId, pending: pending) {
+        let state = Activity<TogoActivityAttributes>.activities.first {
+            $0.attributes.hostId == hostId && $0.content.state.status == "needs_you" && $0.content.state.requestId == requestId
+        }?.content.state
+        let context = state?.ctx.flatMap { LiveContext.open($0, hostId: hostId, keys: KeychainDeviceKeys(accessGroup: nil)) }
+        let deadline = context?.expires.map { Date(timeIntervalSince1970: Double($0)) }
+            ?? pending.request(requestId)?.expiry
+            ?? state.flatMap { $0.since > 0 ? Date(timeIntervalSince1970: Double($0.since) + RequestLifetime.seconds) : nil }
+        try await perform(decision, hostId: hostId, requestId: requestId, pending: pending, expiresAt: deadline) {
             #if DEBUG
             if SharedSettings.defaults?.bool(forKey: "ui.demo.liveAnswers") == true { return }
             #endif
@@ -39,12 +47,23 @@ enum LiveAnswer {
     }
 
     static func perform(
-        _ decision: String, hostId: String, requestId: String, pending: PendingStore,
+        _ decision: String, hostId: String, requestId: String, pending: PendingStore, expiresAt: Date? = nil,
         send: @Sendable () async throws -> Void,
         refresh: @Sendable (LiveAnswerFeedback) async -> Void
     ) async throws {
         if let request = pending.request(requestId), request.hostId != hostId { throw Failure.unavailable }
-        guard pending.claim(requestId, hostId: hostId) else {
+        guard pending.request(requestId) != nil || expiresAt != nil else { throw Failure.unavailable }
+        guard pending.claim(requestId, hostId: hostId, expiresAt: expiresAt) else {
+            let known = pending.request(requestId)
+            if known?.answered == .confirmed || known?.answerReceipt != nil,
+               let feedback = LiveAnswerFeedback.resolve(known, local: nil, now: Date()) {
+                await refresh(feedback)
+                return
+            }
+            if pending.isExpired(requestId, expiresAt: expiresAt) {
+                await refresh(.failed)
+                throw Failure.expired
+            }
             if let feedback = LiveAnswerFeedback.resolve(pending.request(requestId), local: nil, now: Date()) {
                 await refresh(feedback)
             }
@@ -54,12 +73,19 @@ enum LiveAnswer {
         do {
             try await send()
         } catch {
+            let known = pending.request(requestId)
+            if known?.answered == .confirmed || known?.answerReceipt != nil,
+               let feedback = LiveAnswerFeedback.resolve(known, local: nil, now: Date()) {
+                await refresh(feedback)
+                if feedback == .applied || feedback == .answeredElsewhere { return }
+                throw error
+            }
             pending.release(requestId)
             await refresh(.failed)
             throw error
         }
-        pending.mark(requestId, decision == "deny" ? .denied : .approved)
-        await refresh(.sent)
+        pending.markRelaySent(requestId)
+        await refresh(LiveAnswerFeedback.resolve(pending.request(requestId), local: .sent, now: Date()) ?? .sent)
     }
 
     /// Mutate only the activity still showing this request. A late result must not replace

@@ -35,12 +35,14 @@ public struct PushPairParams: Codable, Hashable, Sendable {
     /// Live Activity update standing in for the done push. Sent only to a helper with
     /// `donesilent.v1`, and only when on.
     public var doneSilent: Bool
+    /// Opt-in only for helpers advertising receipt.v1; omitted otherwise.
+    public var answerReceipts: Bool
 
     public init(
         deviceId: String, name: String, x25519: String, approvalKey: String, apnsToken: String,
         env: Environment, relayUrl: String, liveActivityToken: String? = nil,
         platform: Platform = .ios, liveActivityStartToken: String? = nil, liveActivityCommand: Bool = false,
-        sshKey: String? = nil, doneSilent: Bool = false
+        sshKey: String? = nil, doneSilent: Bool = false, answerReceipts: Bool = false
     ) {
         self.deviceId = deviceId
         self.name = name
@@ -55,11 +57,12 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         self.liveActivityCommand = liveActivityCommand
         self.sshKey = sshKey
         self.doneSilent = doneSilent
+        self.answerReceipts = answerReceipts
     }
 
     private enum CodingKeys: String, CodingKey {
         case deviceId, name, x25519, approvalKey, apnsToken, env, relayUrl, liveActivityToken
-        case platform, liveActivityStartToken, liveActivityCommand, sshKey, doneSilent
+        case platform, liveActivityStartToken, liveActivityCommand, sshKey, doneSilent, answerReceipts
     }
 
     public init(from decoder: any Decoder) throws {
@@ -77,6 +80,7 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         liveActivityCommand = try container.decodeIfPresent(Bool.self, forKey: .liveActivityCommand) ?? false
         sshKey = try container.decodeIfPresent(String.self, forKey: .sshKey)
         doneSilent = try container.decodeIfPresent(Bool.self, forKey: .doneSilent) ?? false
+        answerReceipts = try container.decodeIfPresent(Bool.self, forKey: .answerReceipts) ?? false
     }
 
     // platform and liveActivityCommand are written only when they differ from the defaults,
@@ -96,6 +100,7 @@ public struct PushPairParams: Codable, Hashable, Sendable {
         if liveActivityCommand { try container.encode(true, forKey: .liveActivityCommand) }
         try container.encodeIfPresent(sshKey, forKey: .sshKey)
         if doneSilent { try container.encode(true, forKey: .doneSilent) }
+        if answerReceipts { try container.encode(true, forKey: .answerReceipts) }
     }
 }
 

@@ -16,6 +16,10 @@ public enum Capability {
     public static let ports = "ports.v1"
     public static let push = "push.v1"
     public static let liveContext = "livecontext.v1"
+    public static let foregroundDevice = "fgdevice.v1"
+    public static let answerReceipts = "receipt.v1"
+    /// Agent rows are reconciled after helper restart, including while the main turn is idle.
+    public static let liveAgents = "agents.live.v1"
     public static let capture = "capture.v1"
     public static let launch = "launch.v1"
     public static let lifecycle = "lifecycle.v1"
@@ -33,6 +37,8 @@ public enum Capability {
     public static let recent = "recent.v1"
     /// The harness.* methods, the `harness` notification and `Session.mission`.
     public static let harness = "harness.v1"
+    /// Connection-owned native TSP documents and semantic input.
+    public static let surface = "surface.v1"
 }
 
 /// `fs.upload`: writes `data` as a file named `name` for the session.

@@ -26,7 +26,7 @@ struct SessionEntity: AppEntity, IndexedEntity {
 
     /// The link a notification for this session carries. Bibs are reused, so a session saved
     /// in a shortcut opens whichever session holds the bib on that machine now.
-    var deepLink: DeepLink { .session(bib: bib, host: machine) }
+    var deepLink: DeepLink { .session(bib: bib, host: machine, hostID: hostID) }
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(

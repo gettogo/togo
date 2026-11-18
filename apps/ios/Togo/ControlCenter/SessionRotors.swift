@@ -49,7 +49,7 @@ enum SessionRotors {
 
 enum SessionRotorCopy {
     static let sessions = String(localized: "sidebar.rotor.sessions", defaultValue: "Sessions")
-    static let needsYou = String(localized: "sidebar.rotor.needsYou", defaultValue: "Needs you")
+    static let needsYou = String(localized: "sidebar.rotor.needsYou", defaultValue: "Needs You")
     static let machines = String(localized: "sidebar.rotor.machines", defaultValue: "Machines")
 }
 

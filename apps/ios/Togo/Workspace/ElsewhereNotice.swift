@@ -56,7 +56,7 @@ struct OpenInWindowButton: View {
 
 enum WindowCopy {
     static let elsewhere = String(localized: "window.elsewhere", defaultValue: "Showing in another window")
-    static let showHere = String(localized: "window.showHere", defaultValue: "Show here")
+    static let showHere = String(localized: "window.showHere", defaultValue: "Show Here")
     static let openInNewWindow = String(localized: "window.openInNewWindow", defaultValue: "Open in New Window")
 }
 

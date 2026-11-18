@@ -61,7 +61,7 @@ extension HostMonitorTests {
         await monitor.setForeground(false)
         await monitor.setForeground(true)
         gate.open()
-        #expect(await clock.runSleep(.milliseconds(500)))
+        #expect(await clock.runSleep(.seconds(2)))
         #expect(await eventually { log.reach == .online && log.sessionIDs == ["s1"] })
         await monitor.stop()
     }

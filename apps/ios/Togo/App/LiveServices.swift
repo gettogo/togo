@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import TogoKit
 import TogoTerminal
 import UIKit
@@ -61,8 +62,8 @@ import UIKit
     }
 
     @ObservationIgnored let hostStore: HostStore
-    @ObservationIgnored private let hostRecords: SyncedRecordStore<HostRecord>
-    @ObservationIgnored private let settingsStore: SettingsStore
+    @ObservationIgnored let hostRecords: SyncedRecordStore<HostRecord>
+    @ObservationIgnored let settingsStore: SettingsStore
     @ObservationIgnored let deps: Dependencies
     /// Which machines are set up on this device, and the key each signs in with here.
     @ObservationIgnored let deviceMachines: DeviceMachines
@@ -71,15 +72,17 @@ import UIKit
     @ObservationIgnored private var feeds: [HostID: Task<Void, Never>] = [:]
     @ObservationIgnored private(set) var latest: [HostID: HostSnapshot] = [:]
     @ObservationIgnored private(set) var mapper = SnapshotMapper()
+    private static let discoveryLog = Logger(subsystem: "app.togo", category: "agent-discovery")
+    @ObservationIgnored private var backgroundTeardown: Task<Void, Never>?
     @ObservationIgnored private var agentsRequested: Set<HostID> = []
-    @ObservationIgnored private var terminals: [ObjectIdentifier: LiveTerminal] = [:]
+    @ObservationIgnored var terminals: [ObjectIdentifier: LiveTerminal] = [:]
     @ObservationIgnored private(set) var foreground = true
     /// Machines that have not reported since the app last came to the foreground.
     @ObservationIgnored private var unreported: Set<HostID> = []
     /// Set while a value from the store is applied, so it is not written straight back.
-    @ObservationIgnored private var applyingStoredSettings = false
+    @ObservationIgnored var applyingStoredSettings = false
     @ObservationIgnored private var started = false
-    @ObservationIgnored private var lastSave: Task<Void, Never>?
+    @ObservationIgnored var lastSave: Task<Void, Never>?
     @ObservationIgnored private var signIns: [HostID: Task<Void, any Error>] = [:]
     /// False until the stored machines are read, so a launch with machines never flashes first run.
     private(set) var hostsLoaded = false
@@ -98,6 +101,7 @@ import UIKit
         hostStore = HostStore(records: hostRecords)
         settingsStore = SettingsStore(records: settingsRecords, syncSwitch: syncSwitch, device: device)
         deps = dependencies
+        settings = settingsStore.localSettings()
     }
 
     /// Lists the machines saved on this device straight away, so the first frame shows them.
@@ -105,8 +109,9 @@ import UIKit
     /// machines elsewhere never flashes first run. Monitors start in `start()`.
     func showLocalHosts() {
         guard !hostsLoaded else { return }
-        let local = hostStore.localHosts()
+        let local = deviceMachines.resolve(hostStore.localHosts())
         guard !local.isEmpty else { return }
+        records = Dictionary(local.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
         hosts = local.map(Self.view(of:))
         hostsLoaded = true
     }
@@ -150,6 +155,8 @@ import UIKit
     /// terminals reconnect or let the system suspend them.
     func setForeground(_ on: Bool) {
         guard on != foreground else { return }
+        backgroundTeardown?.cancel()
+        backgroundTeardown = nil
         foreground = on
         attachPrompts.isForeground = on
         deps.pairing?.isForeground = on
@@ -166,8 +173,9 @@ import UIKit
         if !on {
             let helpers = deps.helpers
             let before = beforeDroppingHelpers
-            Task {
+            backgroundTeardown = Task {
                 await before()
+                guard !Task.isCancelled else { return }
                 await helpers.dropAll()
             }
         }
@@ -257,11 +265,11 @@ import UIKit
 
     func listDir(hostID: HostID, path: String) async throws -> ListDirResult {
         let record = try helperRecord(hostID)
-        return try await call(record, prompter: userPrompter(record)) { try await $0.listDir(path: path, showHidden: false) }
+        return try await call(record, prompter: userPrompter(record)) { try await $0.listDir(path: path, showHidden: true) }
     }
 
     func terminal(hostID: HostID, sessionID: String, transport: TransportPreference?, userStarted: Bool) -> TerminalHandle {
-        guard let record = records[hostID] else { return awaitingMachine(hostID) }
+        guard recordsLoaded, let record = records[hostID] else { return awaitingMachine(hostID) }
         let preference = transport ?? (record.profile.transport == .auto ? settings.transport : record.profile.transport)
         let prompter = AttachPrompter(
             prompts: attachPrompts, hostID: hostID, machine: record.profile.name,
@@ -341,6 +349,10 @@ import UIKit
         // A new wake target or route is no reason to reconnect.
         let changed = records.keys.filter { incoming[$0] != nil && incoming[$0]?.withoutLearned != records[$0]?.withoutLearned }
         let rewoken = records.keys.filter { incoming[$0] != nil && incoming[$0]?.wake != records[$0]?.wake && !changed.contains($0) }
+        let relabeled = records.keys.filter { id in
+            guard let next = incoming[id], let prior = records[id], !changed.contains(id) else { return false }
+            return next.profile.name != prior.profile.name || next.symbol != prior.symbol
+        }
         // A removed machine's channel and saved password stay until its helper is told to stop pushing.
         let paired = deps.pairing?.pairedOrPairing ?? []
         // A merged record's machine is still here: its helper keeps this device, and its key stays.
@@ -365,7 +377,7 @@ import UIKit
             onMachineRemoved(id)
         }
         changed.forEach(onMachineChanged)
-        for id in rewoken {
+        for id in Set(rewoken + relabeled) {
             if let snapshot = latest[id], let record = records[id] { publish(snapshot, record: record) }
         }
         settlePendingTerminals()
@@ -404,6 +416,7 @@ import UIKit
     private func received(_ snapshot: HostSnapshot) {
         guard let record = records[snapshot.hostID] else { return }
         let reconnected = snapshot.reach == .online && latest[snapshot.hostID]?.reach != .online
+        if reconnected { agentsRequested.remove(record.id) }
         latest[snapshot.hostID] = snapshot
         if snapshot.reach == .online { deviceMachines.signedIn(to: record.id) }
         deps.diagnostics.reached(snapshot, record: record)
@@ -422,7 +435,9 @@ import UIKit
             Task {
                 // A failed fetch is asked again the next time the machine comes online. Nobody
                 // asked for it, so it never puts a question to the user.
-                do { _ = try await fetchAgents(record, prompter: nil) } catch { agentsRequested.remove(record.id) }
+                do { _ = try await fetchAgents(record, prompter: nil) } catch {
+                    Self.discoveryLog.notice("Background agent discovery failed; waiting for another connection.")
+                }
             }
         }
     }
@@ -460,40 +475,4 @@ import UIKit
         return record
     }
 
-    // MARK: Settings
-
-    private func applyStored(_ stored: AppSettings) {
-        guard stored != settings else { return }
-        applyingStoredSettings = true
-        settings = stored
-        applyingStoredSettings = false
-    }
-
-    /// The sync switch covers machines as well as settings; the settings store applies it to
-    /// itself only. A switch flipped on another device reaches the host store here too.
-    private func settingsChanged(from old: AppSettings) {
-        guard settings != old else { return }
-        deps.shareSettings(settings)
-        if settings.relayURL != old.relayURL || settings.liveActivities != old.liveActivities
-            || settings.liveActivityCommandMachines != old.liveActivityCommandMachines {
-            pairOnlineMachines()
-        }
-        if settings.liveActivityCommandMachines != old.liveActivityCommandMachines { sendCommandChoice() }
-        for terminal in terminals.values {
-            terminal.apply(settings)
-        }
-        let value = settings
-        if value.syncEnabled != old.syncEnabled {
-            let hostRecords = self.hostRecords
-            Task { await hostRecords.setSyncEnabled(value.syncEnabled) }
-        }
-        guard !applyingStoredSettings else { return }
-        let settingsStore = self.settingsStore
-        // Saves run one after another, so a burst such as a pinch ends on its last value.
-        let previous = lastSave
-        lastSave = Task {
-            await previous?.value
-            await settingsStore.save(value)
-        }
-    }
 }

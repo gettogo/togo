@@ -27,6 +27,7 @@ extension CommandLineModel {
 
     /// The command list to match against: the palette's, the session's, or read now.
     func routingCommands() async -> [HarnessCompletion] {
+        if let paletteRevision, paletteRevision != store.commandRevision { await loadPalette() }
         if !palette.isEmpty { return palette }
         if !store.commandList.isEmpty { return store.commandList }
         await loadPalette()
@@ -34,6 +35,18 @@ extension CommandLineModel {
     }
 
     private func runTyped(_ command: HarnessCompletion, args: String, text: String) async {
+        if !args.isEmpty, let native = command.native,
+           command.role == .destructive || native.destructive == true,
+           ["action", "toggle", "exit"].contains(native.intent(hasArguments: true)) {
+            taken(text)
+            _ = await runCommand(.init(line: text, action: nil, destructive: true, detail: command.detail))
+            return
+        }
+        if opensOriginalScreen(command, arguments: args) {
+            paletteOpen = false
+            await send(line: text)
+            return
+        }
         let dispatch = CommandKind.dispatch(command)
         switch dispatch {
         case let .choose(choices, _):
@@ -75,7 +88,7 @@ extension CommandLineModel {
                 taken(text)
                 await perform(command, typed: true)
             } else {
-                routes.showTerminal()
+                if !nativeCommandsAvailable { routes.showTerminal() }
                 await send(line: text)
             }
         case .open(.mission):
