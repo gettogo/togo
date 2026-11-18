@@ -58,7 +58,7 @@ struct IslandCompactTrailing: View {
                     }
                 }
             case .working, .other:
-                LiveClock(since: state.since)
+                LiveClock(since: state.since, compact: true)
                     .font(.subheadline)
                     .foregroundStyle(Color.togoMute)
             default:
