@@ -66,7 +66,7 @@ func TestGooseFollowsAConversationItStartsItself(t *testing.T) {
 		t.Fatalf("session %q after the new one, want b", got)
 	}
 	if n := m.State()[harness.StateMoves]; n != "1" {
-		t.Fatalf("moves %q after a move, want 1: the engine ends what the left conversation had", n)
+		t.Fatalf("moves %q after a move, want 1: the engine starts the chat over on it", n)
 	}
 	m.Map(row(t, sess("b", "2026-11-12 10:05:00")))
 	if got := m.State()["harness_session"]; got != "b" {
@@ -128,6 +128,10 @@ func TestGooseRestartKeepsTheMove(t *testing.T) {
 	restarted.Map(row(t, map[string]string{"id": "b", "working_dir": "/w/proj", "created_at": "2026-11-12 10:04:00", "updated_at": "2026-11-12 10:05:00"}))
 	if got := restarted.State()["harness_session"]; got != "b" {
 		t.Fatalf("after a restart the chat is on %q, want b", got)
+	}
+	// The helper restart does not start the chat over.
+	if n := restarted.State()[harness.StateMoves]; n != "" {
+		t.Fatalf("moves %q after a helper restart, want none", n)
 	}
 	// Resume an older conversation, made before this session began.
 	restarted.Map(row(t, map[string]string{"id": "old", "working_dir": "/w/proj", "created_at": "2026-11-11 09:00:00", "updated_at": "2026-11-12 10:09:00"}))

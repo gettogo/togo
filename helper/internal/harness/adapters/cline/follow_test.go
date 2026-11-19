@@ -58,11 +58,15 @@ func TestMessagesFollowsANewSessionWithoutPidWhenAlone(t *testing.T) {
 	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
 		t.Fatal("first session not followed")
 	}
+	m.Map(harness.Record{Data: doc}) // read again: a replay is not a move
+	if n := m.State()[harness.StateMoves]; n != "" {
+		t.Fatalf("moves %q on one session read twice", n)
+	}
 	if got := follows(m, other, "1794200000003_nopid"); got != "1794200000003_nopid" {
 		t.Fatalf("the new session is not followed: %q", got)
 	}
 	if n := m.State()[harness.StateMoves]; n != "1" {
-		t.Fatalf("moves %q after a move, want 1: the engine ends what the left conversation had", n)
+		t.Fatalf("moves %q after a move, want 1: the engine starts the chat over on it", n)
 	}
 	resumed := []byte(strings.Replace(string(doc), "2026-11-08T03:38:03.002Z", "2026-11-08T05:02:00.000Z", 1))
 	if got := follows(m, resumed, fixtureID); got != fixtureID {
