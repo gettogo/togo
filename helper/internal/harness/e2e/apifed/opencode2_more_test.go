@@ -51,7 +51,7 @@ func (s *oc2) sendLands(t *testing.T, text string) enginetest.State {
 // phone's next prompt lands there. No prompt is ever posted to a session
 // id (the fault this product had with OpenCode). A conversation picked
 // afterwards in the terminal's own list: see
-// TestKnownFault_OpenCode2_DeskResumeAfterPhoneResumeEmptiesTheChat.
+// TestOpenCode2DeskResumeAfterPhoneResume.
 func TestOpenCode2NewAndResume(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "generated", "opencode2/lifecycle/new_conversation", "opencode2/lifecycle/resume",
@@ -301,23 +301,17 @@ func TestKnownFault_OpenCode2_ResumeKeepsTheLeftConversation(t *testing.T) {
 	}
 }
 
-// TestKnownFault_OpenCode2_DeskResumeAfterPhoneResumeEmptiesTheChat:
-// after the phone resumed one conversation, the user picks another in the
-// terminal's own list and types there. The helper follows the move (it
-// keeps the new conversation for a restart, and reads its past), but the
-// chat ends empty: neither that conversation's past nor the prompt just
-// typed is shown.
+// After the phone resumed one conversation, the user picks another in the
+// terminal's own list and types there: the chat shows that conversation's
+// past and the prompt just typed, and nothing of the one left.
 //
-// Cause, not traced: the engine logs the move's reset ("chat reset
-// (epoch)"), the history read of the conversation (both pages answered),
-// then a second epoch reset after it (engine/conversation.go
-// startOverLocked, engine/history.go hydrate). The relaunch's adapter
-// restart (engine/endpoint.go:222-257) is the difference from a move
-// without a resume before it, which works (TestOpenCode2NewAndResume).
-//
-// Correct: the chat shows the conversation the terminal moved to, its past
-// and the new prompt.
-func TestKnownFault_OpenCode2_DeskResumeAfterPhoneResumeEmptiesTheChat(t *testing.T) {
+// This was F30: the resume relaunches OpenCode with --session, and the
+// fresh mapper that read the new conversation's past started on the
+// resumed one, dropped the past, and the engine emptied the chat a second
+// time (adapters/opencode/history2.go). Whether the typed prompt survived
+// depended on whether its event was read before or after that reset, so
+// the race detector's timing showed it and a plain run did not.
+func TestOpenCode2DeskResumeAfterPhoneResume(t *testing.T) {
 	t.Parallel()
 	s := oc2Start(t, 76, nil, sessiongen.Turn{Prompt: "In the first", Say: 20})
 	support.WaitFor(t, s.r, "the first conversation", shown("In the first"))
@@ -335,8 +329,11 @@ func TestKnownFault_OpenCode2_DeskResumeAfterPhoneResumeEmptiesTheChat(t *testin
 		return s.l.Append(sessiongen.Turn{Prompt: "Typed at the desk", Say: 10})
 	})
 	support.Eventually(t, support.DriveLimit, "the chat to follow the desk", func() bool { return s.conversation() == second })
-	st := s.r.Settle(3 * time.Second)
-	if len(support.UserPrompts(st)) != 0 {
-		t.Fatalf("the chat shows %q: the fault changed or is fixed; move this to TestOpenCode2NewAndResume", textsOf(st))
+	st := support.WaitFor(t, s.r, "the desk's conversation and its new prompt", func(st enginetest.State) bool {
+		return shown("In the second")(st) && shown("Typed at the desk")(st)
+	})
+	st = s.r.Settle(2 * time.Second)
+	if !shown("In the second")(st) || !shown("Typed at the desk")(st) || shown("In the first")(st) {
+		t.Fatalf("the chat shows %q, want the second conversation's past and the prompt typed at the desk only", textsOf(st))
 	}
 }
