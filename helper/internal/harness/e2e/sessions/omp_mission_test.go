@@ -168,14 +168,14 @@ func TestOMPForkStartsTheChatOver(t *testing.T) {
 		t.Errorf("%d prompts after the fork, want only the fork's", n)
 	}
 	// omp takes a prompt typed to the fork and records it in the fork's file.
-	r.Term.OnSubmit = func(text string) {
-		if err := a.l.Append(sessiongen.Turn{Prompt: text, Say: 20}); err != nil {
-			t.Error(err)
-		}
-	}
+	hook, written := recordAfterSent(t, r, func(text string) error {
+		return a.l.Append(sessiongen.Turn{Prompt: text, Say: 20})
+	})
+	r.Term.OnSubmit = hook
 	if _, err := r.Send("Carry on in the fork", harness.SendNow); err != nil {
 		t.Fatalf("send: %v", err)
 	}
+	<-written
 	st := r.SettleUntil(support.FileLimit, enginetest.Has(a.l.Truth.Last))
 	if got := r.Term.Submitted(); len(got) != 1 || got[0] != "Carry on in the fork" {
 		t.Errorf("omp was given %q", got)

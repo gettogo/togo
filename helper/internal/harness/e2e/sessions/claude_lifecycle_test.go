@@ -59,14 +59,14 @@ func TestKnownFault_ClaudeNewConversationIsNotFollowed(t *testing.T) {
 	if kept != len(first.Items) || len(support.UserPrompts(second)) != 3 {
 		t.Errorf("%d of the old items kept, %d prompts: the fault changed", kept, len(support.UserPrompts(second)))
 	}
-	r.Term.OnSubmit = func(text string) {
-		if err := l.Append(sessiongen.Turn{Prompt: text, Say: 20}); err != nil {
-			t.Error(err)
-		}
-	}
+	hook, written := recordAfterSent(t, r, func(text string) error {
+		return l.Append(sessiongen.Turn{Prompt: text, Say: 20})
+	})
+	r.Term.OnSubmit = hook
 	if _, err := r.Send("Carry on here", harness.SendNow); err != nil {
 		t.Fatalf("send: %v", err)
 	}
+	<-written
 	st := r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
 	if got := r.Term.Submitted(); len(got) != 1 || got[0] != "Carry on here" || len(support.UserPrompts(st)) != 4 {
 		t.Errorf("claude was given %q; %d prompts", got, len(support.UserPrompts(st)))
