@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -15,6 +16,25 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/session"
 )
+
+// waitSendBlockedOnTypingLock waits until a goroutine inside Send is parked
+// on the typing lock. Send reads the conversation before it waits for the
+// lock, so by then it has seen the conversation the test means it to see.
+func waitSendBlockedOnTypingLock(t *testing.T) {
+	t.Helper()
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		var b strings.Builder
+		if err := pprof.Lookup("goroutine").WriteTo(&b, 2); err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range strings.Split(b.String(), "\n\n") {
+			if strings.Contains(g, "(*Engine).Send(") && strings.Contains(g, "sync.Mutex.Lock") {
+				return
+			}
+		}
+	}
+	t.Fatal("the send never reached the typing lock")
+}
 
 // Seen live on omp 18.20, OpenCode 2.3 and others: the agent moved to a new
 // conversation in its terminal and the chat kept the old conversation's
@@ -224,7 +244,7 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		_, err := e.Send(ctx, harness.SendRequest{Session: id, Text: "waiting", Mode: harness.SendNow})
 		done <- err
 	}()
-	time.Sleep(100 * time.Millisecond)
+	waitSendBlockedOnTypingLock(t)
 	deliver(id, map[string]any{"state": map[string]string{"conversation": "B2"}})
 	waitFor(t, func() bool { return e.log.Epoch(id) == "e3" })
 	l.Unlock()

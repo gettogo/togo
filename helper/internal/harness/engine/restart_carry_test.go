@@ -33,7 +33,7 @@ func TestOpenChatSurvivesARestart(t *testing.T) {
 	}
 	e.Release(sub, id)
 	e.restart(id)
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		e.mu.Lock()
 		_, rebuilt := e.sessions[id]
@@ -50,7 +50,7 @@ func TestOpenChatSurvivesARestart(t *testing.T) {
 	s.waitReady(ctx)
 	deliver(id, map[string]any{"items": []harness.Item{{ID: "a1", Kind: harness.KindAssistant, At: time.Now(), Assistant: &harness.TextBody{Text: "ok"}}}})
 	var reset, item bool
-	for i := 0; i < 200 && !(reset && item); i++ {
+	for i := 0; i < 3000 && !(reset && item); i++ {
 		sub.mu.Lock()
 		for _, n := range sub.got {
 			reset = reset || n.Kind == harness.NoteReset

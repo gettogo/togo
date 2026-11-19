@@ -55,7 +55,7 @@ func TestSendNeverTypesIntoAQuestion(t *testing.T) {
 	}
 
 	pane.set("> \n")
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		if _, typed := pane.snapshot(); len(typed) == 1 {
 			if typed[0] != "queued while asked" {

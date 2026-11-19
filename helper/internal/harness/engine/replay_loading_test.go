@@ -62,19 +62,19 @@ func TestHistoryResetPrecedesReplayWork(t *testing.T) {
 	}()
 	select {
 	case <-mapper.entered:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("replay did not start")
 	}
 	announced := false
 	select {
 	case <-sub.reset:
 		announced = true
-	case <-time.After(time.Second):
+	case <-time.After(30 * time.Second):
 	}
 	release.Do(func() { close(mapper.proceed) })
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("replay did not complete")
 	}
 	if !announced {

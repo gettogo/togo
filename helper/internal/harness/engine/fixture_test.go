@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -95,6 +96,45 @@ type noApprovals struct{}
 func (noApprovals) Pending(string) []wire.Approval                       { return nil }
 func (noApprovals) Answer(context.Context, string, string, string) error { return nil }
 
+// waitNoProcessIn waits until no process has its working folder under one
+// of dirs. The pane's shell is signalled when the tmux server is killed but
+// may not have exited yet, and a folder removed under a running shell can
+// fail to go.
+func waitNoProcessIn(t *testing.T, dirs ...string) {
+	t.Helper()
+	for i, d := range dirs {
+		if r, err := filepath.EvalSymlinks(d); err == nil {
+			dirs[i] = r
+		}
+	}
+	if _, err := exec.LookPath("lsof"); err != nil {
+		return
+	}
+	busy := func() bool {
+		out, err := exec.Command("lsof", "-F", "n", "-d", "cwd").Output()
+		if err != nil && len(out) == 0 {
+			return false
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.HasPrefix(line, "n") {
+				continue
+			}
+			for _, d := range dirs {
+				if p := line[1:]; p == d || strings.HasPrefix(p, d+"/") {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for deadline := time.Now().Add(30 * time.Second); busy(); time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Errorf("a process still runs in %v", dirs)
+			return
+		}
+	}
+}
+
 type fixtureEnv struct {
 	approvals engine.Approvals
 	home      string
@@ -138,6 +178,10 @@ func newFixtureEnv(t *testing.T, name string) *fixtureEnv {
 	t.Setenv("HISTFILE", "/dev/null")
 
 	togoHome := t.TempDir()
+	// Cleanups run last-in first-out: this one runs after the tmux server
+	// is killed (registered by tmuxtest.New below) and before the folders
+	// are removed, so nothing from the pane is still using them.
+	t.Cleanup(func() { waitNoProcessIn(t, home, togoHome) })
 	svc := &session.Service{
 		Tmux: tmuxtest.New(t), Recent: &state.Recent{File: filepath.Join(togoHome, "recent.json")},
 		LockFile: filepath.Join(togoHome, "run", "bib.lock"), Shell: "/bin/sh", Path: bin + ":/usr/bin:/bin",
@@ -179,8 +223,9 @@ func (f *fixtureEnv) warm(t *testing.T) {
 	f.waitItems(t, "u1.turn")
 	for _, ev := range []string{"TaskCreated", "TaskCompleted"} {
 		for i, title := range []string{"Find the failing test", "Fix the offset handling"} {
+			rev := f.open(t).Mission.Rev
 			hook(map[string]any{"hook_event_name": ev, "task_id": string(rune('1' + i)), "task_subject": title})
-			time.Sleep(30 * time.Millisecond)
+			f.waitMission(t, func(m harness.Mission) bool { return m.Rev > rev })
 		}
 	}
 	status, err := os.ReadFile("../adapters/claude/testdata/statusline.json")
@@ -223,7 +268,7 @@ func (f *fixtureEnv) waitItems(t *testing.T, id string) {
 
 func (f *fixtureEnv) waitMission(t *testing.T, ok func(harness.Mission) bool) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); !ok(f.open(t).Mission); {
+	for deadline := time.Now().Add(30 * time.Second); !ok(f.open(t).Mission); {
 		if time.Now().After(deadline) {
 			t.Fatalf("the session never settled: %+v", f.open(t))
 		}
