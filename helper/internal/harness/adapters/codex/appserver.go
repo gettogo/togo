@@ -158,9 +158,14 @@ func (a *AppServer) parentOf(thread string) string {
 	return ""
 }
 
+// setMain follows the top-level thread the TUI shows. It names the
+// conversation: another one (a /new or a /resume at the desk, a resume
+// from the phone) makes the engine start the chat over on it with a fresh
+// mapper; the same thread again (a helper restart) changes nothing.
 func (a *AppServer) setMain(thread string) {
 	a.main = thread
 	a.state["harness_session"] = thread
+	a.state[harness.StateConversation] = thread
 }
 
 type resumeResult struct {
@@ -368,6 +373,9 @@ func (a *AppServer) turnStarted(params json.RawMessage, at time.Time) ([]harness
 		// /resume, so it is now the main thread.
 		a.threads[p.ThreadID] = &threadInfo{top: true}
 		a.setMain(p.ThreadID)
+		// Fresh as of this turn: an older thread the server loads again
+		// does not take the chat back.
+		a.mainFresh = orNow(secs(p.Turn.StartedAt), at)
 	}
 	started := orNow(secs(p.Turn.StartedAt), at)
 	ti := a.turn(p.Turn.ID, p.ThreadID, started)
