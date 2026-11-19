@@ -45,7 +45,6 @@ kilo/lifecycle/helper_restart
 kimi/capability/agents
 kimi/capability/changes
 kimi/capability/chat.anchors
-kimi/lifecycle/resume
 omp/capability/changes
 omp/capability/chat
 omp/capability/chat.anchors

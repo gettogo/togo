@@ -56,6 +56,8 @@ func openQuestions(st enginetest.State) map[string][]string {
 // /new in Kimi starts another session folder with its own log. The
 // session moves to it, keeps the old conversation's items, and follows the
 // new log after a helper restart.
+// Keeping both conversations is this agent's current convention; the
+// question whether every agent should start over instead is open.
 func TestKimiNewConversation(t *testing.T) {
 	coverage.Covers(t, "generated", "kimi/lifecycle/new_conversation", "kimi/lifecycle/helper_restart")
 	l, r := kimiStart(t, true, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 30}, sessiongen.Turn{Say: 20})
@@ -85,31 +87,13 @@ func TestKimiNewConversation(t *testing.T) {
 	support.Fail(t, "paging", enginetest.Paging(more))
 }
 
-// TestKnownFault_KimiResumeToDroppedFile documents the fault of
-// TestKnownFault_PiResumeToDroppedFile for Kimi: a log the session left
-// (a /new) is never followed again unless a process of the session holds
-// it open (source/exclusive.go, the `dropped` checks), and Kimi's TUI does
-// not keep its log open between records, so a resumed conversation's
-// prompts never reach the chat.
-//
-// Correct: a dropped log that grows while no other Kimi runs in the
-// folder is followed again. This test passes while the fault is present;
-// when it fails the fault is fixed: delete it.
-func TestKnownFault_KimiResumeToDroppedFile(t *testing.T) {
+// Kimi Code appends and closes its file per entry. After a /new, a resume of
+// the first conversation appends to the file the session left: the
+// session follows it back (resumeToLeft).
+func TestKimiResumeToLeftConversation(t *testing.T) {
+	coverage.Covers(t, "generated", "kimi/lifecycle/resume")
 	l, r := kimiStart(t, true, map[int]sessiongen.KimiTurn{3: {Resume: 1}}, sessiongen.Turn{Say: 20})
-	support.SettleUntil(r, 1)
-	support.Now(l)
-	if err := l.Append(sessiongen.Turn{New: true, Say: 20}); err != nil {
-		t.Fatal(err)
-	}
-	support.SettleUntil(r, 2)
-	support.Now(l)
-	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil { // resumed: the first log again
-		t.Fatal(err)
-	}
-	if !support.Never(r, 4500*time.Millisecond, support.HasPrompt(3)) {
-		t.Fatal("the resumed conversation is followed: the fault is fixed")
-	}
+	resumeToLeft(t, l, r)
 }
 
 // TestKnownFault_KimiReplayWindowLeavesItemsWithoutATurn documents the
