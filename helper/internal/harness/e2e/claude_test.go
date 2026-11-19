@@ -19,6 +19,7 @@ import (
 // SessionStart hook; after a restart no hook comes again and the engine
 // must find the same transcript and show the same chat.
 func TestClaudeBackgroundAgentsAndRestart(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "claude/capability/agents", "claude/capability/background",
 		"claude/capability/compact", "claude/lifecycle/helper_restart")
 	e := newEnv(t, 2*time.Hour)

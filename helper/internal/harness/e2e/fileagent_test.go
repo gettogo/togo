@@ -222,18 +222,18 @@ func (a fileAgent) reconnect(t *testing.T) {
 	a.seen(t, r, "first half", l, false)
 	ctx := context.Background()
 	sub := &quietSub{done: make(chan struct{})}
-	first, err := r.Engine.Open(ctx, sub, enginetest.SessionID, 0, 50)
+	first, err := r.Engine.Open(ctx, sub, r.ID, 0, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = r.Engine.Close(ctx, sub, enginetest.SessionID)
+	_ = r.Engine.Close(ctx, sub, r.ID)
 	close(sub.done) // the connection drops
 	for i := 0; i < 4; i++ {
 		a.add(t, l, sessiongen.Turn{Say: 50, Tools: 1, Output: 100})
 	}
 	st := a.seen(t, r, "second half", l, false)
 	sub2 := &quietSub{done: make(chan struct{})}
-	back, err := r.Engine.Open(ctx, sub2, enginetest.SessionID, first.Cursor, 1000)
+	back, err := r.Engine.Open(ctx, sub2, r.ID, first.Cursor, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func (a fileAgent) removed(t *testing.T) {
 	l, r := a.start(t, e, sessiongen.Script{Seed: 62})
 	a.add(t, l, sessiongen.Turn{Say: 40, Tools: 2, Output: 100}, open(sessiongen.Turn{Say: 40, Tools: 2, Output: 100}))
 	a.seen(t, r, "before", l, true)
-	r.Engine.Forget(enginetest.SessionID)
+	r.Engine.Forget(r.ID)
 	st := r.Read()
 	if len(st.Items) != 0 || st.Mission.Summary.Working || st.Mission.Summary.NeedsYou != 0 {
 		t.Errorf("after the removal: %d items, summary %+v", len(st.Items), st.Mission.Summary)
@@ -300,20 +300,20 @@ func (a fileAgent) hammer(t *testing.T) {
 				}
 				ctx := context.Background()
 				sub := &quietSub{done: make(chan struct{})}
-				res, err := r.Engine.Open(ctx, sub, enginetest.SessionID, 0, 20+g)
+				res, err := r.Engine.Open(ctx, sub, r.ID, 0, 20+g)
 				if err != nil {
 					t.Errorf("open: %v", err)
 					return
 				}
 				if len(res.Items) > 0 {
-					if _, err := r.Engine.History(ctx, enginetest.SessionID, res.Items[0].Seq, 10); err != nil {
+					if _, err := r.Engine.History(ctx, r.ID, res.Items[0].Seq, 10); err != nil {
 						t.Errorf("history: %v", err)
 						return
 					}
 				}
-				_, _ = r.Engine.Describe(ctx, enginetest.SessionID)
-				r.Engine.Summary(enginetest.SessionID)
-				_ = r.Engine.Close(ctx, sub, enginetest.SessionID)
+				_, _ = r.Engine.Describe(ctx, r.ID)
+				r.Engine.Summary(r.ID)
+				_ = r.Engine.Close(ctx, sub, r.ID)
 				close(sub.done)
 			}
 		}(g)

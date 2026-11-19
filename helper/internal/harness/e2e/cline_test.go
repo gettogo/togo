@@ -40,6 +40,7 @@ func clineStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *
 // written while no other Cline runs there, is followed. This test passes
 // while the fault is present; when it fails the fault is fixed: delete it.
 func TestKnownFault_ClineNewConversationIsNeverFollowed(t *testing.T) {
+	t.Parallel()
 	l, r := clineStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Say: 20})
 	settleUntil(r, 2)
 	now(l)
@@ -63,6 +64,7 @@ func TestKnownFault_ClineNewConversationIsNeverFollowed(t *testing.T) {
 // test passes while the fault is present; when it fails the fault is fixed:
 // delete it.
 func TestKnownFault_ClineDocumentOver8MiB(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t, 10*time.Minute)
 	turns := make([]sessiongen.Turn, 40)
 	for i := range turns {
@@ -85,6 +87,7 @@ func TestKnownFault_ClineDocumentOver8MiB(t *testing.T) {
 // answered. When the hub reports the agent exited they end and nothing
 // waits for the user; relaunched, the same session carries on.
 func TestClineExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cline/lifecycle/agent_exits", "cline/lifecycle/relaunch", "cline/capability/needs.questions")
 	extra := map[int]sessiongen.ClineTurn{
 		2: {Question: &sessiongen.ClineQuestion{Question: "Which language?", Options: []string{"Go", "Rust"}, Open: true}},
@@ -136,6 +139,7 @@ func TestClineExitAndRelaunch(t *testing.T) {
 // A failed run ends its turn failed with the reason in words; the next
 // turn works; a restart reads the same.
 func TestClineFailedTurn(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cline/lifecycle/turn_end")
 	l, r := clineStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Error: true}, sessiongen.Turn{Say: 20})
 	st := settleUntil(r, 3)
@@ -163,6 +167,7 @@ func TestClineFailedTurn(t *testing.T) {
 // results, edits, commands, thinking, questions answered and cancelled, the
 // mode of a prompt; paged history reads the same whatever the page size.
 func TestClineCapabilitiesInFiles(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cline/capability/chat", "cline/capability/needs.questions")
 	extra := map[int]sessiongen.ClineTurn{
 		1: {Edits: 2, Commands: 1, Think: true, Mode: "plan"},
@@ -213,16 +218,19 @@ func TestClineCapabilitiesInFiles(t *testing.T) {
 }
 
 func TestClineConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cline/lifecycle/connection_drop")
 	dropAndReturn(t, clineStarter)
 }
 
 func TestClineSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cline/lifecycle/session_removed")
 	removeAndServeAgain(t, clineStarter)
 }
 
 func TestClineConcurrentReaders(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cline/scale/concurrent_requests")
 	concurrentReaders(t, clineStarter)
 }
@@ -238,6 +246,7 @@ func TestClineConcurrentReaders(t *testing.T) {
 // passes while the fault is present; when it fails the fault is fixed:
 // delete it.
 func TestKnownFault_ClineKilledTurnEndsOK(t *testing.T) {
+	t.Parallel()
 	_, r := clineStart(t, map[int]sessiongen.ClineTurn{1: {Unfinished: true}}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
 	st := settleUntil(r, 1)

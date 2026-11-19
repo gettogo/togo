@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness/coverage"
-	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
@@ -52,7 +51,7 @@ func TestCursorModelIsTheOneTheHooksName(t *testing.T) {
 	})
 	r := e.rig(t, "cursor")
 	selected := func() string {
-		sc, err := r.Engine.Screen(context.Background(), enginetest.SessionID, "model", nil)
+		sc, err := r.Engine.Screen(context.Background(), r.ID, "model", nil)
 		if err != nil || sc.Picker == nil {
 			t.Fatalf("model screen: %v %+v", err, sc)
 		}

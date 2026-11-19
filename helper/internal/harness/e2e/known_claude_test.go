@@ -24,6 +24,7 @@ import (
 // Correct: when the call is read, the row takes the call's turn and start
 // time. This test passes while the fault is present.
 func TestKnownFault_ClaudeAgentReadBeforeItsCall(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t, time.Hour)
 	l, err := sessiongen.Write(e.home, &sessiongen.Claude{}, sessiongen.Script{Seed: 32, Start: e.start, Cwd: e.cwd,
 		Turns: []sessiongen.Turn{{Say: 40, Agents: &sessiongen.Batch{Size: 2, Steps: 1, Background: true}}}})

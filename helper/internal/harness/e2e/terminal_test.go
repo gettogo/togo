@@ -89,17 +89,17 @@ func TestTerminalConnectionDrop(t *testing.T) {
 	terminalEach(t, func(t *testing.T, r *enginetest.Rig) {
 		ctx := context.Background()
 		sub := &quietSub{done: make(chan struct{})}
-		first, err := r.Engine.Open(ctx, sub, enginetest.SessionID, 0, 50)
+		first, err := r.Engine.Open(ctx, sub, r.ID, 0, 50)
 		if err != nil {
 			t.Fatal(err)
 		}
-		_ = r.Engine.Close(ctx, sub, enginetest.SessionID)
+		_ = r.Engine.Close(ctx, sub, r.ID)
 		close(sub.done)
 		r.SetEnded(true)
 		r.SetEnded(false)
 		sub2 := &quietSub{done: make(chan struct{})}
 		defer close(sub2.done)
-		back, err := r.Engine.Open(ctx, sub2, enginetest.SessionID, first.Cursor, 1000)
+		back, err := r.Engine.Open(ctx, sub2, r.ID, first.Cursor, 1000)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -121,7 +121,7 @@ func TestTerminalSessionRemoved(t *testing.T) {
 	terminalEach(t, func(t *testing.T, r *enginetest.Rig) {
 		r.SetStatus("working")
 		r.Settle(fileLimit)
-		r.Engine.Forget(enginetest.SessionID)
+		r.Engine.Forget(r.ID)
 		st := r.Read()
 		if len(st.Items) != 0 || st.Mission.Summary.Working {
 			t.Errorf("after the removal: %d items, summary %+v", len(st.Items), st.Mission.Summary)

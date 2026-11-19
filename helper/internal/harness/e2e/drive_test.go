@@ -212,6 +212,9 @@ func (e env) rigMod(t *testing.T, agent string, mod func(*enginetest.Options)) *
 	if mod != nil {
 		mod(&opt)
 	}
+	if opt.ID == "" {
+		opt.ID = enginetest.NewID()
+	}
 	return enginetest.New(t, opt)
 }
 

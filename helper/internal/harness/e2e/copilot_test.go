@@ -10,6 +10,13 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
+// The scenarios of the hook-driven agents (Copilot CLI, Droid, Cursor
+// CLI, Amp) run one at a time, before the parallel ones: under load,
+// TestCopilotNewConversationAndResume and TestCopilotRestartsAtSeededPoints
+// have seen a turn with one reply where two were written, in under a
+// second (no wait ran out), and TestAmpRestartsAtSeededPoints a restart
+// with nothing drawn before it. The cause is not found yet; running them
+// alone keeps the rest of the package fast without hiding it.
 var copilotAgent = hookAgent{
 	name:    "copilot",
 	profile: func() sessiongen.Profile { return &sessiongen.Copilot{} },

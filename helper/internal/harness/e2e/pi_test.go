@@ -32,6 +32,7 @@ func piStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *eng
 // keeps the old conversation's items, follows the new file after a helper
 // restart, and holds no item twice.
 func TestPiNewConversation(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/new_conversation", "pi/lifecycle/helper_restart")
 	_, l, r := piStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 30}, sessiongen.Turn{Say: 20})
 	checkEdge(t, "first conversation", settleUntil(r, 2), l)
@@ -64,6 +65,7 @@ func TestPiNewConversation(t *testing.T) {
 // Pi resumed on an older conversation it had not followed appends to that
 // file; the session moves to it.
 func TestPiResumeOlderConversation(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/resume")
 	e := newEnv(t, 20*time.Minute)
 	// Two conversations exist when the session starts; the newer is followed.
@@ -97,6 +99,7 @@ func TestPiResumeOlderConversation(t *testing.T) {
 // is followed again. This test passes while the fault is present; when it
 // fails the fault is fixed: delete it.
 func TestKnownFault_PiResumeToDroppedFile(t *testing.T) {
+	t.Parallel()
 	_, l, r := piStart(t, map[int]sessiongen.PiTurn{3: {Resume: 1}}, sessiongen.Turn{Say: 20})
 	settleUntil(r, 1)
 	now(l)
@@ -117,6 +120,7 @@ func TestKnownFault_PiResumeToDroppedFile(t *testing.T) {
 // the hub reports the agent exited, the turn and tool end interrupted and
 // the summary stops working; relaunched on the same file it carries on.
 func TestPiExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/agent_exits", "pi/lifecycle/relaunch")
 	_, l, r := piStart(t, map[int]sessiongen.PiTurn{2: {Unfinished: true}}, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Tools: 1, Output: 20})
 	r.Hub("working")
@@ -163,6 +167,7 @@ func TestPiExitAndRelaunch(t *testing.T) {
 // ends the turn failed with the reason in words. Neither leaves the
 // summary working, and a restart reads the same.
 func TestPiInterruptAndError(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/interrupt", "pi/lifecycle/turn_end")
 	_, l, r := piStart(t, nil, sessiongen.Turn{Say: 20}, sessiongen.Turn{Interrupt: true}, sessiongen.Turn{Error: true}, sessiongen.Turn{Say: 20})
 	st := settleUntil(r, 4)
@@ -201,6 +206,7 @@ func TestPiInterruptAndError(t *testing.T) {
 // changes, edited files, a compaction, a command run with "!", thinking
 // blocks, the title; paged history reads the same whatever the page size.
 func TestPiCapabilitiesInFiles(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/capability/chat", "pi/capability/chat.history", "pi/capability/model", "pi/capability/effort",
 		"pi/capability/status", "pi/capability/changes", "pi/capability/files", "pi/capability/compact")
 	extra := map[int]sessiongen.PiTurn{
@@ -255,6 +261,7 @@ func TestPiCapabilitiesInFiles(t *testing.T) {
 // A phone that drops while Pi works and returns with the cursor it had
 // gets exactly the items it missed.
 func TestPiConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/connection_drop")
 	dropAndReturn(t, piStarter)
 }
@@ -262,6 +269,7 @@ func TestPiConnectionDrop(t *testing.T) {
 // A removed session is dropped by the engine; serving it again rebuilds
 // the conversation from the files.
 func TestPiSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/session_removed")
 	removeAndServeAgain(t, piStarter)
 }
@@ -281,6 +289,7 @@ func TestPiSessionRemoved(t *testing.T) {
 // present; when it fails the fault is fixed: delete it, and the edge-turn
 // allowance in restarted (drive_test.go).
 func TestKnownFault_PiReplayWindowStartsATurnMidTurn(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t, 48*time.Hour)
 	turns := make([]sessiongen.Turn, 230)
 	for i := range turns {
@@ -313,6 +322,7 @@ func TestKnownFault_PiReplayWindowStartsATurnMidTurn(t *testing.T) {
 
 // Many clients reading at once while Pi writes get consistent answers.
 func TestPiConcurrentReaders(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "pi/scale/concurrent_requests")
 	concurrentReaders(t, piStarter)
 }

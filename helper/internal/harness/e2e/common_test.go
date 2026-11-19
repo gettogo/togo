@@ -29,11 +29,11 @@ func dropAndReturn(t *testing.T, start starter) {
 	l, r := start(t, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Say: 20})
 	settleUntil(r, 2)
 	a := dropSub{make(chan struct{})}
-	first, err := r.Engine.Open(t.Context(), a, enginetest.SessionID, 0, 1<<20)
+	first, err := r.Engine.Open(t.Context(), a, r.ID, 0, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.Engine.Release(a, enginetest.SessionID)
+	r.Engine.Release(a, r.ID)
 	close(a.done) // the connection drops
 	now(l)
 	if err := l.Append(sessiongen.Turn{Say: 20, Tools: 2, Output: 20}, sessiongen.Turn{Say: 20}); err != nil {
@@ -42,7 +42,7 @@ func dropAndReturn(t *testing.T, start starter) {
 	full := settleUntil(r, 4)
 	b := dropSub{make(chan struct{})}
 	defer close(b.done)
-	back, err := r.Engine.Open(t.Context(), b, enginetest.SessionID, first.Cursor, 1<<20)
+	back, err := r.Engine.Open(t.Context(), b, r.ID, first.Cursor, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func concurrentReaders(t *testing.T, start starter) {
 				default:
 				}
 				sub := dropSub{make(chan struct{})}
-				res, err := r.Engine.Open(ctx, sub, enginetest.SessionID, 0, 5+i)
+				res, err := r.Engine.Open(ctx, sub, r.ID, 0, 5+i)
 				if err != nil {
 					errs <- "open: " + err.Error()
 					close(sub.done)
@@ -132,7 +132,7 @@ func concurrentReaders(t *testing.T, start starter) {
 				}
 				add(res.Items)
 				for page, more := res.Items, res.More; more && len(page) > 0; {
-					p, err := r.Engine.History(ctx, enginetest.SessionID, page[0].Seq, 5+i)
+					p, err := r.Engine.History(ctx, r.ID, page[0].Seq, 5+i)
 					if err != nil {
 						errs <- "history: " + err.Error()
 						break
@@ -140,7 +140,7 @@ func concurrentReaders(t *testing.T, start starter) {
 					add(p.Items)
 					page, more = p.Items, p.More
 				}
-				_ = r.Engine.Close(ctx, sub, enginetest.SessionID)
+				_ = r.Engine.Close(ctx, sub, r.ID)
 				close(sub.done)
 			}
 		}(i)

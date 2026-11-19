@@ -15,6 +15,7 @@ import (
 // with two subagents and nothing else at work: they end with it, and the
 // session stops working.
 func TestOMPNewConversationThenExit(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "omp/lifecycle/new_conversation", "omp/lifecycle/agent_exits")
 	e := newEnv(t, 30*time.Minute)
 	l, err := sessiongen.Write(e.home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 21, Start: e.start, Cwd: e.cwd,

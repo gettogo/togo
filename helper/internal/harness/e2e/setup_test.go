@@ -40,6 +40,9 @@ func (e env) rig(t *testing.T, agent string) *enginetest.Rig {
 
 func (e env) rigWith(t *testing.T, o enginetest.Options) *enginetest.Rig {
 	o.Home, o.Cwd, o.Created = e.home, e.cwd, e.start.Add(-30*time.Second)
+	if o.ID == "" {
+		o.ID = enginetest.NewID()
+	}
 	return enginetest.New(t, o)
 }
 

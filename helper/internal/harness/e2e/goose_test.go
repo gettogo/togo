@@ -118,7 +118,7 @@ func TestGooseMode(t *testing.T) {
 	e := newEnv(t, time.Hour)
 	l, r := gooseAgent.start(t, e, sessiongen.Script{Seed: 22, Turns: []sessiongen.Turn{{Say: 30}}})
 	gooseAgent.seen(t, r, "chat", l, false)
-	d, err := r.Engine.Describe(t.Context(), enginetest.SessionID)
+	d, err := r.Engine.Describe(t.Context(), r.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

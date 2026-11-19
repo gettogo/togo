@@ -101,7 +101,7 @@ func longScenario(t *testing.T, a hookAgent, n int) {
 	e := newEnv(t, 48*time.Hour)
 	turns := mixed(a, n)
 	l := write(t, e, a, turns)
-	r := e.rig(t, a.name)
+	r := e.rigWith(t, enginetest.Options{Agent: a.name, NoRedact: true})
 	run(t, r, a, l.Hooks)
 	st := settled(r, lastPrompt(a, l.Hooks))
 	exp := expected(a, l.Hooks)
@@ -131,7 +131,7 @@ func restartScenario(t *testing.T, a hookAgent) []string {
 	l := write(t, e, a, mixed(a, 60))
 	exp := expected(a, l.Hooks)
 	cuts := restartPoints(a, l.Hooks)
-	r := e.rig(t, a.name)
+	r := e.rigWith(t, enginetest.Options{Agent: a.name, NoRedact: true})
 	done, kinds := 0, []string{}
 	for _, c := range cuts {
 		run(t, r, a, l.Hooks[done:c.at])
@@ -421,20 +421,20 @@ func concurrent(t *testing.T, a hookAgent) {
 				}
 				ctx := context.Background()
 				sub := &quiet{done: make(chan struct{})}
-				res, err := r.Engine.Open(ctx, sub, enginetest.SessionID, 0, 20+g)
+				res, err := r.Engine.Open(ctx, sub, r.ID, 0, 20+g)
 				if err != nil {
 					t.Errorf("open: %v", err)
 					return
 				}
 				if len(res.Items) > 0 {
-					if _, err := r.Engine.History(ctx, enginetest.SessionID, res.Items[0].Seq, 10); err != nil {
+					if _, err := r.Engine.History(ctx, r.ID, res.Items[0].Seq, 10); err != nil {
 						t.Errorf("history: %v", err)
 						return
 					}
 				}
-				_, _ = r.Engine.Describe(ctx, enginetest.SessionID)
-				r.Engine.Summary(enginetest.SessionID)
-				_ = r.Engine.Close(ctx, sub, enginetest.SessionID)
+				_, _ = r.Engine.Describe(ctx, r.ID)
+				r.Engine.Summary(r.ID)
+				_ = r.Engine.Close(ctx, sub, r.ID)
 				close(sub.done)
 			}
 		}(g)
@@ -465,16 +465,16 @@ func connectionDrop(t *testing.T, a hookAgent) {
 	drain(r)
 	ctx := context.Background()
 	sub := &quiet{done: make(chan struct{})}
-	first, err := r.Engine.Open(ctx, sub, enginetest.SessionID, 0, 50)
+	first, err := r.Engine.Open(ctx, sub, r.ID, 0, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = r.Engine.Close(ctx, sub, enginetest.SessionID)
+	_ = r.Engine.Close(ctx, sub, r.ID)
 	close(sub.done) // the connection drops
 	run(t, r, a, l.Hooks[half:])
 	st := settled(r, lastPrompt(a, l.Hooks))
 	sub2 := &quiet{done: make(chan struct{})}
-	back, err := r.Engine.Open(ctx, sub2, enginetest.SessionID, first.Cursor, 1000)
+	back, err := r.Engine.Open(ctx, sub2, r.ID, first.Cursor, 1000)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +524,7 @@ func sessionRemoved(t *testing.T, a hookAgent) {
 	if len(r.Read().Items) == 0 {
 		t.Fatal("nothing was drawn before the removal")
 	}
-	r.Engine.Forget(enginetest.SessionID)
+	r.Engine.Forget(r.ID)
 	st := r.Read()
 	if len(st.Items) != 0 || st.Mission.Summary.Agents != 0 || st.Mission.Summary.Working {
 		t.Errorf("after the removal: %d items, summary %+v", len(st.Items), st.Mission.Summary)
@@ -548,7 +548,7 @@ func atLimit(t *testing.T, a hookAgent) {
 		}
 	}
 	l := write(t, e, a, turns)
-	r := enginetest.New(t, enginetest.Options{Agent: a.name, Home: e.home, Cwd: e.cwd, Created: e.start.Add(-30 * time.Second), MaxItems: 60})
+	r := enginetest.New(t, enginetest.Options{Agent: a.name, Home: e.home, Cwd: e.cwd, Created: e.start.Add(-30 * time.Second), MaxItems: 60, ID: enginetest.NewID(), NoRedact: true})
 	run(t, r, a, l.Hooks)
 	st := settled(r, lastPrompt(a, l.Hooks))
 	if st.Discarded == 0 || len(st.Items) > 60 {

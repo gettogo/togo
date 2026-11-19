@@ -34,16 +34,8 @@ var (
 // feeds, the approvals or any code of the harness packages. The test
 // functions' own goroutines are not listed.
 func Goroutines() []string {
-	var buf []byte
-	for n := 1 << 16; ; n *= 2 {
-		buf = make([]byte, n)
-		if got := runtime.Stack(buf, true); got < n {
-			buf = buf[:got]
-			break
-		}
-	}
 	var out []string
-	for _, g := range strings.Split(string(buf), "\n\n") {
+	for _, g := range stacks() {
 		switch {
 		case !strings.Contains(g, "/helper/internal/"):
 		case strings.Contains(g, "testing.tRunner"), strings.Contains(g, "testing.(*M)"),
@@ -53,6 +45,19 @@ func Goroutines() []string {
 		}
 	}
 	return out
+}
+
+// stacks is the stack of every goroutine, one string each.
+func stacks() []string {
+	var buf []byte
+	for n := 1 << 16; ; n *= 2 {
+		buf = make([]byte, n)
+		if got := runtime.Stack(buf, true); got < n {
+			buf = buf[:got]
+			break
+		}
+	}
+	return strings.Split(string(buf), "\n\n")
 }
 
 // Children lists the processes that descend from this test process, as

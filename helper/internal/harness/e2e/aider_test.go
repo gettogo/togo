@@ -32,6 +32,7 @@ func aiderStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *
 // closes it, and the last one stays open until the pane goes idle (the hub
 // says so).
 func TestAiderTurnEnd(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/lifecycle/turn_end")
 	l, r := aiderStart(t, nil, sessiongen.Turn{Say: 20}, sessiongen.Turn{Say: 20, Tools: 1}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
@@ -58,6 +59,7 @@ func TestAiderTurnEnd(t *testing.T) {
 // old conversation stays, and the new run's prompts follow; a restart reads
 // the same.
 func TestAiderNewConversation(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/lifecycle/new_conversation", "aider/lifecycle/helper_restart")
 	l, r := aiderStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1}, sessiongen.Turn{Say: 20})
 	settleUntil(r, 2)
@@ -85,6 +87,7 @@ func TestAiderNewConversation(t *testing.T) {
 // aider writes a new header and the chat goes on. (How the killed turn
 // ends is TestKnownFault_AiderKilledTurnEndsOK.)
 func TestAiderExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/lifecycle/agent_exits", "aider/lifecycle/relaunch")
 	l, r := aiderStart(t, map[int]sessiongen.AiderTurn{2: {Unfinished: true}}, sessiongen.Turn{Say: 20}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
@@ -124,6 +127,7 @@ func TestAiderExitAndRelaunch(t *testing.T) {
 // passes while the fault is present; when it fails the fault is fixed:
 // delete it.
 func TestKnownFault_AiderKilledTurnEndsOK(t *testing.T) {
+	t.Parallel()
 	_, r := aiderStart(t, map[int]sessiongen.AiderTurn{1: {Unfinished: true}}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
 	st := settleUntil(r, 1)
@@ -149,6 +153,7 @@ func TestKnownFault_AiderKilledTurnEndsOK(t *testing.T) {
 // test passes while the fault is present; when it fails the fault is fixed:
 // delete it, and see aider/history.go CloseIdle.
 func TestKnownFault_AiderTurnEndIsNotInTheFile(t *testing.T) {
+	t.Parallel()
 	l, r := aiderStart(t, nil, sessiongen.Turn{Say: 20}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
 	settleUntil(r, 2)
@@ -165,6 +170,7 @@ func TestKnownFault_AiderTurnEndIsNotInTheFile(t *testing.T) {
 // A request the server refuses ends the turn failed with the reason in
 // words; the next turn works.
 func TestAiderFailedTurn(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/lifecycle/turn_end")
 	l, r := aiderStart(t, nil, sessiongen.Turn{Say: 20}, sessiongen.Turn{Error: true}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
@@ -188,6 +194,7 @@ func TestAiderFailedTurn(t *testing.T) {
 // chat, edits with their files, commits, shell runs, the reply as
 // markdown; paged history reads the same whatever the page size.
 func TestAiderCapabilitiesInFiles(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/capability/chat", "aider/capability/files", "aider/capability/changes")
 	extra := map[int]sessiongen.AiderTurn{1: {Files: 2, Edits: 2, Commit: true}, 2: {Edits: 1}}
 	l, r := aiderStart(t, extra, sessiongen.Turn{Say: 200, Tools: 2, Output: 5}, sessiongen.Turn{Say: 20}, sessiongen.Turn{Say: 20})
@@ -240,16 +247,19 @@ func TestAiderCapabilitiesInFiles(t *testing.T) {
 }
 
 func TestAiderConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/lifecycle/connection_drop")
 	dropAndReturn(t, aiderStarter)
 }
 
 func TestAiderSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/lifecycle/session_removed")
 	removeAndServeAgain(t, aiderStarter)
 }
 
 func TestAiderConcurrentReaders(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "aider/scale/concurrent_requests")
 	concurrentReaders(t, aiderStarter)
 }
@@ -265,6 +275,7 @@ func TestAiderConcurrentReaders(t *testing.T) {
 // Correct: the newest conversation shows. This test passes while the fault
 // is present; when it fails the fault is fixed: delete it.
 func TestKnownFault_AiderHistoryOver8MiBShowsNothingAfterARestart(t *testing.T) {
+	t.Parallel()
 	e := newEnv(t, 48*time.Hour)
 	turns := make([]sessiongen.Turn, 700)
 	for i := range turns {
@@ -277,7 +288,9 @@ func TestKnownFault_AiderHistoryOver8MiBShowsNothingAfterARestart(t *testing.T) 
 	if fi, err := os.Stat(l.Main()); err != nil || fi.Size() <= 8<<20 {
 		t.Fatalf("history is %d bytes (%v): want above 8 MiB", fi.Size(), err)
 	}
-	r := e.rig(t, "aider")
+	// Redaction is not what this is about, and reading 8 MiB through it
+	// takes a hundred seconds under the race detector.
+	r := e.rigWith(t, enginetest.Options{Agent: "aider", NoRedact: true})
 	if !never(r, 4*time.Second, func(st enginetest.State) bool { return len(st.Items) > 0 }) {
 		t.Fatal("the history shows: the fault is fixed")
 	}
