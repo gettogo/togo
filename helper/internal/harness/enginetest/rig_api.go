@@ -89,6 +89,10 @@ func (r *Rig) setupAPI() {
 	if !IsAPIAgent(r.Opt.Agent) || r.api != nil {
 		return
 	}
+	if r.Opt.Adapter == "opencode2" {
+		r.setupAPI2()
+		return
+	}
 	s := newAPIServer(r.Opt.Agent, r.Opt.Home)
 	s.OnPrompt = r.Term.take
 	// An abort ends the turn and what it waits on: the permission
@@ -98,9 +102,10 @@ func (r *Rig) setupAPI() {
 	r.T.Cleanup(s.Stop)
 }
 
-// stopAPI is the agent's process ending: its server goes with it.
+// stopAPI is the agent's process ending: its server goes with it. The
+// server of a 2.x session is the helper's to stop, and outlives it.
 func (r *Rig) stopAPI() {
-	if s := r.API(); s != nil {
+	if s := r.API(); s != nil && s.v2 == nil {
 		s.Stop()
 	}
 }
@@ -108,6 +113,12 @@ func (r *Rig) stopAPI() {
 // relaunchAPI is the agent started again by the app: a new launch, so a
 // new port and password, and a server whose stream starts from now.
 func (r *Rig) relaunchAPI() {
+	if s := r.API(); s != nil && s.v2 != nil {
+		// The launch asks the engine again: it stops the old server and
+		// starts one on a new port and password.
+		r.launchAPI2(r.Engine)
+		return
+	}
 	if s := r.API(); s != nil {
 		s.Stop()
 		r.launchAPI(r.Engine, false)

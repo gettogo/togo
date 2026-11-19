@@ -54,6 +54,9 @@ type APIServer struct {
 	fail     []failRule
 	delay    time.Duration
 	lost     map[string]bool
+	// v2 is set for OpenCode 2.x, whose routes are under /api
+	// (apiroutes2.go).
+	v2 *v2State
 	// OnPrompt is the agent taking a prompt; OnAbort an interrupt. They
 	// run outside the server's lock.
 	OnPrompt func(text string)
@@ -239,7 +242,7 @@ func (s *APIServer) answer(w http.ResponseWriter, r *http.Request, body []byte, 
 		w.WriteHeader(http.StatusUnauthorized)
 		return http.StatusUnauthorized
 	}
-	if r.URL.Path == "/event" {
+	if r.URL.Path == "/event" && s.v2 == nil || r.URL.Path == "/api/event" && s.v2 != nil {
 		return s.stream(w, r)
 	}
 	s.mu.Lock()
@@ -267,7 +270,13 @@ func (s *APIServer) answer(w http.ResponseWriter, r *http.Request, body []byte, 
 		w.WriteHeader(status)
 		return status
 	}
-	st, out := s.route(r.Method, r.URL.Path, body)
+	var st int
+	var out []byte
+	if s.v2 != nil {
+		st, out = s.route2(r.Method, r.URL, body)
+	} else {
+		st, out = s.route(r.Method, r.URL.Path, body)
+	}
 	if out == nil {
 		w.WriteHeader(st)
 		return st
@@ -297,8 +306,12 @@ func (s *APIServer) stream(w http.ResponseWriter, r *http.Request) int {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
-	// The real server's first event (events.sse:1).
-	_, _ = io.WriteString(w, "data: {\"type\":\"server.connected\",\"properties\":{}}\n\n")
+	// The real server's first event (events.sse:1; 2.x: v2/forms.sse:1).
+	hello := "data: {\"type\":\"server.connected\",\"properties\":{}}\n\n"
+	if s.v2 != nil {
+		hello = "data: {\"id\":\"evt_connected\",\"type\":\"server.connected\",\"data\":{}}\n\n"
+	}
+	_, _ = io.WriteString(w, hello)
 	fl.Flush()
 	tick := time.NewTicker(10 * time.Millisecond)
 	defer tick.Stop()

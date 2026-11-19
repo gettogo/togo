@@ -76,6 +76,10 @@ type Options struct {
 	// ApprovalTTL is how long an approval stays answerable; 0 keeps the
 	// store's default.
 	ApprovalTTL time.Duration
+	// Adapter names the adapter of an agent with one per major version
+	// (OpenCode's opencode2): New sets it when Agent is given as such a
+	// name (variants, rig_api2.go), and Agent becomes the agent's id.
+	Adapter string
 }
 
 // asIs is a redactor that changes nothing.
@@ -118,6 +122,10 @@ func New(t testing.TB, opt Options) *Rig {
 	if opt.ID == "" {
 		opt.ID = SessionID
 	}
+	version := versions[opt.Agent]
+	if v, ok := variants[opt.Agent]; ok {
+		opt.Adapter, opt.Agent, version = opt.Agent, v.agent, v.version
+	}
 	r := &Rig{T: t, Opt: opt, ID: opt.ID, TogoHome: t.TempDir(), bin: filepath.Join(t.TempDir(), "bin"), Term: newTerminal(opt.Agent)}
 	if err := os.MkdirAll(r.bin, 0o755); err != nil {
 		t.Fatal(err)
@@ -125,7 +133,11 @@ func New(t testing.TB, opt Options) *Rig {
 	// The gate runs `<agent> --version`; any other call fails at once.
 	// Every call but the version check is recorded, one argv per line,
 	// so a test sees what an action ran (CLICalls).
-	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] +
+	sub := subcommands[opt.Agent]
+	if opt.Adapter == "opencode2" {
+		sub = serveCase(r.bin)
+	}
+	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + version + "';;\n" + sub +
 		"*) echo \"$*\" >> '" + filepath.Join(r.bin, "calls.log") + "'; exit 1;;\nesac\n"
 	prog := opt.Agent
 	if p, ok := programs[prog]; ok {
@@ -162,7 +174,7 @@ func (r *Rig) start() {
 		panePIDs = func(context.Context, string) ([]int, error) { return f(), nil }
 	}
 	var listeners func(context.Context, string) ([]ports.Listener, error)
-	if r.api != nil {
+	if r.api != nil && r.api.v2 == nil {
 		listeners = r.apiPorts
 	}
 	eng := engine.New(engine.Config{
@@ -196,11 +208,15 @@ func (r *Rig) start() {
 	r.mu.Lock()
 	r.Engine = eng
 	r.mu.Unlock()
-	if r.api != nil && r.api.Port() == 0 && !r.launched {
+	if r.api != nil && !r.launched && (r.api.v2 != nil || r.api.Port() == 0) {
 		// The first start is the agent's launch; a restart finds the
 		// server it left running.
 		r.launched = true
-		r.launchAPI(eng, true)
+		if r.api.v2 != nil {
+			r.launchAPI2(eng)
+		} else {
+			r.launchAPI(eng, true)
+		}
 	}
 	r.startPhone()
 	engineStarted()

@@ -8,7 +8,8 @@ import (
 
 // OpenCode 1.x, served through the test API server (apiagent_test.go).
 // OpenCode 2.x (opencode2.yaml) types its prompts and reads a history
-// route; it is not run here.
+// route: its scenarios are in opencode2_*_test.go, its cells in the
+// opencode2 row.
 
 func TestOpenCodeLongSession(t *testing.T) {
 	t.Parallel()
