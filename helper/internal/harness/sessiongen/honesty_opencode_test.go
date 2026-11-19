@@ -39,6 +39,11 @@ var readOpenCode = []string{
 	"properties.status.type",
 	"properties.diff[].file", "properties.diff[].additions", "properties.diff[].deletions",
 	"properties.todos[].content", "properties.todos[].status",
+	// needs.go question and permission.
+	"properties.id", "properties.permission", "properties.patterns[]", "properties.metadata.*",
+	"properties.tool.messageID", "properties.tool.callID", "properties.questions[].question",
+	"properties.questions[].header", "properties.questions[].options[].label",
+	"properties.questions[].options[].description",
 }
 
 func openCodeKind(r map[string]any) string {
@@ -117,9 +122,18 @@ func openCodeScript(cwd string) Script {
 func TestOpenCodeMatchesRecordedEvents(t *testing.T) {
 	for _, kilo := range []bool{false, true} {
 		home := t.TempDir()
-		l, err := Write(home, &OpenCode{Kilo: kilo}, openCodeScript(filepath.Join(home, "proj")))
+		p := &OpenCode{Kilo: kilo}
+		l, err := Write(home, p, openCodeScript(filepath.Join(home, "proj")))
 		if err != nil {
 			t.Fatal(err)
+		}
+		for _, q := range []bool{false, true} {
+			if _, err := p.Ask(l, q); err != nil {
+				t.Fatal(err)
+			}
+			if err := p.EndAsk(l); err != nil {
+				t.Fatal(err)
+			}
 		}
 		files := []string{"../adapters/opencode/testdata/events.sse"}
 		if kilo {

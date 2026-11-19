@@ -65,9 +65,19 @@ import (
 type OpenCode struct {
 	// Kilo writes Kilo Code's stream: its version and default agent.
 	Kilo bool
+	// Mode, Provider and Model, when set, are the agent and model the
+	// following turns run with, as after a switch.
+	Mode, Provider, Model string
 
 	main    string // the session the terminal shows
 	journal string
+	ask     *openAsk
+}
+
+// openAsk is a turn waiting on a permission or a question.
+type openAsk struct {
+	user, msg, part, call, cmd string
+	start                      time.Time
 }
 
 // OpenCodeJournal is where the OpenCode and Kilo profiles write the
@@ -91,6 +101,9 @@ func (p *OpenCode) Session() string { return p.main }
 // Agent is the agent (Togo's mode) the session runs: Kilo's default is
 // "code" (offline.jsonl), OpenCode's "build" (events.sse).
 func (p *OpenCode) Agent() string {
+	if p.Mode != "" {
+		return p.Mode
+	}
 	if p.Kilo {
 		return "code"
 	}
@@ -102,6 +115,13 @@ const (
 	OpenCodeProvider = "local"
 	OpenCodeModel    = "qwen3.8-27b"
 )
+
+func (p *OpenCode) model() (string, string) {
+	if p.Model != "" {
+		return p.Provider, p.Model
+	}
+	return OpenCodeProvider, OpenCodeModel
+}
 
 // ocID makes an OpenCode id: a prefix, then hex that grows with time, as
 // OpenCode's ids do (so sorted ids are in the order they were made).
@@ -153,7 +173,8 @@ func (p *OpenCode) newSession(g *Gen, parent, title string) (string, error) {
 	p.main = id
 	upd := p.sessionInfo(g, id, "", title, at)
 	upd["agent"] = p.Agent()
-	upd["model"] = map[string]any{"id": OpenCodeModel, "providerID": OpenCodeProvider}
+	prov, model := p.model()
+	upd["model"] = map[string]any{"id": model, "providerID": prov}
 	return id, p.emit(g, g.Tick(), "session.updated", map[string]any{"sessionID": id, "info": upd})
 }
 
@@ -223,8 +244,9 @@ func (p *OpenCode) Turn(g *Gen, t Turn) error {
 func (p *OpenCode) userMessage(g *Gen, sess, text string) (string, error) {
 	id := ocID(g, "msg")
 	at := g.Tick()
+	prov, model := p.model()
 	info := map[string]any{"id": id, "role": "user", "sessionID": sess, "time": map[string]any{"created": at.UnixMilli()},
-		"agent": p.Agent(), "model": map[string]any{"providerID": OpenCodeProvider, "modelID": OpenCodeModel}}
+		"agent": p.Agent(), "model": map[string]any{"providerID": prov, "modelID": model}}
 	if err := p.emit(g, at, "message.updated", map[string]any{"sessionID": sess, "info": info}); err != nil {
 		return "", err
 	}
@@ -247,8 +269,9 @@ func (p *OpenCode) assistant(g *Gen, sess, parent string, done bool, id ...strin
 		mid = ocID(g, "msg")
 	}
 	tm := map[string]any{"created": at.UnixMilli()}
+	prov, model := p.model()
 	info := map[string]any{"id": mid, "parentID": parent, "role": "assistant", "mode": p.Agent(), "agent": p.Agent(),
-		"modelID": OpenCodeModel, "providerID": OpenCodeProvider, "sessionID": sess, "time": tm}
+		"modelID": model, "providerID": prov, "sessionID": sess, "time": tm}
 	if done {
 		tm["completed"] = at.UnixMilli()
 	}
@@ -377,4 +400,81 @@ func OpenCodeEvent(line []byte) (string, json.RawMessage, error) {
 	}
 	err := json.Unmarshal(line, &ev)
 	return ev.Type, ev.Properties, err
+}
+
+// Ask starts a turn that stops on a permission (question false) or on the
+// question tool: a prompt, a bash call running, then permission.asked or
+// question.asked naming that call, as in events.sse. It returns the
+// request's id. EndAsk finishes the turn.
+func (p *OpenCode) Ask(l *Layout, question bool) (string, error) {
+	g := l.g
+	if p.ask != nil {
+		return "", errors.New("sessiongen: a turn already waits")
+	}
+	g.L.Truth.Prompts++
+	user, err := p.userMessage(g, p.main, "Step "+strconv.Itoa(g.L.Truth.Prompts)+": "+g.Text(30))
+	if err != nil {
+		return "", err
+	}
+	if err := p.status(g, p.main, "busy"); err != nil {
+		return "", err
+	}
+	msg, err := p.assistant(g, p.main, user, false)
+	if err != nil {
+		return "", err
+	}
+	a := &openAsk{user: user, msg: msg, part: ocID(g, "prt"), call: g.Hex(32), cmd: "cat /etc/hosts", start: g.Tick()}
+	part := map[string]any{"id": a.part, "messageID": msg, "sessionID": p.main, "type": "tool", "tool": "bash", "callID": a.call,
+		"state": map[string]any{"status": "running", "input": map[string]any{"command": a.cmd}, "time": map[string]any{"start": a.start.UnixMilli()}}}
+	if err := p.emit(g, g.Tick(), "message.part.updated", map[string]any{"sessionID": p.main, "part": part}); err != nil {
+		return "", err
+	}
+	tool := map[string]any{"messageID": msg, "callID": a.call}
+	var id string
+	if question {
+		id = ocID(g, "que")
+		qs := []map[string]any{{"question": "Which colour do you prefer?", "header": "Colour preference",
+			"options": []map[string]any{{"label": "red", "description": "You prefer red"}, {"label": "blue", "description": "You prefer blue"}}}}
+		err = p.emit(g, g.Tick(), "question.asked", map[string]any{"id": id, "sessionID": p.main, "questions": qs, "tool": tool})
+	} else {
+		id = ocID(g, "per")
+		err = p.emit(g, g.Tick(), "permission.asked", map[string]any{"id": id, "sessionID": p.main, "permission": "external_directory",
+			"patterns": []string{"/etc/*"}, "metadata": map[string]any{"filepath": "/etc/hosts", "parentDir": "/etc"}, "tool": tool})
+	}
+	if err != nil {
+		return "", err
+	}
+	p.ask = a
+	return id, g.flush()
+}
+
+// EndAsk finishes the turn Ask started: the call completes, the reply
+// follows and the session goes idle.
+func (p *OpenCode) EndAsk(l *Layout) error {
+	g, a := l.g, p.ask
+	if a == nil {
+		return errors.New("sessiongen: no turn waits")
+	}
+	p.ask = nil
+	end := g.Tick()
+	out := "127.0.0.1 localhost\n"
+	part := map[string]any{"id": a.part, "messageID": a.msg, "sessionID": p.main, "type": "tool", "tool": "bash", "callID": a.call,
+		"state": map[string]any{"status": "completed", "input": map[string]any{"command": a.cmd}, "output": out,
+			"metadata": map[string]any{"output": out, "exit": 0, "truncated": false}, "title": a.cmd,
+			"time": map[string]any{"start": a.start.UnixMilli(), "end": end.UnixMilli()}}}
+	if err := p.emit(g, end, "message.part.updated", map[string]any{"sessionID": p.main, "part": part}); err != nil {
+		return err
+	}
+	last, err := p.text(g, p.main, a.msg, 30)
+	if err != nil {
+		return err
+	}
+	g.L.Truth.Last = last
+	if _, err := p.assistant(g, p.main, a.user, true, a.msg); err != nil {
+		return err
+	}
+	if err := p.idle(g, p.main); err != nil {
+		return err
+	}
+	return g.flush()
 }

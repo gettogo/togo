@@ -207,7 +207,11 @@ func (r *Rig) start() {
 	var once sync.Once
 	stop := func() {
 		once.Do(func() {
+			// Forget is how a rig stops its engine; it also deletes the
+			// session's run records, which a helper that exits keeps.
+			kept := r.keepRunRecords()
 			eng.Forget(r.ID)
+			kept()
 			r.engineStopped([]string{r.Opt.Home, r.Opt.Cwd, r.TogoHome, r.bin})
 		})
 	}

@@ -3,6 +3,7 @@ package enginetest
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/kilo"
@@ -132,5 +133,28 @@ func (t *Terminal) interrupted(via string) {
 	t.mu.Unlock()
 	if on != nil {
 		on(via)
+	}
+}
+
+// keepRunRecords reads the session's records under TOGO_HOME/run/harness
+// (the endpoint and the conversation, engine/recovery.go and
+// engine/history.go) and returns a function that writes them back: a
+// helper that stops keeps them, and the next one finds the agent's server
+// through them. Agents without a server keep none, and nothing is done.
+func (r *Rig) keepRunRecords() func() {
+	if r.api == nil {
+		return func() {}
+	}
+	dir := filepath.Join(r.TogoHome, "run", "harness")
+	saved := map[string][]byte{}
+	for _, name := range []string{r.ID + ".json", r.ID + ".conversation"} {
+		if b, err := os.ReadFile(filepath.Join(dir, name)); err == nil {
+			saved[name] = b
+		}
+	}
+	return func() {
+		for name, b := range saved {
+			_ = os.WriteFile(filepath.Join(dir, name), b, 0o600)
+		}
 	}
 }
