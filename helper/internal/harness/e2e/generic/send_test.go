@@ -58,6 +58,10 @@ func sendIdle(t *testing.T, lv *live) {
 	if res.Item.User == nil || res.Item.User.Queued || res.Item.User.Text != text {
 		t.Errorf("send result %+v", res.Item.User)
 	}
+	// An agent with an API takes the prompt after the request returns.
+	eventually(t, 30*time.Second, "the agent to be given the prompt", func() bool {
+		return len(r.Term.Submitted()) > 0
+	})
 	if got := r.Term.Submitted(); !slices.Equal(got, []string{text}) {
 		t.Errorf("the agent was given %q", got)
 	}
