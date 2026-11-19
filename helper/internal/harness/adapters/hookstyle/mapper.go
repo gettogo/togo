@@ -1,6 +1,7 @@
 package hookstyle
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/errtext"
-	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
 // Options tune the Mapper for one harness.
@@ -18,12 +18,14 @@ type Options struct {
 	// Name is the mapper name the adapter file uses.
 	Name string
 	// Transcript, when set, finds the session's transcript before any hook
-	// names it, so the transcript feed starts without hooks installed. It
-	// is asked again while no hook has named one, with the one it found
-	// last, so it can follow the agent to another conversation; alone
-	// says whether no other agent of the kind runs in the folder
-	// (source.Solo).
-	Transcript func(env harness.Env, current string, alone func() bool) string
+	// names it, so the transcript feed starts without hooks installed
+	// (guess.go). It is asked again while no hook has named one, with the
+	// one it found last, so it can follow the agent to another
+	// conversation; alone says whether no other agent of the kind runs in
+	// the folder (source.Solo). It runs away from the session's lock.
+	Transcript func(ctx context.Context, env harness.Env, current string, alone func() bool) string
+	// Siblings name other programs that write the agent's store.
+	Siblings []string
 	// Mode maps the payload's permission_mode to the adapter's mode ids;
 	// nil keeps the value.
 	Mode func(string) string
@@ -77,12 +79,11 @@ type Mapper struct {
 	env  harness.Env
 	opts Options
 
-	mu        sync.Mutex
-	state     map[string]string
-	guessedAt time.Time
+	mu    sync.Mutex
+	state map[string]string
 	// hooked is set once a hook named the transcript: its word wins.
 	hooked  bool
-	solo    source.Solo
+	guess   guess
 	turn    string
 	started time.Time
 	steps   map[string]bool
@@ -111,6 +112,7 @@ func New(env harness.Env, opts Options) *Mapper {
 	m := &Mapper{env: env, opts: opts, state: map[string]string{"working": "false", "idle": "true"},
 		steps: map[string]bool{}, running: map[string][]string{}, tools: map[string]harness.Item{},
 		asks: map[string]harness.Item{}, seenCalls: map[string]bool{}, agents: map[string][]agentRow{}}
+	m.guess.solo.Also = opts.Siblings
 	if env.Cwd != "" {
 		// Sources filter the harness's session lists by $state.cwd.
 		m.state["cwd"] = env.Cwd
@@ -126,16 +128,11 @@ func Register(opts Options) {
 func (m *Mapper) Name() string { return m.opts.Name }
 
 // State reports what the hooks said. Until a hook names a transcript,
-// Options.Transcript stands in, checked at most every 5 seconds.
+// Options.Transcript stands in (guess.go).
 func (m *Mapper) State() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.hooked && m.opts.Transcript != nil && time.Since(m.guessedAt) > 5*time.Second {
-		m.guessedAt = time.Now()
-		if p := m.opts.Transcript(m.env, m.state["transcript_path"], func() bool { return m.solo.Alone(m.env) }); p != "" {
-			m.state["transcript_path"] = p
-		}
-	}
+	m.guessLocked()
 	out := make(map[string]string, len(m.state))
 	for k, v := range m.state {
 		out[k] = v

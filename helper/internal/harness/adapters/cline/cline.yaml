@@ -6,8 +6,9 @@
 # manifest works in this folder and started (or changed) since the session began is followed; a
 # `--id` launch follows that id. The manifest records the pid of the Cline process that runs the
 # session: a session whose pid is outside this Togo session's process tree (a Cline the user ran in
-# a terminal in the same folder) is never followed, and with no pid evidence a session already
-# followed is kept. Writes: resume relaunches with --id; prompts are typed. Model,
+# a terminal in the same folder) is never followed. With no pid (the 3.0.74 manifests record none) a
+# newer session moves the chat only when its manifest is interactive (a one-shot run writes false) and a
+# process lookup begun after it was seen finds no other Cline in the folder. Writes: resume relaunches with --id; prompts are typed. Model,
 # thinking and mode relaunches are not offered yet. There is no MCP list command. A failed run
 # (provider refused, unreachable, unknown model) appends a display-only assistant message with
 # metadata.displayRole error (recordTerminalError, read from real failed runs): it maps to an

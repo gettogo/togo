@@ -61,10 +61,13 @@ type messages struct {
 	tree       []int
 	treeAt     time.Time
 	solo       source.Solo
+	seen       map[string]time.Time // when each session the chat may move to was first seen
+	pend       string               // the session a move waits on a lookup for
+	wake       func()
 }
 
 func newMessages(env harness.Env) *messages {
-	m := &messages{env: env, state: map[string]string{}, sent: map[string]string{}, idleAt: map[string]time.Time{},
+	m := &messages{env: env, state: map[string]string{}, sent: map[string]string{}, idleAt: map[string]time.Time{}, seen: map[string]time.Time{},
 		home: source.Expand("~", env.Vars[source.VarHome])}
 	if c, err := time.Parse(time.RFC3339, env.Vars["created"]); err == nil {
 		m.created = c
@@ -80,6 +83,13 @@ func (m *messages) Name() string { return MapperMessages }
 func (m *messages) State() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.pend != "" && m.mayMove(m.pend) {
+		// The lookup the last document waited for ended: the chat moves,
+		// and the messages feed reads the session's document from its
+		// path.
+		m.moveTo(m.pend)
+		m.updated = ""
+	}
 	out := make(map[string]string, len(m.state))
 	for k, v := range m.state {
 		out[k] = v
@@ -179,8 +189,11 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		// or a fresh start in the same pane. It must be this session's own
 		// Cline process, not one the user started in a terminal: the
 		// manifest's pid says so when it has one (the recorded 3.0.74
-		// manifests have none); without it, the session moves only when
-		// no other Cline runs in the folder (source.Solo).
+		// manifests have none). Without it, the session moves only to an
+		// interactive session (a one-shot `cline <task>` writes
+		// interactive false) and only when no other Cline runs in the
+		// folder, by a lookup begun after the session was first seen
+		// (source.Solo), which runs away from the session's lock.
 		if !m.belongs(d.SessionID, d.UpdatedAt) || (m.session != "" && d.UpdatedAt <= m.updated) {
 			return nil, nil
 		}
@@ -188,13 +201,11 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		case source.Foreign:
 			return nil, nil
 		case source.Unknown:
-			if m.session != "" && !m.solo.Alone(m.env) {
+			if m.session != "" && !m.mayMove(d.SessionID) {
 				return nil, nil
 			}
 		}
-		m.lock(d.SessionID)
-		m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
-		m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+		m.moveTo(d.SessionID)
 	} else if d.UpdatedAt != "" && d.UpdatedAt == m.updated && len(d.Messages) == len(m.lastMsgs) {
 		// The same document again (both feeds read each rewrite).
 		return nil, nil
@@ -202,6 +213,42 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	m.updated = d.UpdatedAt
 	m.lastMsgs = d.Messages
 	return m.changed(m.render(d.Messages)), nil
+}
+
+// mayMove reports whether the chat may move to session id without a pid:
+// an interactive session, and a lookup begun after it was first seen found
+// no other Cline in the folder. Until then id is pending.
+func (m *messages) mayMove(id string) bool {
+	if mf, ok := m.manifest(id); !ok || mf.Interactive == nil || !*mf.Interactive {
+		return false
+	}
+	since, ok := m.seen[id]
+	if !ok {
+		since = time.Now()
+		m.seen[id] = since
+	}
+	if !m.solo.Alone(m.env, since, m.wake) {
+		m.pend = id
+		return false
+	}
+	m.pend = ""
+	return true
+}
+
+// moveTo follows session id from its start.
+func (m *messages) moveTo(id string) {
+	m.lock(id)
+	m.pend = ""
+	m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
+	m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+}
+
+// Wake keeps the engine's wake for the lookups mayMove starts
+// (harness.Waker).
+func (m *messages) Wake(f func()) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.wake = f
 }
 
 // Relaunched follows the session a resume relaunch (`--id <id>`) opens:

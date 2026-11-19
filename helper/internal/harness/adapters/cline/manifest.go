@@ -13,11 +13,14 @@ import (
 
 type manifest struct {
 	// Pid is the Cline process that runs the session.
-	Pid       int    `json:"pid"`
-	Cwd       string `json:"cwd"`
-	StartedAt string `json:"started_at"`
-	Model     string `json:"model"`
-	Metadata  struct {
+	Pid int `json:"pid"`
+	// Interactive is false for a one-shot `cline <task>` run, true for
+	// the TUI (testdata/session.json, ask.json).
+	Interactive *bool  `json:"interactive"`
+	Cwd         string `json:"cwd"`
+	StartedAt   string `json:"started_at"`
+	Model       string `json:"model"`
+	Metadata    struct {
 		Mode string `json:"mode"`
 	} `json:"metadata"`
 }
