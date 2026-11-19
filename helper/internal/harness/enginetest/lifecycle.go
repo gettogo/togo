@@ -53,6 +53,7 @@ func (r *Rig) relaunch(_ context.Context, _ string, argv []string) error {
 	r.Term.SetGone(false)
 	r.Term.CloseDialog()
 	r.relaunchAPI()
+	r.relaunchCodex(argv)
 	return nil
 }
 
@@ -80,6 +81,7 @@ func (r *Rig) Exit() {
 func (r *Rig) Relaunch() {
 	r.Term.SetGone(false)
 	r.relaunchAPI()
+	r.relaunchCodex([]string{r.Opt.Agent})
 	r.SetEnded(false)
 }
 

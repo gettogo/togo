@@ -23,6 +23,7 @@ import (
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/omp"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/source"
+	"github.com/gettogo/togo/helper/internal/harness/source/rpc"
 	"github.com/gettogo/togo/helper/internal/ports"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -76,6 +77,9 @@ type Options struct {
 	// ApprovalTTL is how long an approval stays answerable; 0 keeps the
 	// store's default.
 	ApprovalTTL time.Duration
+	// Version, when set, is what the fake agent program prints for the
+	// version gate instead of the agent's usual version.
+	Version string
 }
 
 // asIs is a redactor that changes nothing.
@@ -99,6 +103,10 @@ type Rig struct {
 
 	bin string
 	api *APIServer
+	// codex is a Codex session's app-server; codexLaunch the terminal
+	// client's arguments from its last launch (rig_codex.go).
+	codex       *CodexServer
+	codexLaunch []string
 	// launched is set once the API agent was launched.
 	launched bool
 	mu       sync.Mutex
@@ -114,7 +122,11 @@ var pollOnce sync.Once
 func New(t testing.TB, opt Options) *Rig {
 	t.Helper()
 	// Set once, before any engine runs: the tails read it.
-	pollOnce.Do(func() { source.PollEvery = 20 * time.Millisecond })
+	pollOnce.Do(func() {
+		source.PollEvery = 20 * time.Millisecond
+		// How often an app-server feed looks for newly loaded threads.
+		rpc.Default.Poll = 50 * time.Millisecond
+	})
 	if opt.ID == "" {
 		opt.ID = SessionID
 	}
@@ -125,7 +137,11 @@ func New(t testing.TB, opt Options) *Rig {
 	// The gate runs `<agent> --version`; any other call fails at once.
 	// Every call but the version check is recorded, one argv per line,
 	// so a test sees what an action ran (CLICalls).
-	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] +
+	version := versions[opt.Agent]
+	if opt.Version != "" {
+		version = opt.Version
+	}
+	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + version + "';;\n" + subcommands[opt.Agent] +
 		"*) echo \"$*\" >> '" + filepath.Join(r.bin, "calls.log") + "'; exit 1;;\nesac\n"
 	prog := opt.Agent
 	if p, ok := programs[prog]; ok {
@@ -135,6 +151,7 @@ func New(t testing.TB, opt Options) *Rig {
 		t.Fatal(err)
 	}
 	r.setupAPI()
+	r.setupCodex()
 	r.start()
 	return r
 }
@@ -201,6 +218,10 @@ func (r *Rig) start() {
 		// server it left running.
 		r.launched = true
 		r.launchAPI(eng, true)
+	}
+	if r.codex != nil && !r.launched {
+		r.launched = true
+		r.codexArgs(r.launchCodex(eng))
 	}
 	r.startPhone()
 	engineStarted()

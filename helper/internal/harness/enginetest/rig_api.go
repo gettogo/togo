@@ -103,6 +103,7 @@ func (r *Rig) stopAPI() {
 	if s := r.API(); s != nil {
 		s.Stop()
 	}
+	r.exitCodex()
 }
 
 // relaunchAPI is the agent started again by the app: a new launch, so a
