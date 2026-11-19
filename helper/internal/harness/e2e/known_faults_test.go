@@ -104,17 +104,32 @@ func holdFiles(t *testing.T, paths []string) func() {
 
 // TestSubagentFileBeforeItsCall: the subagents feed and the session feed
 // run apart, and after a restart either can come first. A subagent file
-// read before the main conversation's task call waits for the call, then
-// goes to its task: one row per task, each with its own file's steps, for
-// a file written a minute ago and for one written long before it is read.
+// read before the main conversation's task call gets the row its call
+// then adopts: one row per task, each with its own file's steps. A file
+// written a minute ago shows its row at once; one written long before it
+// is read shows nothing until its call is read. "large" is a batch whose
+// files add up to more than one 8 MiB read.
 func TestSubagentFileBeforeItsCall(t *testing.T) {
-	for _, age := range []time.Duration{time.Minute, 10 * time.Minute} {
-		t.Run(age.String(), func(t *testing.T) {
-			e := newEnv(t, age)
+	for _, c := range []struct {
+		name       string
+		age        time.Duration
+		size, pad  int
+		earlyShown int
+	}{
+		{"recent", time.Minute, 2, 0, 2},
+		{"old", 10 * time.Minute, 2, 0, 0},
+		{"large recent", time.Minute, 6, 2 << 20, 6},
+		{"large old", 10 * time.Minute, 6, 2 << 20, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := newEnv(t, c.age)
 			l, err := sessiongen.Write(e.home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 6, Start: e.start, Cwd: e.cwd,
-				Turns: []sessiongen.Turn{{Say: 20, Agents: &sessiongen.Batch{Size: 2, Steps: 1, Background: true}}}})
+				Turns: []sessiongen.Turn{{Say: 20, Agents: &sessiongen.Batch{Size: c.size, Steps: 1, Background: true}}}})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if c.pad > 0 {
+				padFiles(t, l.Subagents, c.pad)
 			}
 			main, err := os.ReadFile(l.Main())
 			if err != nil {
@@ -126,20 +141,38 @@ func TestSubagentFileBeforeItsCall(t *testing.T) {
 				t.Fatal(err)
 			}
 			r := e.rig(t, "omp")
-			if st := r.Settle(5 * time.Second); countKind(st, harness.KindAgent) != 0 {
-				t.Fatalf("%d agent rows before any task call", countKind(st, harness.KindAgent))
+			if st := r.Settle(10 * time.Second); countKind(st, harness.KindAgent) != c.earlyShown {
+				t.Fatalf("%d agent rows before any task call, want %d", countKind(st, harness.KindAgent), c.earlyShown)
 			}
 			if err := os.WriteFile(l.Main(), main, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			st := r.SettleUntil(10*time.Second, func(st enginetest.State) bool {
-				return enginetest.Has(l.Truth.Last)(st) && stepOwners(st) == 2
+			st := r.SettleUntil(20*time.Second, func(st enginetest.State) bool {
+				return enginetest.Has(l.Truth.Last)(st) && stepOwners(st) == c.size
 			})
-			if n := countKind(st, harness.KindAgent); n != 2 {
-				t.Fatalf("%d agent rows for 2 tasks", n)
+			if n := countKind(st, harness.KindAgent); n != c.size {
+				t.Fatalf("%d agent rows for %d tasks", n, c.size)
 			}
 			enginetest.Fail(t, "after the call", enginetest.Matched(st, enginetest.Facts{Truth: l.Truth}))
 		})
+	}
+}
+
+// padFiles puts a record of n bytes (a note omp does not show) after each
+// file's header, so the files of a batch are large.
+func padFiles(t *testing.T, paths []string, n int) {
+	t.Helper()
+	pad := []byte(`{"type":"custom","customType":"note","data":"` + strings.Repeat("x", n) + "\"}\n")
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		at := nthLine(b, 2)
+		out := append(append(append([]byte(nil), b[:at]...), pad...), b[at:]...)
+		if err := os.WriteFile(p, out, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
