@@ -45,6 +45,7 @@ func NothingRuns(t *testing.T, st enginetest.State) {
 // eventually waits for ok, failing with what after limit.
 func Eventually(t *testing.T, limit time.Duration, what string, ok func() bool) {
 	t.Helper()
+	limit = max(limit, enginetest.MinSettleLimit)
 	for deadline := time.Now().Add(limit); !ok(); time.Sleep(20 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out: %s", what)

@@ -116,6 +116,7 @@ func (a fileAgent) seen(t *testing.T, r *enginetest.Rig, where string, l *sessio
 	if limit == 0 {
 		limit = support.FileLimit
 	}
+	limit = max(limit, enginetest.MinSettleLimit)
 	deadline := time.Now().Add(limit)
 	st := r.SettleUntil(limit, nil)
 	for !ok(st) && time.Now().Before(deadline) {

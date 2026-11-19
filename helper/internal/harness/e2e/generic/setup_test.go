@@ -377,6 +377,7 @@ func interruptSent(r *enginetest.Rig) ([]string, bool) {
 // eventually waits for ok, failing with what after limit.
 func eventually(t *testing.T, limit time.Duration, what string, ok func() bool) {
 	t.Helper()
+	limit = max(limit, enginetest.MinSettleLimit)
 	deadline := time.Now().Add(limit)
 	for !ok() {
 		if time.Now().After(deadline) {
