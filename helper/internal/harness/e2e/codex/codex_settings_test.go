@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -23,7 +24,17 @@ import (
 func (c *codexSession) compactThread(t *testing.T) string {
 	t.Helper()
 	before := len(c.s.CallsOf("thread/compact/start"))
-	if res, err := c.r.Act("compact", "", map[string]any{}); err != nil || res.Result != harness.ResultApplied {
+	// The thread is known once the helper has read the server's reply to
+	// its join: until then the action falls back.
+	var res harness.ActionResult
+	var err error
+	for deadline := time.Now().Add(support.Quick); ; time.Sleep(20 * time.Millisecond) {
+		res, err = c.r.Act("compact", "", map[string]any{})
+		if err != nil || res.Result == harness.ResultApplied || time.Now().After(deadline) {
+			break
+		}
+	}
+	if err != nil || res.Result != harness.ResultApplied {
 		t.Fatalf("compact: %+v %v", res, err)
 	}
 	calls := c.s.CallsOf("thread/compact/start")
@@ -42,10 +53,11 @@ func (c *codexSession) compactThread(t *testing.T) string {
 // phone: after each, a prompt from the phone is typed into the terminal
 // and shown, and the helper's calls name the thread the terminal shows.
 // The chat starts over on the new thread. Resuming the first thread at
-// the desk is TestKnownFault_CodexDeskResumeOfAnEarlierThread.
+// the desk is TestKnownFault_CodexDeskResumeOfAnEarlierThread; the resume
+// this test claims is the one from the phone.
 func TestCodexNewAndResume(t *testing.T) {
 	t.Parallel()
-	coverage.Covers(t, "generated", "codex/lifecycle/new_conversation", "codex/capability/resume")
+	coverage.Covers(t, "generated", "codex/lifecycle/new_conversation", "codex/lifecycle/resume", "codex/capability/resume")
 	c := codexStart(t, 91, nil, sessiongen.Turn{Say: 20})
 	support.SettleUntil(c.r, 1)
 	c.joined(t)
@@ -208,7 +220,7 @@ func TestCodexVersionOutsideRange(t *testing.T) {
 //
 // Correct: the helper follows the thread the terminal shows. This test
 // passes while the fault is present; when it fails the fault is fixed:
-// make it an ordinary test and claim codex/lifecycle/resume.
+// make it an ordinary test.
 func TestKnownFault_CodexDeskResumeOfAnEarlierThread(t *testing.T) {
 	t.Parallel()
 	c := codexStart(t, 91, nil, sessiongen.Turn{Say: 20})

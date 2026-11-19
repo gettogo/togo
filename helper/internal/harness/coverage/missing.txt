@@ -2,9 +2,7 @@ aider/capability/ports
 amp/capability/chat.anchors
 claude/capability/mode
 claude/capability/needs.questions
-claude/lifecycle/new_conversation
 claude/lifecycle/relaunch
-claude/lifecycle/resume
 cline/capability/changes
 cline/capability/ports
 cline/lifecycle/resume
