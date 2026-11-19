@@ -11,6 +11,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/turns"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
 // db maps rows of Goose's sessions.db, from two feeds: sessions rows (one
@@ -32,17 +33,48 @@ type db struct {
 	// the followed session's messages were mapped.
 	pin   string
 	shown bool
+	// moved is set when the chat followed the agent to another session
+	// (movedTo, a relaunch's pin, or the one remembered across a helper
+	// restart): kept, like one with content, until its messages come.
+	moved bool
+	solo  source.Solo
+	seen  map[string]time.Time // when each row the chat may move to was first seen
+	wake  func()
 }
 
 func newDB(env harness.Env) *db {
 	m := &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{}, asks: map[string]harness.Item{},
 		early: map[string]map[string][]string{}, b: turns.New()}
+	m.seen = map[string]time.Time{}
 	if m.pin != "" {
 		// Resumed at launch: the chat is that conversation now, before the
 		// sessions feed (which lists only recently touched rows) names it.
 		m.state["harness_session"] = m.pin
+	} else if id := source.LoadFollowed(env, followName); id != "" {
+		// The session the chat followed before a helper restart.
+		m.state["harness_session"], m.moved = id, true
 	}
 	return m
+}
+
+// followName names what this mapper remembers across a helper restart.
+const followName = "goose"
+
+// Wake keeps the engine's wake for the lookups movedTo starts
+// (harness.Waker).
+func (m *db) Wake(f func()) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.wake = f
+}
+
+// Woken moves the chat if the lookup that ended allows it; the chat feed
+// then reads the new session's messages.
+func (m *db) Woken() ([]harness.Item, []harness.Op) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.choose()
+	return nil, nil
 }
 
 func (m *db) Name() string { return MapperDB }
@@ -50,6 +82,7 @@ func (m *db) Name() string { return MapperDB }
 func (m *db) State() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.choose() // a lookup that ended may allow a move
 	out := make(map[string]string, len(m.state)+3)
 	for k, v := range m.state {
 		out[k] = v
@@ -140,103 +173,146 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 // content. Goose's database records no process, so a session another
 // Goose creates in the same folder cannot be told from this one's: once
 // the chat has content it stays on its session, and only this Togo
-// session's own relaunch (--session-id, see Relaunched) moves it. Until
-// then the newest wins, which finds the row the TUI created at launch.
+// session's own relaunch (--session-id, see Relaunched) moves it, or a
+// row written after it while no other Goose runs in the folder (a new
+// session or a resume in Goose's own UI, see movedTo). Until then the
+// newest wins, which finds the row the TUI created at launch.
 func (m *db) session(s sessionRow) {
 	if !sameDir(s.WorkingDir, m.env.Cwd) {
 		return
 	}
 	m.sessions[s.ID] = s
+	m.choose()
+}
+
+// choose picks the session the chat follows from the rows seen.
+func (m *db) choose() {
 	best := m.pick()
+	moved := false
 	if m.pin != "" {
 		p, ok := m.sessions[m.pin]
 		if !ok {
 			return
 		}
 		best = p
-	} else if m.shown && m.state["harness_session"] != "" {
+	} else if (m.shown || m.moved) && m.state["harness_session"] != "" {
 		best = m.sessions[m.state["harness_session"]]
+		if mv := m.movedTo(); mv.ID != "" {
+			best = mv
+			moved = true
+		}
 	}
 	if best.ID == "" {
 		return
 	}
 	if best.ID != m.state["harness_session"] {
+		if m.state["harness_session"] != "" {
+			harness.Moved(m.state)
+		}
 		m.b.Reset()
 		m.asks, m.early = map[string]harness.Item{}, map[string]map[string][]string{}
 		m.state["harness_session"] = best.ID
 		m.shown = false
 	}
+	if moved {
+		m.moved = true
+		source.SaveFollowed(m.env, followName, best.ID)
+	}
 	if m.pin != "" && best.ID == m.pin {
-		m.pin = ""
+		// Held like a move: a newer row from launch does not take over
+		// before the resumed session's messages come.
+		m.pin, m.moved = "", true
 	}
 	if best.Mode != "" {
 		m.state["mode"] = best.Mode
 	}
 }
 
-// pick chooses the session this Togo session's agent created. A row made
-// before this session started (more than a minute, for clock skew) is
-// another conversation that was only touched since; it is never taken. Of
-// the rest, the one made after the session began and first is the row the
-// TUI created at launch; otherwise the newest updated. Rows with no
-// readable creation time are all candidates.
-func (m *db) pick() sessionRow {
-	started, _ := time.Parse(time.RFC3339, m.env.Vars["created"])
-	var best sessionRow
-	var bestAt time.Time
-	bestFresh := false
-	for _, c := range m.sessions {
-		made, err := time.Parse(time.DateTime, c.Created)
-		known := err == nil && !started.IsZero()
-		if known && made.Before(started.Add(-time.Minute)) {
-			continue
-		}
-		fresh := known && !made.Before(started)
-		switch {
-		case best.ID == "", fresh && !bestFresh:
-		case fresh != bestFresh:
-			continue
-		case fresh && (made.Before(bestAt) || (made.Equal(bestAt) && c.ID < best.ID)):
-		case !fresh && (c.Updated > best.Updated || (c.Updated == best.Updated && c.ID > best.ID)):
-		default:
-			continue
-		}
-		best, bestAt, bestFresh = c, made, fresh
+// errorReason reads an error part's kind and message. Goose wraps provider
+// failures as "Ran into this error: …" and adds a paragraph asking for a
+// retry or resend; only the first paragraph, without the wrapper, is kept.
+func errorReason(kind, msg string) (string, string) {
+	text := strings.TrimSpace(msg)
+	if i := strings.Index(text, "\n\n"); i >= 0 {
+		text = strings.TrimSpace(text[:i])
 	}
-	return best
+	text = strings.TrimPrefix(text, "Ran into this error: ")
+	text = strings.TrimSuffix(strings.TrimSpace(text), ".")
+	switch kind {
+	case "authentication":
+		return harness.ErrAuth, text
+	case "contextLengthExceeded":
+		return harness.ErrContextOverflow, text
+	}
+	if notFound.MatchString(text) {
+		return harness.ErrModelNotFound, text
+	}
+	return harness.ClassifyError(text), text
 }
 
-// Relaunched learns the session a relaunch resumes (`--session-id <id>`).
-func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if id := sessionArg(argv); id != "" {
-		m.pin = id
-		if _, ok := m.sessions[id]; ok {
-			m.session(m.sessions[id])
-		} else if m.state["harness_session"] != id {
-			// The feed lists only rows touched since this Togo session
-			// began, which a resumed conversation may not be.
-			m.b.Reset()
-			m.asks, m.early = map[string]harness.Item{}, map[string]map[string][]string{}
-			m.state["harness_session"] = id
-			m.shown = false
-		}
+// notFound is an OpenAI-compatible 404 about the model ("Resource not
+// found (404) at …: no router for requested model").
+var notFound = regexp.MustCompile(`(?i)\(404\).*\bmodel\b|\bmodel\b.*\(404\)`)
+
+// humanError leads the agent's words with what they mean for the user.
+func humanError(reason, text string) string {
+	lead := map[string]string{
+		harness.ErrAuth:                "The provider refused the API key or sign-in.",
+		harness.ErrProviderUnreachable: "Can't reach the model provider.",
+		harness.ErrRateLimit:           "Rate limit or quota reached.",
+		harness.ErrModelNotFound:       "The provider doesn't have this model.",
+		harness.ErrContextOverflow:     "The conversation is too long for the model.",
+	}[reason]
+	switch {
+	case lead == "":
+		return text
+	case text == "":
+		return lead
 	}
-	return nil
+	return lead + " " + text
 }
 
-// sessionArg is the id a `--session-id <id>` (or `--session-id=<id>`) names.
-func sessionArg(argv []string) string {
-	for i, a := range argv {
-		if v, ok := strings.CutPrefix(a, "--session-id="); ok {
-			return v
-		}
-		if a == "--session-id" && i+1 < len(argv) {
-			return argv[i+1]
+func toolOutput(p part) (string, string) {
+	if p.ToolResult == nil {
+		return "", harness.StateOK
+	}
+	if p.ToolResult.Status == "error" {
+		return p.ToolResult.Error, harness.StateFailed
+	}
+	var out []string
+	for _, c := range p.ToolResult.Value.Content {
+		if c.Text != "" {
+			out = append(out, c.Text)
 		}
 	}
-	return ""
+	state := harness.StateOK
+	if p.ToolResult.Value.IsError {
+		state = harness.StateFailed
+	}
+	return strings.Join(out, "\n"), state
+}
+
+// sameDir compares folders after resolving links: Goose stores the
+// resolved path (/private/tmp/...), the session may name /tmp/....
+func sameDir(a, b string) bool {
+	if a == "" || b == "" {
+		return false
+	}
+	return resolve(a) == resolve(b)
+}
+
+func resolve(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	return filepath.Clean(p)
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func (m *db) message(r messageRow) []harness.Item {
@@ -352,91 +428,4 @@ func (m *db) assistant(id string, parts []part, at time.Time) []harness.Item {
 func (m *db) errorItem(id, reason, text string, at time.Time) harness.Item {
 	return harness.Item{ID: id, TurnID: m.b.TurnID(), Kind: harness.KindNotice, At: at,
 		Notice: harness.ErrorNotice(reason, humanError(reason, text))}
-}
-
-// errorReason reads an error part's kind and message. Goose wraps provider
-// failures as "Ran into this error: …" and adds a paragraph asking for a
-// retry or resend; only the first paragraph, without the wrapper, is kept.
-func errorReason(kind, msg string) (string, string) {
-	text := strings.TrimSpace(msg)
-	if i := strings.Index(text, "\n\n"); i >= 0 {
-		text = strings.TrimSpace(text[:i])
-	}
-	text = strings.TrimPrefix(text, "Ran into this error: ")
-	text = strings.TrimSuffix(strings.TrimSpace(text), ".")
-	switch kind {
-	case "authentication":
-		return harness.ErrAuth, text
-	case "contextLengthExceeded":
-		return harness.ErrContextOverflow, text
-	}
-	if notFound.MatchString(text) {
-		return harness.ErrModelNotFound, text
-	}
-	return harness.ClassifyError(text), text
-}
-
-// notFound is an OpenAI-compatible 404 about the model ("Resource not
-// found (404) at …: no router for requested model").
-var notFound = regexp.MustCompile(`(?i)\(404\).*\bmodel\b|\bmodel\b.*\(404\)`)
-
-// humanError leads the agent's words with what they mean for the user.
-func humanError(reason, text string) string {
-	lead := map[string]string{
-		harness.ErrAuth:                "The provider refused the API key or sign-in.",
-		harness.ErrProviderUnreachable: "Can't reach the model provider.",
-		harness.ErrRateLimit:           "Rate limit or quota reached.",
-		harness.ErrModelNotFound:       "The provider doesn't have this model.",
-		harness.ErrContextOverflow:     "The conversation is too long for the model.",
-	}[reason]
-	switch {
-	case lead == "":
-		return text
-	case text == "":
-		return lead
-	}
-	return lead + " " + text
-}
-
-func toolOutput(p part) (string, string) {
-	if p.ToolResult == nil {
-		return "", harness.StateOK
-	}
-	if p.ToolResult.Status == "error" {
-		return p.ToolResult.Error, harness.StateFailed
-	}
-	var out []string
-	for _, c := range p.ToolResult.Value.Content {
-		if c.Text != "" {
-			out = append(out, c.Text)
-		}
-	}
-	state := harness.StateOK
-	if p.ToolResult.Value.IsError {
-		state = harness.StateFailed
-	}
-	return strings.Join(out, "\n"), state
-}
-
-// sameDir compares folders after resolving links: Goose stores the
-// resolved path (/private/tmp/...), the session may name /tmp/....
-func sameDir(a, b string) bool {
-	if a == "" || b == "" {
-		return false
-	}
-	return resolve(a) == resolve(b)
-}
-
-func resolve(p string) string {
-	if r, err := filepath.EvalSymlinks(p); err == nil {
-		return r
-	}
-	return filepath.Clean(p)
-}
-
-func firstNonEmpty(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }

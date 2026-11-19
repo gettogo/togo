@@ -254,6 +254,12 @@ func TestMessagesFollowsAResumeRelaunch(t *testing.T) {
 	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
 		t.Fatal("the resumed session was not mapped")
 	}
+	// A resume from the phone to another session starts the chat over on
+	// it (the engine reacts to the count).
+	r.Relaunched([]string{"cline", "-i", "--id", "1794200000009_other"}, time.Now())
+	if n := m.State()[harness.StateMoves]; n != "1" {
+		t.Fatalf("moves %q after a relaunch onto another session, want 1", n)
+	}
 }
 
 // The mapper keeps a hash of each item it sent, not the item's JSON: a long

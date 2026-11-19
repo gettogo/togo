@@ -154,6 +154,16 @@ type IdleCloser interface {
 	CloseIdle(at time.Time) []Item
 }
 
+// Waker is a mapper that learns something off a record: a lookup it runs
+// away from the session's lock. The engine gives it wake, which never
+// blocks and may be called from any goroutine; the engine then calls
+// Woken under the session's lock, publishes what it returns as a
+// record's, and reads the mapper's state again (feeds, working).
+type Waker interface {
+	Wake(wake func())
+	Woken() ([]Item, []Op)
+}
+
 // Relauncher is a mapper that learns state from the flags an action
 // restarted the agent with, for a harness that records none of them: Pi
 // writes nothing for a --thinking level given on a resume. Its ops (a
@@ -174,6 +184,16 @@ type ReplayMarker interface {
 	// than post, without waiting for more to be written; after that Map
 	// the mapper stands at post. A nil pre keeps where it stands.
 	Replaying(pre, post json.RawMessage)
+}
+
+// Carrier is a mapper whose feed tells it facts about the agent once and
+// does not repeat them: Codex's app-server describes each thread once per
+// connection. When the chat starts over on another conversation, the
+// engine hands the fresh mapper to the old one's Carry before the fresh
+// one maps anything, so those facts are kept. Nothing of the conversation
+// left (its turn, tools, plan, usage, working) may be carried.
+type Carrier interface {
+	Carry(next Mapper)
 }
 
 // MapperFactory builds a fresh mapper for one session.

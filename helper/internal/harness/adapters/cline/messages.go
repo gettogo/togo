@@ -1,13 +1,10 @@
 package cline
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -63,10 +60,15 @@ type messages struct {
 	lastMsgs   []message
 	tree       []int
 	treeAt     time.Time
+	solo       source.Solo
+	seen       map[string]time.Time // when each session the chat may move to was first seen
+	pend       string               // the session a move waits on a lookup for
+	pendDoc    document             // its last document
+	wake       func()
 }
 
 func newMessages(env harness.Env) *messages {
-	m := &messages{env: env, state: map[string]string{}, sent: map[string]string{}, idleAt: map[string]time.Time{},
+	m := &messages{env: env, state: map[string]string{}, sent: map[string]string{}, idleAt: map[string]time.Time{}, seen: map[string]time.Time{},
 		home: source.Expand("~", env.Vars[source.VarHome])}
 	if c, err := time.Parse(time.RFC3339, env.Vars["created"]); err == nil {
 		m.created = c
@@ -119,88 +121,6 @@ func (m *messages) lock(id string) {
 			m.state["mode"] = mf.Metadata.Mode
 		}
 	}
-}
-
-type manifest struct {
-	// Pid is the Cline process that runs the session.
-	Pid       int    `json:"pid"`
-	Cwd       string `json:"cwd"`
-	StartedAt string `json:"started_at"`
-	Model     string `json:"model"`
-	Metadata  struct {
-		Mode string `json:"mode"`
-	} `json:"metadata"`
-}
-
-func (m *messages) manifest(id string) (manifest, bool) {
-	var mf manifest
-	p := filepath.Join(m.dir(id), id+".json")
-	st, err := os.Stat(p)
-	if err != nil || !st.Mode().IsRegular() || st.Size() > maxManifest {
-		return mf, false
-	}
-	b, err := os.ReadFile(p)
-	if err != nil || json.Unmarshal(b, &mf) != nil {
-		return mf, false
-	}
-	return mf, true
-}
-
-// belongs reports whether session id works in this session's folder and
-// started, or was written to, since the Togo session began.
-func (m *messages) belongs(id, updated string) bool {
-	mf, ok := m.manifest(id)
-	if !ok || !sameDir(mf.Cwd, m.env.Cwd) {
-		return false
-	}
-	if m.created.IsZero() {
-		return true
-	}
-	since := m.created.Add(-startSlack)
-	for _, s := range []string{mf.StartedAt, updated} {
-		if t, err := time.Parse(time.RFC3339Nano, s); err == nil && !t.Before(since) {
-			return true
-		}
-	}
-	return false
-}
-
-// owner says whether the session's Cline process is in this Togo session's
-// process tree. Unknown when the manifest has no pid or the tree cannot be
-// listed.
-func (m *messages) owner(id string) source.Verdict {
-	mf, ok := m.manifest(id)
-	if !ok || mf.Pid <= 0 || m.env.Procs == nil {
-		return source.Unknown
-	}
-	if time.Since(m.treeAt) > treeEvery {
-		m.tree, m.treeAt = m.env.Procs.Tree(context.Background()), time.Now()
-	}
-	if len(m.tree) == 0 {
-		return source.Unknown
-	}
-	if slices.Contains(m.tree, mf.Pid) {
-		return source.Mine
-	}
-	return source.Foreign
-}
-
-// treeEvery bounds how often the process tree is listed.
-const treeEvery = 2 * time.Second
-
-func sameDir(a, b string) bool {
-	if a == "" || b == "" {
-		return false
-	}
-	ra, err := filepath.EvalSymlinks(a)
-	if err != nil {
-		ra = filepath.Clean(a)
-	}
-	rb, err := filepath.EvalSymlinks(b)
-	if err != nil {
-		rb = filepath.Clean(b)
-	}
-	return ra == rb
 }
 
 type document struct {
@@ -261,9 +181,13 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	if d.SessionID != m.session {
 		// A session of this folder newer than the one followed: a resume
 		// or a fresh start in the same pane. It must be this session's own
-		// Cline process (the manifest names its pid), not one the user
-		// started in a terminal; with no way to tell, the session followed
-		// stays.
+		// Cline process, not one the user started in a terminal: the
+		// manifest's pid says so when it has one (the recorded 3.0.74
+		// manifests have none). Without it, the session moves only to an
+		// interactive session (a one-shot `cline <task>` writes
+		// interactive false) and only when no other Cline runs in the
+		// folder, by a lookup begun after the session was first seen
+		// (source.Solo), which runs away from the session's lock.
 		if !m.belongs(d.SessionID, d.UpdatedAt) || (m.session != "" && d.UpdatedAt <= m.updated) {
 			return nil, nil
 		}
@@ -271,19 +195,73 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		case source.Foreign:
 			return nil, nil
 		case source.Unknown:
-			if m.session != "" {
+			if m.session != "" && !m.mayMove(d.SessionID) {
+				if m.pend == d.SessionID {
+					m.pendDoc = d // mapped when the lookup ends (Woken)
+				}
 				return nil, nil
 			}
 		}
-		m.lock(d.SessionID)
-		m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
-		m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+		m.moveTo(d.SessionID)
 	} else if d.UpdatedAt != "" && d.UpdatedAt == m.updated && len(d.Messages) == len(m.lastMsgs) {
 		// The same document again (both feeds read each rewrite).
 		return nil, nil
 	}
 	m.updated = d.UpdatedAt
 	m.lastMsgs = d.Messages
+	return m.changed(m.render(d.Messages)), nil
+}
+
+// mayMove reports whether the chat may move to session id without a pid:
+// an interactive session, and a lookup begun after it was first seen found
+// no other Cline in the folder. Until then id is pending.
+func (m *messages) mayMove(id string) bool {
+	if mf, ok := m.manifest(id); !ok || mf.Interactive == nil || !*mf.Interactive {
+		return false
+	}
+	since, ok := m.seen[id]
+	if !ok {
+		since = time.Now()
+		m.seen[id] = since
+	}
+	if !m.solo.Alone(m.env, since, m.wake) {
+		m.pend = id
+		return false
+	}
+	m.pend = ""
+	return true
+}
+
+// moveTo follows session id from its start.
+func (m *messages) moveTo(id string) {
+	if m.session != "" && m.session != id {
+		harness.Moved(m.state)
+	}
+	m.lock(id)
+	m.pend, m.pendDoc = "", document{}
+	m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
+	m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
+}
+
+// Wake keeps the engine's wake for the lookups mayMove starts
+// (harness.Waker).
+func (m *messages) Wake(f func()) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.wake = f
+}
+
+// Woken moves the chat to the session the last document waited on, when
+// the lookup that ended allows it, and maps that document.
+func (m *messages) Woken() ([]harness.Item, []harness.Op) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pend == "" || m.pendDoc.SessionID != m.pend || !m.mayMove(m.pend) {
+		return nil, nil
+	}
+	d := m.pendDoc
+	m.moveTo(d.SessionID)
+	m.updated, m.lastMsgs = d.UpdatedAt, d.Messages
 	return m.changed(m.render(d.Messages)), nil
 }
 
@@ -295,6 +273,9 @@ func (m *messages) Relaunched(argv []string, _ time.Time) []harness.Op {
 	defer m.mu.Unlock()
 	if id == "" || id == m.session {
 		return nil
+	}
+	if m.session != "" {
+		harness.Moved(m.state)
 	}
 	m.lock(id)
 	m.updated, m.lastMsgs, m.lastTurn, m.lastOpen, m.lastAsking = "", nil, "", false, false

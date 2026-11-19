@@ -8,6 +8,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/turns"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
 // db maps rows of the project's .crush/crush.db, from two feeds: top-level
@@ -29,17 +30,47 @@ type db struct {
 	// the followed session's messages were mapped.
 	pin   string
 	shown bool
+	// moved is set when the chat followed the agent to another session
+	// (movedTo, a relaunch's pin, or the one remembered across a helper
+	// restart): kept, like one with content, until its messages come.
+	moved bool
+	solo  source.Solo
+	seen  map[string]time.Time // when each session the chat may move to was first seen
+	wake  func()
 }
 
 func newDB(env harness.Env) *db {
 	m := &db{env: env, pin: sessionArg(env.Argv), state: map[string]string{}, sessions: map[string]sessionRow{},
-		done: map[string]bool{}, asks: map[string]asked{}, b: turns.New()}
+		done: map[string]bool{}, asks: map[string]asked{}, b: turns.New(), seen: map[string]time.Time{}}
 	if m.pin != "" {
 		// Resumed at launch: the chat is that conversation now, before the
 		// sessions feed (which lists only recently touched rows) names it.
 		m.state["harness_session"] = m.pin
+	} else if id := source.LoadFollowed(env, followName); id != "" {
+		// The session the chat followed before a helper restart.
+		m.state["harness_session"], m.moved = id, true
 	}
 	return m
+}
+
+// followName names what this mapper remembers across a helper restart.
+const followName = "crush"
+
+// Wake keeps the engine's wake for the lookups movedTo starts
+// (harness.Waker).
+func (m *db) Wake(f func()) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.wake = f
+}
+
+// Woken moves the chat if the lookup that ended allows it; the chat feed
+// then reads the new session's messages.
+func (m *db) Woken() ([]harness.Item, []harness.Op) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.choose()
+	return nil, nil
 }
 
 func (m *db) Name() string { return MapperDB }
@@ -47,6 +78,7 @@ func (m *db) Name() string { return MapperDB }
 func (m *db) State() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.choose() // a lookup that ended may allow a move
 	out := make(map[string]string, len(m.state)+3)
 	for k, v := range m.state {
 		out[k] = v
@@ -118,32 +150,84 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 // database names no process, so a session another Crush creates in the
 // same project cannot be told from this one's: once the chat has content
 // it stays on its session, and only this Togo session's own relaunch
-// (--session, see Relaunched) moves it.
+// (--session, see Relaunched) moves it, or a session written after it
+// while no other Crush runs in the project (ctrl+n or a resume in Crush's
+// own UI, see movedTo).
 func (m *db) session(s sessionRow) {
 	m.sessions[s.ID] = s
+	m.choose()
+}
+
+// choose picks the session the chat follows from the rows seen.
+func (m *db) choose() {
 	best := m.pick()
+	moved := false
 	if m.pin != "" {
 		p, ok := m.sessions[m.pin]
 		if !ok {
 			return
 		}
 		best = p
-	} else if m.shown && m.state["harness_session"] != "" {
+	} else if (m.shown || m.moved) && m.state["harness_session"] != "" {
 		best = m.sessions[m.state["harness_session"]]
+		if mv := m.movedTo(); mv.ID != "" {
+			best = mv
+			moved = true
+		}
 	}
 	if best.ID == "" {
 		return
 	}
 	if best.ID != m.state["harness_session"] {
+		if m.state["harness_session"] != "" {
+			harness.Moved(m.state)
+		}
 		m.b.Reset()
 		m.done = map[string]bool{}
 		m.asks = map[string]asked{}
 		m.state["harness_session"] = best.ID
 		m.shown = false
 	}
-	if m.pin != "" && best.ID == m.pin {
-		m.pin = ""
+	if moved {
+		m.moved = true
+		source.SaveFollowed(m.env, followName, best.ID)
 	}
+	if m.pin != "" && best.ID == m.pin {
+		// Held like a move: a newer session does not take over before
+		// the resumed one's messages come.
+		m.pin, m.moved = "", true
+	}
+}
+
+// movedTo is the session written last, when it was written after the
+// followed one and no other Crush runs in the project to have written it
+// (source.Solo, asked after it was first seen): the agent moved to it.
+// Otherwise none.
+func (m *db) movedTo() sessionRow {
+	cur := m.sessions[m.state["harness_session"]]
+	var top sessionRow
+	for _, c := range m.sessions {
+		if c.ID == cur.ID || c.Updated <= cur.Updated {
+			continue
+		}
+		if top.ID == "" || c.Updated > top.Updated || (c.Updated == top.Updated && c.ID > top.ID) {
+			top = c
+		}
+	}
+	if top.ID == "" {
+		return sessionRow{}
+	}
+	since, ok := m.seen[top.ID]
+	if !ok {
+		since = time.Now()
+		m.seen[top.ID] = since
+	}
+	// A lookup begun after the session was first seen; it runs away from
+	// the session's lock and wakes the engine when done.
+	if !m.solo.Alone(m.env, since, m.wake) {
+		return sessionRow{}
+	}
+	return top
 }
 
 // pick chooses the session this Togo session's agent created. A row made
@@ -180,13 +264,20 @@ func (m *db) pick() sessionRow {
 func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if id := sessionArg(argv); id != "" {
+	id := sessionArg(argv)
+	// A relaunch names the conversation it opens, or starts a new one:
+	// what was followed before is not remembered past it.
+	source.SaveFollowed(m.env, followName, id)
+	if id != "" {
 		m.pin = id
 		if r, ok := m.sessions[id]; ok {
 			m.session(r)
 		} else if m.state["harness_session"] != id {
 			// The feed lists only rows touched since this Togo session
 			// began, which a resumed conversation may not be.
+			if m.state["harness_session"] != "" {
+				harness.Moved(m.state)
+			}
 			m.b.Reset()
 			m.done = map[string]bool{}
 			m.asks = map[string]asked{}

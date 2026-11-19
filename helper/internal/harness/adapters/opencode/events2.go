@@ -49,6 +49,7 @@ type Events2 struct {
 	pastTurn    string          // turn of the past message being mapped (history2.go)
 	loc         located         // the followed conversation's folder (needs2.go)
 	flagMain    bool            // main comes from the launch flag alone (history2.go)
+	kids        childSet        // every session reported with a parent (children.go)
 }
 
 // NewEvents2 returns a 2.x mapper for one session.
@@ -357,6 +358,9 @@ func (e *Events2) created(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 		e.setMain(d.SessionID)
 		return nil, nil
 	}
+	if d.ParentID != "" {
+		e.kids.add(d.SessionID)
+	}
 	if d.ParentID == "" || !e.follows(d.ParentID) {
 		return nil, nil
 	}
@@ -378,7 +382,7 @@ func (e *Events2) enqueued(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 	if d.Item == nil || d.Item.Type != "user" || d.InboxID == "" {
 		return nil, nil
 	}
-	if d.SessionID != e.main && e.children[d.SessionID] == nil {
+	if d.SessionID != e.main && e.children[d.SessionID] == nil && !e.kids.has(d.SessionID) {
 		e.setMain(d.SessionID)
 	}
 	turn := e.turnOf[d.SessionID]
@@ -394,7 +398,7 @@ func (e *Events2) enqueued(d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 // id of its own: "turn-" and the prompt's).
 func (e *Events2) started(evID string, d ev2, at time.Time) ([]harness.Item, []harness.Op) {
 	if !e.follows(d.SessionID) {
-		if e.main != "" || d.SessionID == "" {
+		if e.main != "" || d.SessionID == "" || e.kids.has(d.SessionID) {
 			return nil, nil
 		}
 		e.setMain(d.SessionID)

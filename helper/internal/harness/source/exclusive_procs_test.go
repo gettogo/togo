@@ -244,7 +244,8 @@ func TestExclusiveUnheldNewFileIsOwnNewWhenNoForeignAgent(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	writeLine(t, newF, `{"f":"new1"}`)
 	c.wait(t, 2)
-	writeLine(t, oldF, `{"f":"old2"}`)
+	// The old file growing now would be a resume
+	// (TestExclusiveUnheldResumeToDroppedFile); the new file stays followed.
 	time.Sleep(300 * time.Millisecond)
 	writeLine(t, newF, `{"f":"new2"}`)
 	c.wait(t, 3)

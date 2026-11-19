@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -12,13 +13,12 @@ import (
 )
 
 // StateConversation is the mapper state key naming the conversation the
-// agent's terminal shows. A mapper sets it when its harness can leave one
-// conversation for another under a running agent (/new, /resume, a fork).
-// When it changes, the chat starts over on the new conversation: a new log
-// epoch, a fresh mapper and a fresh mission, so nothing of the old
-// conversation stays in the chat and nothing of the old turn's state
-// (tools, plan, usage, working, held prompts) carries into the new one.
-const StateConversation = "conversation"
+// agent's terminal shows (harness.StateConversation). When it changes, the
+// chat starts over on the new conversation: a new log epoch, a fresh mapper
+// and a fresh mission, so nothing of the old conversation stays in the chat
+// and nothing of the old turn's state (tools, plan, usage, working, held
+// prompts) carries into the new one.
+const StateConversation = harness.StateConversation
 
 // StateCwd is the mapper state key naming the folder the conversation
 // works in now. A mapper sets it when its harness can move a running
@@ -62,22 +62,82 @@ func (s *sess) filesDir(ctx context.Context) string {
 
 // movedLocked reports whether the mappers now name a conversation other
 // than the one the chat shows. The first one named is the one the session
-// started on.
+// started on, unless the session was started again under a running chat
+// (a relaunch on a new endpoint, Engine.restart) that showed another: the
+// item log is kept across that restart, so it is a move.
 func (s *sess) movedLocked() bool {
 	id := s.stateLocked()[StateConversation]
 	if id == "" || id == s.conv {
 		return false
 	}
 	if s.conv == "" {
+		left := s.e.convCarry.take(s.id)
+		if left != "" && left != id {
+			return true
+		}
 		s.conv = id
 		return false
 	}
 	return true
 }
 
+// followedLocked starts the chat over when a mapper that carries on across
+// conversations followed the agent to another one (harness.StateMoves
+// rose). The mapper stays: what it learned picks the conversation, and it
+// reset its own turn state when it moved. It reports whether the chat
+// started over. A count seen before, or a fresh mapper's zero (a helper
+// restart), changes nothing.
+func (s *sess) followedLocked() bool {
+	moves := s.stateLocked()[harness.StateMoves]
+	if moves == s.moves {
+		return false
+	}
+	s.moves = moves
+	if moves == "" || moves == "0" {
+		return false
+	}
+	s.startOverLocked("")
+	if h := s.hookStoreLocked(); h != nil {
+		h.remove(false) // the stored chat is the old conversation's
+	}
+	return true
+}
+
+// convCarry keeps, per session, the conversation the chat showed when the
+// session's adapter was started again on a new endpoint, until the new
+// run's mappers name theirs. It is taken once, and dropped with the
+// session (Forget).
+type convCarry struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+func (c *convCarry) put(id, conv string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if conv == "" {
+		delete(c.m, id)
+		return
+	}
+	if c.m == nil {
+		c.m = map[string]string{}
+	}
+	c.m[id] = conv
+}
+
+func (c *convCarry) take(id string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	conv := c.m[id]
+	delete(c.m, id)
+	return conv
+}
+
 // startOverLocked empties the chat for the conversation the agent moved to
-// and returns a fresh mapper in place of the one that reported the move;
-// the caller maps the announcing record again with it. Feeds keep running,
+// and returns a fresh mapper in place of the one that reported the move,
+// given what the old one carries (harness.Carrier); the caller maps the
+// announcing record again with it. With no mapper
+// named, the mappers stay (followedLocked) and it returns nil. Feeds keep running,
 // so no record is missed, and open chats are told to reset and read the
 // new epoch. Mappers of other feeds (settings, the status line) describe
 // the agent, not the conversation, and stay.
@@ -93,10 +153,22 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 			held = append(held, q.item.User.Text)
 		}
 	}
+	// An open question of the old conversation is no longer on screen:
+	// its offer on the phone is withdrawn, so no answer is typed into a
+	// pane that shows another conversation.
+	for id := range s.needs.asked {
+		s.withdrawOfferLocked(id)
+	}
 	s.convGen++
 	s.e.log.Forget(s.id)
-	fresh := s.e.mapperFor(mapper, s.env)
-	s.mappers[mapper] = fresh
+	var fresh harness.Mapper
+	if mapper != "" {
+		fresh = s.e.mapperFor(mapper, s.env)
+		if c, ok := s.mappers[mapper].(harness.Carrier); ok {
+			c.Carry(fresh)
+		}
+		s.mappers[mapper] = fresh
+	}
 	s.conv = ""
 	s.queue, s.sent, s.phone = nil, map[string]bool{}, nil
 	s.phoneAlias = nil

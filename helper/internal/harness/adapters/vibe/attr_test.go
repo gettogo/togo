@@ -46,11 +46,11 @@ func TestJournalForSkipsForeignProcess(t *testing.T) {
 	_, foreignSeg := write("foreign", 0)
 	env := harness.Env{Cwd: "/w/proj", Vars: map[string]string{source.VarHome: home}}
 	env.Procs = heldProcs{tree: []int{10, 11}, holders: map[string][]int{foreignSeg: {99}, mineSeg: {11}}}
-	if got := journalFor(env); got != mine {
+	if got := journalFor(context.Background(), env, "", nil); got != mine {
 		t.Fatalf("got %q want %q", got, mine)
 	}
 	env.Procs = heldProcs{tree: []int{10, 11}, holders: map[string][]int{foreignSeg: {99}}}
-	if got := journalFor(env); got != mine {
+	if got := journalFor(context.Background(), env, "", nil); got != mine {
 		t.Fatalf("foreign-held journal chosen without evidence: %q", got)
 	}
 }

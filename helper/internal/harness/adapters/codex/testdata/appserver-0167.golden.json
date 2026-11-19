@@ -705,6 +705,7 @@
   }
  ],
  "state": {
+  "conversation": "01a1bbac-a0e4-7321-9ea5-c9ceabfb4575",
   "effort": "low",
   "harness_session": "01a1bbac-a0e4-7321-9ea5-c9ceabfb4575",
   "idle": "true",

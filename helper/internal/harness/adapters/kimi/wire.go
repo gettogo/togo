@@ -20,6 +20,7 @@ type Wire struct {
 
 	mu       sync.Mutex
 	state    map[string]string
+	file     string // the log the records come from
 	permMode string
 	planMode bool
 	turn     *turn
@@ -121,6 +122,13 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if rec.File != "" {
+		// Another log is a /new or a resume: the engine starts the chat
+		// over on it with a fresh mapper, which reads the log from its
+		// start. The same log read again (a helper restart) changes nothing.
+		w.file = rec.File
+		w.state[harness.StateConversation] = rec.File
+	}
 	items, ops := w.mapRecord(r, at)
 	for _, op := range ops {
 		if op.Row != nil || len(op.Rows) > 0 {

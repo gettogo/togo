@@ -5,17 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gettogo/togo/helper/internal/wire"
-	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
-	"github.com/gettogo/togo/helper/internal/harness/procs"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/session"
 )
@@ -40,6 +37,8 @@ type sess struct {
 	// (see conversation.go).
 	conv    string
 	convGen uint64
+	// moves is the last harness.StateMoves the mappers reported.
+	moves string
 	// catalogPending: the harness's own command list is still being read;
 	// the last command completion said so.
 	catalogPending bool
@@ -194,53 +193,6 @@ func (s *sess) missionCaps() []string {
 	}
 	return caps
 }
-
-// envFor builds the template and runner environment of a session.
-func (e *Engine) envFor(info session.Session) harness.Env {
-	home := e.cfg.Home
-	cwd := source.Expand(info.Cwd, home)
-	env := harness.Env{SessionID: info.ID, Agent: info.Agent, Cwd: cwd, Argv: info.Command, Vars: map[string]string{
-		source.VarHome: home, "cwd": cwd, "cwd_key": CwdKey(cwd), "session": info.ID,
-		"created":          info.CreatedAt.UTC().Format(time.RFC3339),
-		source.VarTogoHome: e.cfg.TogoHome,
-	}}
-	if ep, ok := e.endpointFor(info.ID); ok {
-		env.Endpoint = ep.url()
-		env.Auth = ep.auth()
-		env.Vars["port"], env.Vars["socket"] = strconv.Itoa(ep.port), ep.socket
-	}
-	if argv, ok := e.relaunchedArgv(info.ID); ok {
-		env.Argv = argv
-	}
-	if e.cfg.PanePIDs != nil {
-		id := info.ID
-		env.Procs = procs.Session{Panes: func(ctx context.Context) ([]int, error) { return e.cfg.PanePIDs(ctx, id) }}
-	}
-	if e.cfg.PaneTTY != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if tty, err := e.cfg.PaneTTY(ctx, info.ID); err == nil && tty != "" {
-			env.Vars[source.VarTTY] = tty
-		}
-		cancel()
-	}
-	if e.cfg.LoginPath != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		env.Vars[source.VarPath] = e.cfg.LoginPath(ctx)
-		cancel()
-	}
-	if e.cfg.LoginEnv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		env.Environ = e.cfg.LoginEnv(ctx)
-		cancel()
-	}
-	return env
-}
-
-var nonKey = regexp.MustCompile(`[^A-Za-z0-9]`)
-
-// CwdKey is a folder as Claude Code and omp name their per-project
-// folders: every character other than a letter or digit becomes "-".
-func CwdKey(dir string) string { return nonKey.ReplaceAllString(filepath.Clean(dir), "-") }
 
 // begin starts the adapter once.
 func (s *sess) begin() {
@@ -689,6 +641,8 @@ func (s *sess) recordLocked(mapper string, rec harness.Record) {
 		pre = replayMark(m)
 		items, ops = safeMap(m, rec, s.e.cfg.Logf)
 		s.movedLocked()
+	} else {
+		s.followedLocked() // before publishing: the record's items are the new conversation's
 	}
 	s.keepHookLocked(rec, pre, replayMark(m))
 	s.warnPlanLocked(m)
@@ -734,6 +688,7 @@ func safeMap(m harness.Mapper, rec harness.Record, logf func(string, ...any)) (i
 func (s *sess) afterRecordLocked() {
 	s.syncFeedsLocked()
 	st := s.stateLocked()
+	s.followedLocked()
 	if t := st["turn"]; t != "" {
 		s.turn = t
 	}

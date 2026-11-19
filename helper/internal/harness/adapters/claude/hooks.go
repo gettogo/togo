@@ -20,6 +20,9 @@ type hooks struct {
 	state     map[string]string
 	guessedAt time.Time
 	notices   int
+	// ended is set when the followed session's SessionEnd came: the next
+	// session to start in the pane is the agent's own (a relaunch).
+	ended bool
 }
 
 func newHooks(env harness.Env) *hooks {
@@ -59,6 +62,9 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.nested(p) {
+		return nil, nil
+	}
 	if v := str(p, "session_id"); v != "" {
 		h.state["harness_session"] = v
 	}
@@ -82,6 +88,9 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		h.setWorking(true, at)
 	case "Stop", "SessionEnd":
 		h.setWorking(false, at)
+		if str(p, "hook_event_name") == "SessionEnd" {
+			h.ended = true
+		}
 	case "StopFailure":
 		h.setWorking(false, at)
 		if h.state["transcript_path"] != "" {
