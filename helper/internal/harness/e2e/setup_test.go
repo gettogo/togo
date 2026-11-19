@@ -102,8 +102,12 @@ func check(t *testing.T, where string, st enginetest.State, l *sessiongen.Layout
 
 // fail reports the violations outside the known faults. A job row named
 // after a subagent that a restart drops is the agent-shown-as-job fault.
-func fail(t *testing.T, where string, vs []enginetest.Violation, l *sessiongen.Layout) {
+func fail(t *testing.T, where string, vs []enginetest.Violation, layout ...*sessiongen.Layout) {
 	t.Helper()
+	l := &sessiongen.Layout{}
+	if len(layout) > 0 && layout[0] != nil {
+		l = layout[0]
+	}
 	for i, v := range vs {
 		if v.Rule == "restart-changed" && strings.HasPrefix(v.Detail, "agent-") && turnOnly(v.Detail) {
 			vs[i].Rule = "agent-turn-moved"

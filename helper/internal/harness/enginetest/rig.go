@@ -61,6 +61,11 @@ type Options struct {
 	// tests, and it is four fifths of the time a restore of a large file
 	// takes (eight times that under the race detector).
 	NoRedact bool
+	// PanePIDs, when set, names the processes of the session's pane, so
+	// the engine attributes files to the session by who holds them open
+	// (the agents whose feed is exclusive: pi, kimi). Nil leaves the
+	// engine without a process view.
+	PanePIDs func() []int
 }
 
 // asIs is a redactor that changes nothing.
@@ -95,7 +100,7 @@ func New(t testing.TB, opt Options) *Rig {
 		t.Fatal(err)
 	}
 	// The gate runs `<agent> --version`; any other call fails at once.
-	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] + "*) exit 1;;\nesac\n"
+	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] + "*) exit 1;;\nesac\n"
 	prog := opt.Agent
 	if p, ok := programs[prog]; ok {
 		prog = p
@@ -125,8 +130,13 @@ func (r *Rig) start() {
 	if r.Opt.NoRedact {
 		red = asIs{}
 	}
+	var panePIDs func(context.Context, string) ([]int, error)
+	if f := r.Opt.PanePIDs; f != nil {
+		panePIDs = func(context.Context, string) ([]int, error) { return f(), nil }
+	}
 	r.Engine = engine.New(engine.Config{
 		Redactor: red,
+		PanePIDs: panePIDs,
 		Sessions: sessions{r}, Typist: typist{}, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
 		Screen:    func(context.Context, string) (string, error) { return "", nil },
 		Cursor:    func(context.Context, string) (int, int, bool, error) { return 0, 0, false, nil },
