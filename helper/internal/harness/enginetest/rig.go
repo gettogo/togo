@@ -42,6 +42,11 @@ type Options struct {
 	Created time.Time
 	// MaxItems is the engine's item log size; 0 keeps the default.
 	MaxItems int
+	// PanePIDs, when set, names the processes of the session's pane, so
+	// the engine attributes files to the session by who holds them open
+	// (the agents whose feed is exclusive: pi, kimi). Nil leaves the
+	// engine without a process view.
+	PanePIDs func() []int
 }
 
 // Rig is a running engine over one session.
@@ -70,7 +75,7 @@ func New(t testing.TB, opt Options) *Rig {
 		t.Fatal(err)
 	}
 	// The gate runs `<agent> --version`; any other call fails at once.
-	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo '" + versions[opt.Agent] + "';;\n*) exit 1;;\nesac\n"
+	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + versions[opt.Agent] + "';;\n*) exit 1;;\nesac\n"
 	if err := os.WriteFile(filepath.Join(r.bin, opt.Agent), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +97,12 @@ func (r *Rig) start() {
 	if r.Opt.MaxItems > 0 {
 		log.Max = r.Opt.MaxItems
 	}
+	var panePIDs func(context.Context, string) ([]int, error)
+	if f := r.Opt.PanePIDs; f != nil {
+		panePIDs = func(context.Context, string) ([]int, error) { return f(), nil }
+	}
 	r.Engine = engine.New(engine.Config{
+		PanePIDs: panePIDs,
 		Sessions: sessions{r}, Typist: typist{}, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
 		Screen:    func(context.Context, string) (string, error) { return "", nil },
 		Cursor:    func(context.Context, string) (int, int, bool, error) { return 0, 0, false, nil },
