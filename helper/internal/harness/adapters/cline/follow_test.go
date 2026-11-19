@@ -105,3 +105,29 @@ func TestMessagesDoesNotFollowASecondClineAfterAMove(t *testing.T) {
 		t.Fatalf("followed the second Cline's session: %q", got)
 	}
 }
+
+// The document that waited on the lookup is mapped when the lookup ends
+// (Woken), not at the next rewrite: Cline may write nothing more for a
+// while.
+func TestMessagesMapsTheWaitingDocumentWhenTheLookupEnds(t *testing.T) {
+	h, doc := home(t)
+	interactive(t, h, fixtureID)
+	other := addSession(t, h, "1794200000007_nopid", 0, doc)
+	interactive(t, h, "1794200000007_nopid")
+	m := newMessages(clineEnv(h, fakeProcs{tree: []int{100}}))
+	woke := make(chan struct{}, 1)
+	m.Wake(func() { woke <- struct{}{} })
+	m.Map(harness.Record{Data: doc})
+	if items, _ := m.Map(harness.Record{Data: other}); len(items) != 0 {
+		t.Fatal("moved before the lookup ended")
+	}
+	select {
+	case <-woke:
+	case <-time.After(3 * time.Second):
+		t.Fatal("the engine was not woken")
+	}
+	items, _ := m.Woken()
+	if len(items) == 0 || m.State()["harness_session"] != "1794200000007_nopid" {
+		t.Fatalf("Woken drew %d items, session %q", len(items), m.State()["harness_session"])
+	}
+}
