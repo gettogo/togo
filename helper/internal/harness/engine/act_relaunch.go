@@ -74,6 +74,9 @@ group:
 			}
 		}
 	}
+	// A relaunch that opens another conversation starts the chat over now,
+	// and feeds that follow the conversation move with it.
+	s.afterRecordLocked()
 	s.mu.Unlock()
 	return harness.ActionResult{Result: harness.ResultRelaunched}, nil
 }

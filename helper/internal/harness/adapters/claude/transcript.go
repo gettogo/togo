@@ -159,6 +159,9 @@ func (t *transcript) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	if e.SessionID != "" && !e.IsSidechain {
 		t.state["harness_session"] = e.SessionID
 	}
+	if conv := conversationOf(rec.File); conv != "" && !e.IsSidechain {
+		t.state[harness.StateConversation] = conv
+	}
 	switch e.Type {
 	case "permission-mode":
 		var pm struct {

@@ -165,6 +165,10 @@ func (e *Events) setMain(id string) {
 	}
 	e.main = id
 	e.state["harness_session"] = id
+	// Another one (the TUI switched session, a resume) makes the engine
+	// start the chat over on it with a fresh mapper; the same one again
+	// changes nothing.
+	e.state[harness.StateConversation] = id
 }
 
 func (e *Events) parentOf(sess string) string {

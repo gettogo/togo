@@ -18,20 +18,23 @@ func (s *sess) restore(ctx context.Context, mapper string, rec harness.Record) {
 	s.wantHistoryLocked(mapper, rec.Source)
 }
 
-func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Record) {
+//
+// It returns where in the snapshot the conversation the chat now shows
+// begins: 0, or the record at which the snapshot moved to another one.
+func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Record) int {
+	from := 0
 	m := s.mappers[mapper]
 	if m == nil {
-		return
+		return from
 	}
 	// Let existing clients show loading before replay starts. Their open waits
 	// for this lock, so they still receive only the completed snapshot.
 	s.notifyLocked(harness.Notification{Kind: harness.NoteReset, Reason: "history"})
 	s.restoring = true
 	defer func() { s.restoring = false }()
-	moved := false
 	for i := 0; i < len(rec.Replay); i++ {
 		if ctx.Err() != nil {
-			return
+			return from
 		}
 		one := harness.Record{Source: rec.Source, At: rec.At, Data: s.e.red.JSON(rec.Replay[i]), File: rec.File}
 		if len(rec.ReplayAt) == len(rec.Replay) {
@@ -42,14 +45,18 @@ func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Rec
 		}
 		s.last[rec.Source] = one.Data
 		items, ops := safeMap(m, one, s.e.cfg.Logf)
-		if !moved && s.movedLocked() {
-			// The file is another conversation's (the terminal moved to it):
-			// the chat starts over and the snapshot is read from its start.
-			moved = true
+		if s.movedLocked() {
+			// The snapshot names another conversation from here on (a file
+			// the terminal moved to, a hook store spanning a /new): the chat
+			// starts over and this record is mapped again by a fresh mapper,
+			// which names its conversation as the one the chat shows. What
+			// came before belongs to the conversation left.
 			m = s.startOverLocked(mapper)
-			i = -1
+			from = i
+			i--
 			continue
 		}
+		s.followedLocked()
 		s.publishLocked(items, ops)
 		s.afterRecordLocked()
 	}
@@ -61,4 +68,5 @@ func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Rec
 		run.failures = 0
 		s.recoverLocked(run)
 	}
+	return from
 }

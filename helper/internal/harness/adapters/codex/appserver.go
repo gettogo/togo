@@ -158,9 +158,14 @@ func (a *AppServer) parentOf(thread string) string {
 	return ""
 }
 
+// setMain follows the top-level thread the TUI shows. It names the
+// conversation: another one (a /new or a /resume at the desk, a resume
+// from the phone) makes the engine start the chat over on it with a fresh
+// mapper; the same thread again (a helper restart) changes nothing.
 func (a *AppServer) setMain(thread string) {
 	a.main = thread
 	a.state["harness_session"] = thread
+	a.state[harness.StateConversation] = thread
 }
 
 type resumeResult struct {
@@ -363,14 +368,24 @@ func (a *AppServer) turnStarted(params json.RawMessage, at time.Time) ([]harness
 	if json.Unmarshal(params, &p) != nil || p.Turn.ID == "" {
 		return nil, nil
 	}
-	if t := a.threads[p.ThreadID]; (t == nil || t.top) && p.ThreadID != a.main {
-		// A new top-level thread started a turn: the desk ran /new or
-		// /resume, so it is now the main thread.
-		a.threads[p.ThreadID] = &threadInfo{top: true}
+	t := a.threads[p.ThreadID]
+	if t != nil && t.top && p.ThreadID != a.main {
+		// A top-level thread the server listed started a turn: the desk
+		// ran /new or /resume, so it is now the main thread.
 		a.setMain(p.ThreadID)
+		// Fresh as of this turn: an older thread the server loads again
+		// does not take the chat back.
+		a.mainFresh = orNow(secs(p.Turn.StartedAt), at)
 	}
 	started := orNow(secs(p.Turn.StartedAt), at)
 	ti := a.turn(p.Turn.ID, p.ThreadID, started)
+	if t == nil && p.ThreadID != a.main {
+		// A thread the server has not described yet: a subagent's turn can
+		// start before its spawn completes. Only the thread's resume result
+		// says whether it has a parent (resumed, which also takes a new
+		// top-level thread as main); until then nothing of it is drawn.
+		return nil, nil
+	}
 	if p.ThreadID == a.main {
 		a.state["turn"] = p.Turn.ID
 		a.state["working"], a.state["idle"] = "true", "false"

@@ -64,7 +64,7 @@ func TestCrushFollowsAConversationItStartsItself(t *testing.T) {
 		t.Fatalf("session %q after the new one, want b", got)
 	}
 	if n := m.State()[harness.StateMoves]; n != "1" {
-		t.Fatalf("moves %q after a move, want 1: the engine ends what the left conversation had", n)
+		t.Fatalf("moves %q after a move, want 1: the engine starts the chat over on it", n)
 	}
 	m.Map(rec(t, srow("b", 200)))
 	if got := m.State()["harness_session"]; got != "b" {
@@ -125,6 +125,10 @@ func TestCrushRestartKeepsTheMove(t *testing.T) {
 	restarted.Map(rec(t, srow("b", 200)))
 	if got := restarted.State()["harness_session"]; got != "b" {
 		t.Fatalf("after a restart the chat is on %q, want b", got)
+	}
+	// The helper restart does not start the chat over.
+	if n := restarted.State()[harness.StateMoves]; n != "" {
+		t.Fatalf("moves %q after a helper restart, want none", n)
 	}
 	restarted.Map(rec(t, map[string]any{"id": "old", "title": "old", "created_at": 10, "updated_at": 300}))
 	if got := settles(restarted, "old"); got != "old" {

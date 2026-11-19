@@ -168,6 +168,7 @@
   }
  ],
  "state": {
+  "conversation": "01a1b3f0-e3f6-7a70-bc61-35400eb4d0e0",
   "effort": "high",
   "harness_session": "01a1b3f0-e3f6-7a70-bc61-35400eb4d0e0",
   "idle": "true",

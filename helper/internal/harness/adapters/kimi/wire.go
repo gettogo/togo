@@ -123,10 +123,11 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if rec.File != "" {
-		if w.file != "" && rec.File != w.file {
-			harness.Moved(w.state) // a /new or a resume: another log
-		}
+		// Another log is a /new or a resume: the engine starts the chat
+		// over on it with a fresh mapper, which reads the log from its
+		// start. The same log read again (a helper restart) changes nothing.
 		w.file = rec.File
+		w.state[harness.StateConversation] = rec.File
 	}
 	items, ops := w.mapRecord(r, at)
 	for _, op := range ops {

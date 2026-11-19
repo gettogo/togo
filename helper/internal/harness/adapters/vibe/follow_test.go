@@ -81,7 +81,10 @@ func TestJournalForFollowsANewConversation(t *testing.T) {
 
 // When the journal the feed reads moves to another Vibe session, the turn
 // left open in the first ends interrupted and nothing of it goes on: a
-// turn id of the new session opens its own turn.
+// turn id of the new session opens its own turn. The mapper names the
+// conversation, so the engine starts the chat over on the new one; the
+// same session read again (a replay after a helper restart) names the
+// same one and changes nothing.
 func TestSessionChangeResetsTheMapper(t *testing.T) {
 	m := newTestSession(t, t.TempDir())
 	b, err := os.ReadFile(filepath.Join("testdata", "journal-tool.jsonl"))
@@ -98,6 +101,10 @@ func TestSessionChangeResetsTheMapper(t *testing.T) {
 	}
 	first := "turn-e7625568e7604aa7572a9af30a425266"
 	m.Map(harness.Record{At: time.Unix(1, 0), Data: json.RawMessage(opened)})
+	m.Map(harness.Record{At: time.Unix(1, 0), Data: json.RawMessage(opened)})
+	if got := m.State()[harness.StateConversation]; got != "c62e7a44-5a4f-1af0-5ad4-d1c9fa135f62" {
+		t.Fatalf("conversation %q on the first session, read twice", got)
+	}
 	if m.State()["working"] != "true" {
 		t.Fatalf("the first turn is not running: %v", m.State())
 	}
@@ -115,8 +122,11 @@ func TestSessionChangeResetsTheMapper(t *testing.T) {
 	if _, ok := m.turns[first]; ok || len(m.order) != 1 {
 		t.Fatalf("the left conversation's turns are kept: %v", m.order)
 	}
-	if n := m.State()[harness.StateMoves]; n != "1" {
-		t.Fatalf("moves %q after a move, want 1: the engine ends what the left conversation had", n)
+	if got := m.State()[harness.StateConversation]; got != "d73f8b55-6a5f-4b01-9be0-e2dad0246073" {
+		t.Fatalf("conversation %q after the move, want the new session: the engine starts the chat over on it", got)
+	}
+	if n := m.State()[harness.StateMoves]; n != "" {
+		t.Fatalf("moves %q: a named conversation is the engine's signal, not the count", n)
 	}
 }
 

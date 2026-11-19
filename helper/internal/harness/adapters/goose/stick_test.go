@@ -44,6 +44,11 @@ func TestGooseFollowsItsOwnResume(t *testing.T) {
 	if got := m.State()["harness_session"]; got != "b" {
 		t.Fatalf("session %q, want b", got)
 	}
+	// A resume from the phone starts the chat over on the resumed
+	// conversation (the engine reacts to the count).
+	if n := m.State()[harness.StateMoves]; n != "1" {
+		t.Fatalf("moves %q after the relaunch, want 1", n)
+	}
 }
 
 // Two Goose sessions in one folder: the older conversation gets a message
@@ -68,6 +73,11 @@ func TestGooseResumeMovesTheChatBeforeTheRowIsListed(t *testing.T) {
 	m.Relaunched([]string{"goose", "session", "--resume", "--session-id", "b"}, time.Now())
 	if got := m.State()["harness_session"]; got != "b" {
 		t.Fatalf("session %q, want b", got)
+	}
+	// A resume from the phone starts the chat over on the resumed
+	// conversation (the engine reacts to the count).
+	if n := m.State()[harness.StateMoves]; n != "1" {
+		t.Fatalf("moves %q after the relaunch, want 1", n)
 	}
 	fresh := newDB(harness.Env{Cwd: "/w/proj", Argv: []string{"goose", "session", "--resume", "--session-id", "b"}})
 	if got := fresh.State()["harness_session"]; got != "b" {

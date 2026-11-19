@@ -2,21 +2,26 @@ package engine
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
 
-// An agent that reports no conversation of its own (Pi, Kimi Code, Vibe,
-// Goose, Crush, Cline) moved to another one and the chat keeps the
-// earlier one above it. What belonged to the conversation left ends: its
-// open question closes, so an answer is not typed into a pane that shows
-// another conversation; a prompt waiting to be sent is withdrawn; the
-// running turn ends. The chat keeps its items and its epoch.
-func TestFollowingAnotherConversationEndsWhatTheLeftOneHad(t *testing.T) {
+// An agent whose mapper carries on across conversations (Vibe, Goose,
+// Crush, Cline) moved to another one. The chat starts over on it, as for
+// an agent that names its conversation: a new epoch that holds only the
+// conversation followed, its open question closed so no answer is typed
+// into a pane that shows another conversation, the waiting prompt reported
+// instead of sent. The mapper stays. The same count again, or a fresh
+// mapper's zero after a helper restart, changes nothing.
+func TestFollowingAnotherConversationStartsTheChatOver(t *testing.T) {
 	const id = "s_fakemoves1"
 	e, _ := newFake(t, id, "1.2.3")
+	var epochs atomic.Int64
+	e.log.NewEpoch = func() string { return "m" + strconv.FormatInt(epochs.Add(1), 10) }
 	var status atomic.Value
 	status.Store("working")
 	e.cfg.Status = func(string) string { v, _ := status.Load().(string); return v }
@@ -41,27 +46,42 @@ func TestFollowingAnotherConversationEndsWhatTheLeftOneHad(t *testing.T) {
 	if !open("q1") {
 		t.Fatal("the question is not open before the move")
 	}
-	queued := queue(t, e, id, "for the first conversation")
+	queue(t, e, id, "for the first conversation")
 	epoch := e.log.Epoch(id)
 
 	deliver(id, map[string]any{"state": map[string]string{harness.StateMoves: "1", "working": "false"},
 		"items": []harness.Item{{ID: "u2", TurnID: "t2", Kind: harness.KindUser, User: &harness.UserBody{Text: "in the second"}}}})
-	waitFor(t, func() bool { _, ok := e.log.Get(id, "u2"); return ok })
-	waitFor(t, func() bool { return !open("q1") })
-	if q, _ := e.log.Get(id, queued); q.User == nil || !q.User.Withdrawn {
-		t.Fatalf("the queued prompt is %+v, want withdrawn", q.User)
+	waitFor(t, func() bool { _, ok := e.log.Get(id, "u2"); return ok && e.log.Epoch(id) != epoch })
+	if open("q1") {
+		t.Fatal("the left conversation's question is still open")
 	}
-	if tr, _ := e.log.Get(id, "t1"); tr.Turn == nil || tr.Turn.State != harness.StateInterrupted {
-		t.Fatalf("the left conversation's turn is %+v", tr.Turn)
+	for _, gone := range []string{"u1", "t1", "q1"} {
+		if _, ok := e.log.Get(id, gone); ok {
+			t.Fatalf("%s of the left conversation is still in the chat", gone)
+		}
 	}
-	if _, ok := e.log.Get(id, "u1"); !ok || e.log.Epoch(id) != epoch {
-		t.Fatal("the chat started over: the keep-both convention is the adapter's")
+	notice := false
+	items, _, _ := e.log.Since(id, 0, 50)
+	for _, it := range items {
+		if it.Notice != nil && strings.Contains(it.Notice.Text, "for the first conversation") {
+			notice = true
+		}
+		if it.User != nil && it.User.Text == "for the first conversation" {
+			t.Fatal("the waiting prompt was kept for the new conversation")
+		}
+	}
+	if !notice {
+		t.Fatal("no notice carries the prompt that was not sent")
 	}
 	// The same count again changes nothing.
+	second := e.log.Epoch(id)
 	q2 := harness.Item{ID: "q2", TurnID: "t2", Kind: harness.KindQuestion, Question: &harness.QuestionBody{Questions: []harness.Question{{ID: "a", Prompt: "Now?", AllowText: true}}}}
 	deliver(id, map[string]any{"state": map[string]string{harness.StateMoves: "1"}, "items": []harness.Item{q2}})
 	waitFor(t, func() bool { _, ok := e.log.Get(id, "q2"); return ok })
 	if !open("q2") {
 		t.Fatal("a question of the conversation followed was closed")
+	}
+	if _, ok := e.log.Get(id, "u2"); !ok || e.log.Epoch(id) != second {
+		t.Fatal("the chat started over again on a count it had seen")
 	}
 }

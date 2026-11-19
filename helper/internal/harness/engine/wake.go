@@ -25,6 +25,7 @@ func (e *Engine) woken(id string) {
 	for _, m := range s.mappers {
 		if w, ok := m.(harness.Waker); ok {
 			if items, ops := w.Woken(); len(items) > 0 || len(ops) > 0 {
+				s.followedLocked() // a move the lookup allowed starts the chat over first
 				s.publishLocked(items, ops)
 			}
 		}

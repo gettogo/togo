@@ -46,6 +46,11 @@ func TestCrushFollowsItsOwnResume(t *testing.T) {
 	if got := m.State()["harness_session"]; got != "b" {
 		t.Fatalf("session %q, want b", got)
 	}
+	// A resume from the phone starts the chat over on the resumed
+	// conversation (the engine reacts to the count).
+	if n := m.State()[harness.StateMoves]; n != "1" {
+		t.Fatalf("moves %q after the relaunch, want 1", n)
+	}
 }
 
 // Two Crush sessions in one project: the older conversation gets a message
@@ -68,6 +73,11 @@ func TestCrushResumeMovesTheChatBeforeTheRowIsListed(t *testing.T) {
 	m.Relaunched([]string{"crush", "--session", "b"}, time.Now())
 	if got := m.State()["harness_session"]; got != "b" {
 		t.Fatalf("session %q, want b", got)
+	}
+	// A resume from the phone starts the chat over on the resumed
+	// conversation (the engine reacts to the count).
+	if n := m.State()[harness.StateMoves]; n != "1" {
+		t.Fatalf("moves %q after the relaunch, want 1", n)
 	}
 	fresh := newDB(harness.Env{Cwd: "/w/proj", Argv: []string{"crush", "--session", "b"}})
 	if got := fresh.State()["harness_session"]; got != "b" {
