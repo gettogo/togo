@@ -103,6 +103,10 @@ func claudeByRecords(n int) []sessiongen.Turn {
 // does the one after a helper restart.
 func TestClaudeRestoreLimits(t *testing.T) {
 	t.Parallel()
+	// The subtests run in this test's turn, not in parallel. This test keeps
+	// its Heavy place until they finish; a parallel subtest waits for a
+	// parallel slot, and on a small machine tests waiting for a Heavy place
+	// hold every slot, so neither side could go on.
 	support.Heavy(t)
 	coverage.Covers(t, "generated", "claude/scale/at_limit")
 	for _, c := range []struct {
@@ -110,7 +114,6 @@ func TestClaudeRestoreLimits(t *testing.T) {
 		n    int
 	}{{"records_below", maxRecords - 1}, {"records_at", maxRecords}} {
 		t.Run(c.name, func(t *testing.T) {
-			t.Parallel()
 			_, l, r := claudeSession(t, time.Hour, nil, enginetest.Options{MaxItems: 20000}, claudeByRecords(c.n)...)
 			if got := l.Records[l.Main()]; got != c.n {
 				t.Fatalf("transcript holds %d records, want %d", got, c.n)
@@ -119,7 +122,6 @@ func TestClaudeRestoreLimits(t *testing.T) {
 		})
 	}
 	t.Run("size", func(t *testing.T) {
-		t.Parallel()
 		for _, size := range []int{maxFileRead - 1024, maxFileRead} {
 			t.Run(strconv.Itoa(size), func(t *testing.T) {
 				e := support.NewEnv(t, time.Hour)

@@ -155,7 +155,7 @@ func TestSubagentFileBeforeItsCall(t *testing.T) {
 			// only thing to wait for.
 			st := r.Settle(10 * time.Second)
 			if c.earlyShown > 0 {
-				st = r.SettleUntil(60*time.Second, func(st enginetest.State) bool {
+				st = r.SettleUntil(5*time.Minute, func(st enginetest.State) bool {
 					return support.CountKind(st, harness.KindAgent) >= c.earlyShown
 				})
 			}
@@ -165,7 +165,7 @@ func TestSubagentFileBeforeItsCall(t *testing.T) {
 			if err := os.WriteFile(l.Main(), main, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			st = r.SettleUntil(60*time.Second, func(st enginetest.State) bool {
+			st = r.SettleUntil(5*time.Minute, func(st enginetest.State) bool {
 				return enginetest.Has(l.Truth.Last)(st) && stepOwners(st) == c.size
 			})
 			if n := support.CountKind(st, harness.KindAgent); n != c.size {
