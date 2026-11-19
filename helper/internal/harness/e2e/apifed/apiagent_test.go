@@ -71,12 +71,22 @@ func (s *apiSession) hold(t *testing.T, n int, turn sessiongen.Turn) (release fu
 	defer s.mu.Unlock()
 	path := s.api.Journal()
 	support.Now(s.l)
-	before, _ := os.ReadFile(path)
+	// The agent's API streams the journal as it grows, so the whole turn
+	// must never sit in it, even for an instant: the stream could read it
+	// before it is cut, and the turn would end. The turn is written to a
+	// fresh file with the journal moved aside, and only its first n events
+	// are put back.
+	aside := path + ".aside"
+	if err := os.Rename(path, aside); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.l.Append(turn); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := os.ReadFile(path)
-	tail := after[len(before):]
+	tail, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cut := 0
 	for i := 0; i < n; i++ {
 		j := strings.IndexByte(string(tail[cut:]), '\n')
@@ -85,7 +95,21 @@ func (s *apiSession) hold(t *testing.T, n int, turn sessiongen.Turn) (release fu
 		}
 		cut += j + 1
 	}
-	if err := os.WriteFile(path, after[:len(before)+cut], 0o644); err != nil {
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(aside, os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.Write(tail[:cut])
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(aside, path); err != nil {
 		t.Fatal(err)
 	}
 	held := append([]byte(nil), tail[cut:]...)
