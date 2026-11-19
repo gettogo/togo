@@ -54,10 +54,8 @@ func openQuestions(st enginetest.State) map[string][]string {
 }
 
 // /new in Kimi starts another session folder with its own log. The
-// session moves to it, keeps the old conversation's items, and follows the
+// session moves to it, starts the chat over on it, and follows the
 // new log after a helper restart.
-// Keeping both conversations is this agent's current convention; the
-// question whether every agent should start over instead is open.
 func TestKimiNewConversation(t *testing.T) {
 	coverage.Covers(t, "generated", "kimi/lifecycle/new_conversation", "kimi/lifecycle/helper_restart")
 	l, r := kimiStart(t, true, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 30}, sessiongen.Turn{Say: 20})
@@ -69,20 +67,20 @@ func TestKimiNewConversation(t *testing.T) {
 	if len(l.Mains) != 2 {
 		t.Fatalf("%d logs", len(l.Mains))
 	}
-	st := support.SettleUntil(r, 4)
+	st := support.SettleUntil(r, 2)
 	support.CheckEdge(t, "after /new", st, l)
-	if n := len(support.UserPrompts(st)); n != 4 {
-		t.Fatalf("%d prompts after /new, want 4 (both conversations)", n)
+	if n := len(support.UserPrompts(st)); n != 2 {
+		t.Fatalf("%d prompts after /new, want 2 (the new conversation alone)", n)
 	}
 	r.Restart()
-	after := support.SettleUntil(r, 4)
+	after := support.SettleUntil(r, 2)
 	support.CheckEdge(t, "after restart", after, l)
 	support.Fail(t, "restart", support.Restarted(st, after))
 	support.Now(l)
 	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil {
 		t.Fatal(err)
 	}
-	more := support.SettleUntil(r, 5)
+	more := support.SettleUntil(r, 3)
 	support.CheckEdge(t, "new conversation after restart", more, l)
 	support.Fail(t, "paging", enginetest.Paging(more))
 }

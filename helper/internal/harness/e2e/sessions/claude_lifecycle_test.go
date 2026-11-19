@@ -20,23 +20,15 @@ func ids(st enginetest.State) map[string]bool {
 	return out
 }
 
-// TestKnownFault_ClaudeNewConversationIsNotFollowed documents a fault:
-// /clear (and /resume) in Claude Code starts another transcript and says
-// so with SessionStart, but the chat does not start over. The engine
-// starts a chat over when a mapper names a new conversation in its state
-// "conversation" (engine/conversation.go StateConversation); Claude Code's
-// transcript and hook mappers set only harness_session
-// (adapters/claude/transcript.go:160, hooks.go:63). The old
-// conversation's items stay, the log keeps its epoch, and the new
-// conversation's items follow them. A prompt sent from the phone still
-// reaches Claude.
-//
-// Correct: the chat starts over on the new conversation, as omp's does
-// (adapters/omp/session.go header). This test passes while the fault is
-// present; when it fails the fault is fixed: delete it and claim
-// claude/lifecycle/new_conversation and claude/lifecycle/resume.
-func TestKnownFault_ClaudeNewConversationIsNotFollowed(t *testing.T) {
+// /clear and /resume in Claude Code start another transcript and say so
+// with SessionStart whose source is clear or resume. The chat starts over
+// on the new conversation: the old conversation's items go, the log has a
+// new epoch, and the new conversation's items follow. A prompt sent from
+// the phone still reaches Claude, and a /resume of the first transcript
+// starts the chat over on that one.
+func TestClaudeNewConversationIsFollowed(t *testing.T) {
 	t.Parallel()
+	coverage.Covers(t, "generated", "claude/lifecycle/new_conversation", "claude/lifecycle/resume")
 	_, l, r := claudeSession(t, time.Hour, nil, enginetest.Options{},
 		sessiongen.Turn{Say: 30, Tools: 1, Output: 40}, sessiongen.Turn{Say: 30})
 	first := r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
@@ -47,17 +39,16 @@ func TestKnownFault_ClaudeNewConversationIsNotFollowed(t *testing.T) {
 	}
 	claudeStart(r, l.Main(), "clear")
 	second := r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
-	if second.Epoch != first.Epoch {
-		t.Fatal("the fault is fixed: the chat started over after /clear")
+	if second.Epoch == first.Epoch {
+		t.Fatal("the chat did not start over after /clear")
 	}
-	kept := 0
 	for _, it := range second.Items {
 		if oldIDs[it.ID] {
-			kept++
+			t.Errorf("item %s of the first conversation is still shown after /clear", it.ID)
 		}
 	}
-	if kept != len(first.Items) || len(support.UserPrompts(second)) != 3 {
-		t.Errorf("%d of the old items kept, %d prompts: the fault changed", kept, len(support.UserPrompts(second)))
+	if n := len(support.UserPrompts(second)); n != 1 {
+		t.Errorf("%d prompts after /clear, want 1", n)
 	}
 	hook, written := recordAfterSent(t, r, func(text string) error {
 		return l.Append(sessiongen.Turn{Prompt: text, Say: 20})
@@ -68,13 +59,13 @@ func TestKnownFault_ClaudeNewConversationIsNotFollowed(t *testing.T) {
 	}
 	<-written
 	st := r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
-	if got := r.Term.Submitted(); len(got) != 1 || got[0] != "Carry on here" || len(support.UserPrompts(st)) != 4 {
-		t.Errorf("claude was given %q; %d prompts", got, len(support.UserPrompts(st)))
+	if got := r.Term.Submitted(); len(got) != 1 || got[0] != "Carry on here" || len(support.UserPrompts(st)) != 2 {
+		t.Errorf("claude was given %q; %d prompts, want 2", got, len(support.UserPrompts(st)))
 	}
 	claudeStart(r, firstFile, "resume")
-	back := r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
-	if back.Epoch != first.Epoch || len(back.Items) < len(st.Items) {
-		t.Errorf("after /resume the epoch is %s (was %s) and %d items (were %d): the fault changed", back.Epoch, first.Epoch, len(back.Items), len(st.Items))
+	back := r.SettleUntil(support.FileLimit, func(s enginetest.State) bool { return s.Epoch != st.Epoch && len(support.UserPrompts(s)) == 2 })
+	if n := len(back.Items); n != len(first.Items) {
+		t.Errorf("after /resume %d items, want the first conversation's %d", n, len(first.Items))
 	}
 }
 

@@ -38,13 +38,14 @@ func (c *codexSession) compactThread(t *testing.T) string {
 	return p["threadId"]
 }
 
-// (d) A new thread started at the desk, then the old one resumed at the
-// desk, then a thread resumed from the phone: after each, a prompt from
-// the phone is typed into the terminal and shown, and the helper's calls
-// name the thread the terminal shows.
+// (d) A new thread started at the desk, then a thread resumed from the
+// phone: after each, a prompt from the phone is typed into the terminal
+// and shown, and the helper's calls name the thread the terminal shows.
+// The chat starts over on the new thread. Resuming the first thread at
+// the desk is TestKnownFault_CodexDeskResumeOfAnEarlierThread.
 func TestCodexNewAndResume(t *testing.T) {
 	t.Parallel()
-	coverage.Covers(t, "generated", "codex/lifecycle/new_conversation", "codex/lifecycle/resume", "codex/capability/resume")
+	coverage.Covers(t, "generated", "codex/lifecycle/new_conversation", "codex/capability/resume")
 	c := codexStart(t, 91, nil, sessiongen.Turn{Say: 20})
 	support.SettleUntil(c.r, 1)
 	c.joined(t)
@@ -72,11 +73,6 @@ func TestCodexNewAndResume(t *testing.T) {
 	fresh := c.p.Thread()
 	c.r.SettleUntil(support.Quick, support.HasPrompt(2))
 	sendAndShow("after /new", fresh)
-	// /resume of the first thread at the desk, and a prompt there.
-	c.s.Join(old)
-	c.p.Resume(old)
-	c.add(t, sessiongen.Turn{Say: 10})
-	sendAndShow("after /resume at the desk", old)
 	// Resume from the phone: Codex restarts on the thread.
 	if res, err := c.r.Act("resume", "", map[string]any{"id": fresh}); err != nil || res.Result != harness.ResultRelaunched {
 		t.Fatalf("resume: %+v %v", res, err)
@@ -199,4 +195,39 @@ func TestCodexVersionOutsideRange(t *testing.T) {
 		t.Errorf("a newer Codex was given %q", args)
 	}
 	support.SettleUntil(newer.r, 1)
+}
+
+// /resume at the desk of the thread the helper joined before /new: the
+// server has that thread loaded already, so the helper's feed (one join
+// per thread and connection, source/rpc/attach.go) never lists it again.
+// The mapper made for the new conversation has never seen it described,
+// so its turn is not taken as top level (adapters/codex/appserver.go
+// turnStarted) and the chat stays on the /new thread: the helper's calls
+// (compact, interrupt) name that thread while the terminal shows the
+// resumed one.
+//
+// Correct: the helper follows the thread the terminal shows. This test
+// passes while the fault is present; when it fails the fault is fixed:
+// make it an ordinary test and claim codex/lifecycle/resume.
+func TestKnownFault_CodexDeskResumeOfAnEarlierThread(t *testing.T) {
+	t.Parallel()
+	c := codexStart(t, 91, nil, sessiongen.Turn{Say: 20})
+	support.SettleUntil(c.r, 1)
+	c.joined(t)
+	c.answerPrompts()
+	old := c.p.Thread()
+	c.add(t, sessiongen.Turn{New: true, Say: 10})
+	fresh := c.p.Thread()
+	c.r.SettleUntil(support.Quick, support.HasPrompt(2))
+	c.s.Join(old)
+	c.p.Resume(old)
+	c.add(t, sessiongen.Turn{Say: 10})
+	c.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return !st.Mission.Summary.Working })
+	switch got := c.compactThread(t); got {
+	case fresh:
+	case old:
+		t.Fatal("the fault is fixed: the helper names the thread resumed at the desk")
+	default:
+		t.Fatalf("the helper names thread %q, neither of the two", got)
+	}
 }

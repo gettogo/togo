@@ -30,10 +30,8 @@ func piStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *eng
 }
 
 // /new in Pi starts a new file in the folder. The session moves to it,
-// keeps the old conversation's items, follows the new file after a helper
+// starts the chat over on it, follows the new file after a helper
 // restart, and holds no item twice.
-// Keeping both conversations is this agent's current convention; the
-// question whether every agent should start over instead is open.
 func TestPiNewConversation(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/new_conversation", "pi/lifecycle/helper_restart")
@@ -46,20 +44,20 @@ func TestPiNewConversation(t *testing.T) {
 	if len(l.Mains) != 2 {
 		t.Fatalf("%d files", len(l.Mains))
 	}
-	st := support.SettleUntil(r, 4)
+	st := support.SettleUntil(r, 2)
 	support.CheckEdge(t, "after /new", st, l)
-	if n := len(support.UserPrompts(st)); n != 4 {
-		t.Fatalf("%d prompts after /new, want 4 (both conversations)", n)
+	if n := len(support.UserPrompts(st)); n != 2 {
+		t.Fatalf("%d prompts after /new, want 2 (the new conversation alone)", n)
 	}
 	r.Restart()
-	after := support.SettleUntil(r, 4)
+	after := support.SettleUntil(r, 2)
 	support.CheckEdge(t, "after restart", after, l)
 	support.Fail(t, "restart", support.Restarted(st, after))
 	// The restart follows the new conversation, not the first file.
 	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil {
 		t.Fatal(err)
 	}
-	more := support.SettleUntil(r, 5)
+	more := support.SettleUntil(r, 3)
 	support.CheckEdge(t, "new conversation after restart", more, l)
 	// Stable ids: every id once.
 	support.Fail(t, "paging", enginetest.Paging(more))
