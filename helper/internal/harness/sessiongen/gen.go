@@ -59,6 +59,9 @@ type Turn struct {
 	Error     bool
 	// Exit records the agent's own exit after the turn.
 	Exit bool
+	// Hook holds what only hook-driven agents (copilot, droid, cursor,
+	// amp) do; the other profiles ignore it.
+	Hook *HookTurn
 }
 
 // Batch is a group of subagents started by one call.
@@ -111,6 +114,9 @@ type Layout struct {
 	// Records counts the lines written to each file.
 	Records map[string]int
 	Truth   Truth
+	// Hooks are the hook calls of a hook-driven agent, in the order the
+	// agent ran them. A test delivers them, as `togo hook` would.
+	Hooks []HookCall
 
 	g *Gen
 	p Profile
