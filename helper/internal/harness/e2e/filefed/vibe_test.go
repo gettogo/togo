@@ -236,7 +236,7 @@ func TestVibeInterruptAndFailure(t *testing.T) {
 	coverage.Covers(t, "generated", "vibe/lifecycle/interrupt", "vibe/lifecycle/turn_end", "vibe/capability/interrupt")
 	e := support.NewEnv(t, time.Hour)
 	l, r := vibeAgent.start(t, e, sessiongen.Script{Seed: 15})
-	vibeAgent.add(t, l, sessiongen.Turn{Say: 30, Tools: 2, Output: 50})
+	vibeAgent.attach(t, r, l)
 	st := vibeAgent.seen(t, r, "done", l, false)
 	if the(t, st, harness.KindTurn).Turn.State != harness.StateOK || st.Mission.Summary.Working {
 		t.Fatalf("turn %+v summary %+v", the(t, st, harness.KindTurn).Turn, st.Mission.Summary)
@@ -276,8 +276,7 @@ func TestVibeExitAndRelaunch(t *testing.T) {
 	coverage.Covers(t, "generated", "vibe/lifecycle/agent_exits", "vibe/lifecycle/relaunch", "vibe/lifecycle/resume", "vibe/capability/resume")
 	e := support.NewEnv(t, time.Hour)
 	l, r := vibeAgent.start(t, e, sessiongen.Script{Seed: 16})
-	vibeAgent.add(t, l, sessiongen.Turn{Say: 30, Tools: 1, Output: 50})
-	vibeAgent.seen(t, r, "first turn", l, false)
+	vibeAgent.attach(t, r, l)
 	vibeAgent.add(t, l, open(sessiongen.Turn{Say: 30, Tools: 2, Output: 50}))
 	r.SetStatus("working")
 	vibeAgent.seen(t, r, "mid turn", l, true)
