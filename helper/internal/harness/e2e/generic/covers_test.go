@@ -43,7 +43,9 @@ func declare(t *testing.T, agent, cell string) bool {
 // declared holds, per cell, the literal declaration the coverage scan
 // reads (coverage.ScanEvidence takes only string literals). Relaunch is
 // claimed only for agents without TestKnownFault_RelaunchKeepsDeadTurnWorking.
-// Sending while idle proves part of chat, not the cell.
+// Sending while idle proves part of chat, not the cell. OpenCode and Kilo
+// claim relaunch here: they do not have that fault (their exit ends the
+// stream, and the relaunched agent's stream starts idle).
 var declared = map[string]func(t *testing.T){
 	"amp/lifecycle/agent_exits":          func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/agent_exits") },
 	"amp/lifecycle/session_removed":      func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/session_removed") },
@@ -210,4 +212,24 @@ var declared = map[string]func(t *testing.T){
 	"crush/capability/commands":          func(t *testing.T) { coverage.Covers(t, "generated", "crush/capability/commands") },
 	"crush/capability/mode":              func(t *testing.T) { coverage.Covers(t, "generated", "crush/capability/mode") },
 	"crush/capability/resume":            func(t *testing.T) { coverage.Covers(t, "generated", "crush/capability/resume") },
+	"opencode/lifecycle/agent_exits":     func(t *testing.T) { coverage.Covers(t, "generated", "opencode/lifecycle/agent_exits") },
+	"opencode/lifecycle/relaunch":        func(t *testing.T) { coverage.Covers(t, "generated", "opencode/lifecycle/relaunch") },
+	"opencode/lifecycle/session_removed": func(t *testing.T) { coverage.Covers(t, "generated", "opencode/lifecycle/session_removed") },
+	"opencode/lifecycle/turn_end":        func(t *testing.T) { coverage.Covers(t, "generated", "opencode/lifecycle/turn_end") },
+	"opencode/lifecycle/connection_drop": func(t *testing.T) { coverage.Covers(t, "generated", "opencode/lifecycle/connection_drop") },
+	"opencode/lifecycle/interrupt":       func(t *testing.T) { coverage.Covers(t, "generated", "opencode/lifecycle/interrupt") },
+	"opencode/capability/send.queue":     func(t *testing.T) { coverage.Covers(t, "generated", "opencode/capability/send.queue") },
+	"opencode/capability/interrupt":      func(t *testing.T) { coverage.Covers(t, "generated", "opencode/capability/interrupt") },
+	"opencode/scale/concurrent_requests": func(t *testing.T) { coverage.Covers(t, "generated", "opencode/scale/concurrent_requests") },
+	"opencode/capability/files":          func(t *testing.T) { coverage.Covers(t, "generated", "opencode/capability/files") },
+	"kilo/lifecycle/agent_exits":         func(t *testing.T) { coverage.Covers(t, "generated", "kilo/lifecycle/agent_exits") },
+	"kilo/lifecycle/relaunch":            func(t *testing.T) { coverage.Covers(t, "generated", "kilo/lifecycle/relaunch") },
+	"kilo/lifecycle/session_removed":     func(t *testing.T) { coverage.Covers(t, "generated", "kilo/lifecycle/session_removed") },
+	"kilo/lifecycle/turn_end":            func(t *testing.T) { coverage.Covers(t, "generated", "kilo/lifecycle/turn_end") },
+	"kilo/lifecycle/connection_drop":     func(t *testing.T) { coverage.Covers(t, "generated", "kilo/lifecycle/connection_drop") },
+	"kilo/lifecycle/interrupt":           func(t *testing.T) { coverage.Covers(t, "generated", "kilo/lifecycle/interrupt") },
+	"kilo/capability/send.queue":         func(t *testing.T) { coverage.Covers(t, "generated", "kilo/capability/send.queue") },
+	"kilo/capability/interrupt":          func(t *testing.T) { coverage.Covers(t, "generated", "kilo/capability/interrupt") },
+	"kilo/scale/concurrent_requests":     func(t *testing.T) { coverage.Covers(t, "generated", "kilo/scale/concurrent_requests") },
+	"kilo/capability/files":              func(t *testing.T) { coverage.Covers(t, "generated", "kilo/capability/files") },
 }

@@ -176,7 +176,8 @@ func connectionDrop(t *testing.T, lv *live) {
 
 // interrupt: the phone interrupts the turn. The adapter's interrupt key
 // reaches the pane (it also dismisses the open prompt, as Escape does in
-// the agents' own dialogs); the agent stops; nothing is left running and
+// the agents' own dialogs), or its API's interrupt call reaches the agent
+// (which ends the turn and its open prompt); the agent stops; nothing is left running and
 // the queued prompt is not lost.
 func interrupt(t *testing.T, lv *live) {
 	r := lv.r
@@ -194,9 +195,8 @@ func interrupt(t *testing.T, lv *live) {
 	if _, err := r.Interrupt(); err != nil {
 		t.Fatalf("interrupt: %v", err)
 	}
-	keys := r.Term.KeysSent()
-	if !slices.Contains(keys, "Escape") && !slices.Contains(keys, "C-c") {
-		t.Fatalf("no interrupt key reached the pane: %v", keys)
+	if got, ok := interruptSent(r); !ok {
+		t.Fatalf("no interrupt reached the agent: %v", got)
 	}
 	r.Look()
 	lv.approvalClosed(wire.ResolutionDesk)

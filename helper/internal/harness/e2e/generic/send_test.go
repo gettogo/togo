@@ -123,9 +123,8 @@ func interruptKeys(t *testing.T, lv *live) {
 	if res.Result == harness.ResultFailed || res.Result == harness.ResultFallback {
 		t.Fatalf("interrupt: %+v", res)
 	}
-	keys := r.Term.KeysSent()
-	if !slices.Contains(keys, "Escape") && !slices.Contains(keys, "C-c") {
-		t.Fatalf("no interrupt key reached the pane: %v", keys)
+	if got, ok := interruptSent(r); !ok {
+		t.Fatalf("no interrupt reached the agent: %v", got)
 	}
 	st := r.Settle(3 * time.Second)
 	for _, it := range st.Items {
@@ -144,6 +143,11 @@ func interruptKeys(t *testing.T, lv *live) {
 func approvalFromPhone(t *testing.T, lv *live) {
 	r := lv.r
 	rel := dialogFor(lv.agent)
+	if rel == "" && r.API() != nil {
+		// Its permission prompts reach the phone from its API, not from
+		// the screen; the agent's own scenarios answer them there.
+		t.Skipf("%s: no captured permission screen; its API permissions are tested in e2e (TestKiloPermissionsAndQuestions)", lv.agent)
+	}
 	if rel == "" {
 		t.Fatalf("%s declares approvals and has no captured permission prompt in detect/testdata", lv.agent)
 	}

@@ -23,6 +23,7 @@ import (
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/omp"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/source"
+	"github.com/gettogo/togo/helper/internal/ports"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -96,9 +97,12 @@ type Rig struct {
 	phoneState
 	lifeState
 
-	bin    string
-	mu     sync.Mutex
-	status string
+	bin string
+	api *APIServer
+	// launched is set once the API agent was launched.
+	launched bool
+	mu       sync.Mutex
+	status   string
 	// stopEngine stops the running engine and waits for what it started.
 	stopEngine func()
 }
@@ -130,6 +134,7 @@ func New(t testing.TB, opt Options) *Rig {
 	if err := os.WriteFile(filepath.Join(r.bin, prog), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	r.setupAPI()
 	r.start()
 	return r
 }
@@ -156,9 +161,14 @@ func (r *Rig) start() {
 	if f := r.Opt.PanePIDs; f != nil {
 		panePIDs = func(context.Context, string) ([]int, error) { return f(), nil }
 	}
+	var listeners func(context.Context, string) ([]ports.Listener, error)
+	if r.api != nil {
+		listeners = r.apiPorts
+	}
 	eng := engine.New(engine.Config{
 		Redactor: red,
 		PanePIDs: panePIDs,
+		Ports:    listeners,
 		Sessions: sessions{r}, Typist: r.Term, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
 		Approvals:    approvals{r},
 		Screen:       func(context.Context, string) (string, error) { return r.Term.Text(), nil },
@@ -186,6 +196,12 @@ func (r *Rig) start() {
 	r.mu.Lock()
 	r.Engine = eng
 	r.mu.Unlock()
+	if r.api != nil && r.api.Port() == 0 && !r.launched {
+		// The first start is the agent's launch; a restart finds the
+		// server it left running.
+		r.launched = true
+		r.launchAPI(eng, true)
+	}
 	r.startPhone()
 	engineStarted()
 	var once sync.Once

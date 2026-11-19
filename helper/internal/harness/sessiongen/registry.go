@@ -16,12 +16,14 @@ var registry = map[string]func() Profile{
 	"cursor":  func() Profile { return &Cursor{} },
 	"droid":   func() Profile { return &Droid{} },
 	"goose":   func() Profile { return &Goose{} },
+	"kilo":    func() Profile { return &OpenCode{Kilo: true} },
 	"kimi":    func() Profile { return &Kimi{} },
 	// The terminal omp records its session file against; the engine rig's
 	// pane has this terminal (enginetest.TTY).
-	"omp":  func() Profile { return &OMP{TTY: "ttys042"} },
-	"pi":   func() Profile { return &Pi{} },
-	"vibe": func() Profile { return &Vibe{} },
+	"omp":      func() Profile { return &OMP{TTY: "ttys042"} },
+	"opencode": func() Profile { return &OpenCode{} },
+	"pi":       func() Profile { return &Pi{} },
+	"vibe":     func() Profile { return &Vibe{} },
 }
 
 // Names lists the registered profiles, sorted.

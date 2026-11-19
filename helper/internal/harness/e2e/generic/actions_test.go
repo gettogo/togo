@@ -1,6 +1,8 @@
 package generic
 
 import (
+	"encoding/json"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/enginetest"
+	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
 // Every action an adapter declares, called from the phone through
@@ -22,6 +25,10 @@ var elsewhere = map[string]string{
 	"answer":    "TestQuestions answers questions from the phone",
 	"stop":      "TestSend's queue_and_take_back stops a queued prompt",
 	"interrupt": "TestSend's interrupt and TestLifecycle's interrupt",
+	// An API agent's prompt and / line travel through these; the phone
+	// reaches them by sending, not as actions of their own.
+	"send":    "TestSend sends prompts; the OpenCode and Kilo scenarios check the calls",
+	"command": "a / line sent from the phone; the OpenCode and Kilo scenarios check the call",
 }
 
 // choice is the value an action is called with: a mode the adapter lists
@@ -32,6 +39,11 @@ func choice(r *enginetest.Rig, action string) string {
 			return m[len(m)-1].ID
 		}
 	}
+	if action == "set_model" && r.API() != nil {
+		// The model switch takes a model reference, an object: the
+		// recordings' model.
+		return `{"id":"` + sessiongen.OpenCodeModel + `","providerID":"` + sessiongen.OpenCodeProvider + `"}`
+	}
 	return "e2echoice"
 }
 
@@ -41,6 +53,7 @@ type effect struct {
 	keys      []string
 	relaunch  [][]string
 	cli       []string
+	api       []enginetest.APICall // calls to the agent's own API
 	result    harness.ActionResult
 	errorText string
 }
@@ -48,9 +61,16 @@ type effect struct {
 func act(t *testing.T, r *enginetest.Rig, name, value string) effect {
 	t.Helper()
 	typed, keys, rel, cli := len(r.Term.Submitted()), len(r.Term.KeysSent()), len(r.Relaunches()), len(r.CLICalls())
+	calls := 0
+	if api := r.API(); api != nil {
+		calls = len(api.Posts())
+	}
 	res, err := r.Act(name, "", map[string]any{"id": value, "value": value, "focus": "the parser"})
 	e := effect{result: res, typed: r.Term.Submitted()[typed:], keys: r.Term.KeysSent()[keys:],
 		relaunch: r.Relaunches()[rel:], cli: r.CLICalls()[min(cli, len(r.CLICalls())):]}
+	if api := r.API(); api != nil {
+		e.api = api.Posts()[calls:]
+	}
 	if err != nil {
 		e.errorText = err.Error()
 	}
@@ -105,6 +125,9 @@ func checkEffect(t *testing.T, lv *live, name, value string, e effect) {
 	if len(e.keys) > 0 {
 		seen = append(seen, "keys "+strings.Join(e.keys, " "))
 	}
+	for _, c := range e.api {
+		seen = append(seen, "called "+c.Method+" "+c.Path)
+	}
 	if len(seen) == 0 && e.result.Result != harness.ResultFallback {
 		t.Fatalf("%s reached nothing the agent sees (result %+v)", name, e.result)
 	}
@@ -118,6 +141,9 @@ func checkEffect(t *testing.T, lv *live, name, value string, e effect) {
 	}
 	if len(e.cli) > 0 && !strings.Contains(strings.Join(e.cli, "\n"), value) {
 		t.Errorf("%s ran %q, without the chosen %q", name, e.cli, value)
+	}
+	if takesValue[name] && len(e.api) > 0 && !apiCarries(e.api, value) {
+		t.Errorf("%s called %+v, without the chosen %q", name, e.api, value)
 	}
 	switch e.result.Result {
 	case harness.ResultFailed:
@@ -147,6 +173,31 @@ var actionCells = map[string]string{
 	"set_mode": "capability/mode", "set_effort": "capability/effort",
 	"compact": "capability/compact", "snapcompact": "capability/compact",
 	"resume": "capability/resume",
+}
+
+// takesValue are the actions whose call carries the chosen value.
+var takesValue = map[string]bool{"set_model": true, "set_mode": true, "resume": true, "add_provider_key": true,
+	"set_provider_key": true, "command": true}
+
+// apiCarries reports whether a call's path or body holds the value: the
+// model reference may come back with its keys in another order.
+func apiCarries(calls []enginetest.APICall, value string) bool {
+	var want any
+	isJSON := json.Unmarshal([]byte(value), &want) == nil && strings.HasPrefix(value, "{")
+	for _, c := range calls {
+		if strings.Contains(c.Path, value) || strings.Contains(c.Body, value) {
+			return true
+		}
+		var body map[string]any
+		if isJSON && json.Unmarshal([]byte(c.Body), &body) == nil {
+			for _, v := range body {
+				if reflect.DeepEqual(v, want) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func confirmed(r harness.ActionResult) bool {

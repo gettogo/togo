@@ -38,6 +38,8 @@ func Goroutines() []string {
 	for _, g := range stacks() {
 		switch {
 		case !strings.Contains(g, "/helper/internal/"):
+		// The agent's server outlives the engine, as the agent does.
+		case strings.Contains(g, "enginetest.(*APIServer)"):
 		case strings.Contains(g, "testing.tRunner"), strings.Contains(g, "testing.(*M)"),
 			strings.Contains(g, "testing.runTests"), strings.Contains(g, "enginetest.Goroutines"):
 		default:

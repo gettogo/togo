@@ -338,6 +338,25 @@ func (lv *live) makeLive() {
 	}
 }
 
+// interruptSent reports whether an interrupt reached the agent: the
+// adapter's interrupt key in the pane or, for an agent driven through its
+// own API (OpenCode 1.x, Kilo), the API's interrupt call. It returns what
+// was sent, for the failure message.
+func interruptSent(r *enginetest.Rig) ([]string, bool) {
+	if api := r.API(); api != nil {
+		var paths []string
+		for _, c := range api.Posts() {
+			paths = append(paths, c.Method+" "+c.Path)
+			if strings.HasSuffix(c.Path, "/abort") && c.Status/100 == 2 {
+				return paths, true
+			}
+		}
+		return paths, false
+	}
+	keys := r.Term.KeysSent()
+	return keys, slices.Contains(keys, "Escape") || slices.Contains(keys, "C-c")
+}
+
 // eventually waits for ok, failing with what after limit.
 func eventually(t *testing.T, limit time.Duration, what string, ok func() bool) {
 	t.Helper()

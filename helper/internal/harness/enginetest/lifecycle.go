@@ -52,6 +52,7 @@ func (r *Rig) relaunch(_ context.Context, _ string, argv []string) error {
 	}
 	r.Term.SetGone(false)
 	r.Term.CloseDialog()
+	r.relaunchAPI()
 	return nil
 }
 
@@ -67,6 +68,7 @@ func (r *Rig) Relaunches() [][]string {
 // exit, the hub's session event carries it), and its prompt left the
 // screen with it.
 func (r *Rig) Exit() {
+	r.stopAPI()
 	r.Term.SetGone(true)
 	r.Term.CloseDialog()
 	r.SetEnded(true)
@@ -77,6 +79,7 @@ func (r *Rig) Exit() {
 // app's relaunch, or by hand): the hub's session event says it runs.
 func (r *Rig) Relaunch() {
 	r.Term.SetGone(false)
+	r.relaunchAPI()
 	r.SetEnded(false)
 }
 

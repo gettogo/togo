@@ -119,6 +119,9 @@ func (r *Rig) ActionNames() []string { return ActionNames(r.Opt.Agent) }
 func ActionNames(agent string) []string {
 	paths, _ := filepath.Glob(filepath.Join(sourceDir(), "harness", "adapters", agent, "*.yaml"))
 	sort.Strings(paths)
+	if f, ok := adapterFiles[agent]; ok {
+		paths = []string{filepath.Join(sourceDir(), "harness", "adapters", agent, f)}
+	}
 	if len(paths) == 0 {
 		return nil
 	}
