@@ -48,12 +48,6 @@ type Options struct {
 	// carries (Droid's ExitSpecMode): it is drawn as an assistant item just
 	// before the question.
 	Plan func(tool string, input json.RawMessage) (string, bool)
-	// Conversation says the hooks' session id names the conversation and
-	// this mapper draws it: a session that starts or takes a prompt under
-	// another id (a /new, a resume) makes the engine start the chat over.
-	// Only those two events name it, so a late hook of the session left
-	// does not move the chat back.
-	Conversation bool
 }
 
 // Reply is one agent message from the harness's own log: its text (empty
@@ -336,9 +330,6 @@ func (m *Mapper) mapRecord(rec harness.Record) ([]harness.Item, []harness.Op) {
 func (m *Mapper) learn(p payload) {
 	if p.SessionID != "" {
 		m.state["harness_session"] = p.SessionID
-		if m.opts.Conversation && (p.Event == SessionStart || p.Event == UserPromptSubmit) {
-			m.state[harness.StateConversation] = p.SessionID
-		}
 	}
 	if p.Transcript != "" {
 		m.hooked = true

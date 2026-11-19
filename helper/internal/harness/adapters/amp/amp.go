@@ -20,7 +20,7 @@ const MapperHooks = "amp.hooks"
 
 func init() {
 	harness.RegisterAdapterFile("amp", adapterFile)
-	hookstyle.Register(hookstyle.Options{Name: MapperHooks, Conversation: true})
+	hookstyle.Register(hookstyle.Options{Name: MapperHooks})
 }
 
 // AdapterFile returns the embedded adapter file.

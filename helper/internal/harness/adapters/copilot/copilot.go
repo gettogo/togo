@@ -23,7 +23,7 @@ const MapperHooks = "copilot.hooks"
 
 func init() {
 	harness.RegisterAdapterFile("copilot", adapterFile)
-	hookstyle.Register(hookstyle.Options{Name: MapperHooks, Conversation: true, Replies: repliesUpTo, Ask: askQuestion, Answered: askAnswered, Plan: planText})
+	hookstyle.Register(hookstyle.Options{Name: MapperHooks, Replies: repliesUpTo, Ask: askQuestion, Answered: askAnswered, Plan: planText})
 }
 
 // AdapterFile returns the embedded adapter file.
