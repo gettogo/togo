@@ -18,7 +18,7 @@ var readCline = []string{
 	"content[tool_use].id", "content[tool_use].name", "content[tool_use].input.*",
 	"content[tool_result].tool_use_id", "content[tool_result].name", "content[tool_result].content", "content[tool_result].is_error",
 	"content[tool_result].content[].query", "content[tool_result].content[].result", "content[tool_result].content[].success",
-	"cwd", "started_at", "model", "metadata.mode", "pid",
+	"cwd", "started_at", "model", "metadata.mode", "pid", "interactive",
 }
 
 // clineRecords splits Cline's documents into records: each document's

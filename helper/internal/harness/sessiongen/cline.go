@@ -21,7 +21,8 @@ import (
 //     for the error Cline appends when a run fails;
 //   - a tool call: editor, run_commands, ask_question, the tools of the
 //     recorded sessions; a tool_result's content is a string or a list;
-//   - the manifest: cwd, started_at, model, metadata.mode. The recorded
+//   - the manifest: cwd, started_at, model, metadata.mode, interactive
+//     (true, as the TUI writes it: testdata/ask.json). The recorded
 //     manifests carry no pid, so none is written.
 //
 // Fields the mapper does not read (version, origin, modelInfo, metrics,
@@ -214,7 +215,7 @@ func (c *Cline) Finish(g *Gen) error {
 			return err
 		}
 		man, err := json.MarshalIndent(map[string]any{"started_at": stamp(d.started), "model": "coder-fast",
-			"cwd": g.Cwd, "metadata": map[string]any{"mode": c.mode}}, "", "  ")
+			"cwd": g.Cwd, "interactive": true, "metadata": map[string]any{"mode": c.mode}}, "", "  ")
 		if err != nil {
 			return err
 		}
