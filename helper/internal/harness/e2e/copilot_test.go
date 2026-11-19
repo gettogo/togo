@@ -15,8 +15,9 @@ import (
 // TestCopilotNewConversationAndResume and TestCopilotRestartsAtSeededPoints
 // have seen a turn with one reply where two were written, in under a
 // second (no wait ran out), and TestAmpRestartsAtSeededPoints a restart
-// with nothing drawn before it. The cause is not found yet; running them
-// alone keeps the rest of the package fast without hiding it.
+// with nothing drawn before it. The cause is not found: five runs of the
+// whole package with these scenarios in parallel, without the race
+// detector, showed neither. They stay serial, which costs about a minute.
 var copilotAgent = hookAgent{
 	name:    "copilot",
 	profile: func() sessiongen.Profile { return &sessiongen.Copilot{} },
