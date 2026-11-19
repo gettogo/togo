@@ -31,6 +31,14 @@ var idleScreens = map[string]string{
 	"claude": "harness/engine/testdata/input/claude-suggested-prompt.ansi",
 }
 
+// configs are an agent's real settings files from its adapter's
+// testdata (path under harness/), put where the agent keeps them (path
+// under home): actions that read them (omp's model roles) have what a
+// user's machine has.
+var configs = map[string]map[string]string{
+	"omp": {"adapters/omp/testdata/config.yml": ".omp/agent/config.yml"},
+}
+
 // dialogFor finds a real captured permission prompt of the agent in the
 // detector's testdata, preferring the 80-column captures; "" when none.
 func dialogFor(agent string) string {
@@ -151,6 +159,19 @@ func start(t *testing.T, agent string) *live {
 	home, cwd, begun, l, agents := script(t, agent)
 	lv := &live{t: t, agent: agent, l: l, hooks: hookAgent(agent), agents: agents}
 	lv.holdTurn()
+	for rel, dst := range configs[agent] {
+		b, err := os.ReadFile(filepath.Join("..", "..", rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		dst = filepath.Join(home, dst)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	r := enginetest.New(t, enginetest.Options{Agent: agent, Home: home, Cwd: cwd, ID: enginetest.NewID(),
 		Created: begun.Add(-30 * time.Second), NoRedact: true})
 	lv.r = r

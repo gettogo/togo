@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
@@ -111,12 +112,39 @@ func (r *Rig) Spec() *spec.Adapter {
 }
 
 // ActionNames lists the actions the adapter declares, sorted.
-func (r *Rig) ActionNames() []string {
-	a := r.Spec()
+func (r *Rig) ActionNames() []string { return ActionNames(r.Opt.Agent) }
+
+// ActionNames lists the actions an agent's adapter file declares, sorted;
+// nil when it has none or no file.
+func ActionNames(agent string) []string {
+	paths, _ := filepath.Glob(filepath.Join(sourceDir(), "harness", "adapters", agent, "*.yaml"))
+	sort.Strings(paths)
+	if len(paths) == 0 {
+		return nil
+	}
+	b, err := os.ReadFile(paths[len(paths)-1])
+	if err != nil {
+		return nil
+	}
+	a, err := spec.Parse(b)
+	if err != nil {
+		return nil
+	}
 	out := make([]string, 0, len(a.Actions))
 	for k := range a.Actions {
 		out = append(out, k)
 	}
 	sort.Strings(out)
 	return out
+}
+
+// CLICalls lists the agent binary's calls an action made (the version
+// check aside), one argv joined by spaces per call. The fake binary
+// fails each of them, as an unknown subcommand does.
+func (r *Rig) CLICalls() []string {
+	b, err := os.ReadFile(filepath.Join(r.bin, "calls.log"))
+	if err != nil {
+		return nil
+	}
+	return strings.Split(strings.TrimRight(string(b), "\n"), "\n")
 }

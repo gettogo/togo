@@ -117,7 +117,10 @@ func New(t testing.TB, opt Options) *Rig {
 		t.Fatal(err)
 	}
 	// The gate runs `<agent> --version`; any other call fails at once.
-	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] + "*) exit 1;;\nesac\n"
+	// Every call but the version check is recorded, one argv per line,
+	// so a test sees what an action ran (CLICalls).
+	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] +
+		"*) echo \"$*\" >> '" + filepath.Join(r.bin, "calls.log") + "'; exit 1;;\nesac\n"
 	prog := opt.Agent
 	if p, ok := programs[prog]; ok {
 		prog = p
