@@ -457,8 +457,9 @@ func (w *World) Scratch() map[string]string {
 func (w *World) Quiet() {
 	w.T.Helper()
 	// A feed looks for new files every couple of seconds (Copilot's log
-	// of replies is one), so a hook-driven agent needs longer.
-	need := 5
+	// of replies is one), and an agent's mode comes from its screen a
+	// moment after the first read: wait two seconds, three for hooks.
+	need := 20
 	if w.hooks {
 		need = 30
 	}

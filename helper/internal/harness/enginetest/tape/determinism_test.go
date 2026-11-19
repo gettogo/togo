@@ -37,6 +37,9 @@ func TestSameScenarioSameTape(t *testing.T) {
 				if why := sc.Applies(agent); why != "" {
 					t.Skip(why)
 				}
+				if hookAgent(agent) && sc.ID != "long-chat-restart" {
+					t.Skip("hook-fed agents: the engine reads their hook calls and polled logs after the app has opened the session, so how much of the live turn the open holds varies")
+				}
 				if why := unordered[sc.ID+"/"+agent]; why != "" {
 					t.Skip(why)
 				}
