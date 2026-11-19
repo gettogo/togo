@@ -191,7 +191,11 @@ func apiQueue(t *testing.T, agent string) {
 	support.SettleUntil(s.r, 1)
 	s.answerPrompts(t)
 	release := s.hold(t, 1, sessiongen.Turn{Say: 30, Tools: 1})
-	s.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return st.Mission.Summary.Working })
+	// The prompts below are queued only while a turn runs: an idle agent
+	// takes them at once, which is right, and is not what this checks.
+	if st := s.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return st.Mission.Summary.Working }); !st.Mission.Summary.Working {
+		t.Fatal("the held turn never showed as working")
+	}
 	want := []string{"First queued", "Second queued", "Third queued"}
 	for _, w := range want {
 		res, err := s.r.Send(w, harness.SendQueue)
