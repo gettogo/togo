@@ -117,7 +117,12 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.mapEntry(rec, e)
+	if s.hold(rec, e) {
+		return s.settleFiles(rec.At)
+	}
+	items, ops := s.mapEntry(rec, e)
+	more, mops := s.settleFiles(rec.At)
+	return append(items, more...), append(ops, mops...)
 }
 
 // mapEntry maps one decoded entry. The caller holds the lock.
@@ -125,7 +130,9 @@ func (s *session) mapEntry(rec harness.Record, e map[string]any) ([]harness.Item
 	at := stamp(e["timestamp"], rec.At)
 	s.readAt = rec.At
 	main := rec.Source == feedSession
-	if a, ok := s.byFile.agent[rec.File]; ok && !main && rec.File != "" {
+	if main {
+		s.byFile.mainRead(e, at)
+	} else if a, ok := s.byFile.agent[rec.File]; ok && rec.File != "" {
 		// An entry of a file whose header was read: that file's agent,
 		// whichever file's header came last.
 		s.cur = a
@@ -262,6 +269,7 @@ func (s *session) restart() {
 	s.jobs = map[string]*harness.Item{}
 	s.todo, s.todoBefore, s.todoUnread = nil, map[string][]todoPhase{}, map[string]bool{}
 	s.files = map[string]bool{}
+	s.byFile.mainAt = time.Time{}
 	delete(s.state, "compactions")
 }
 

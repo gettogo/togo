@@ -3,6 +3,7 @@ package omp
 import (
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -14,12 +15,14 @@ import (
 // named a task by "id" and the file after it). The engine reads the main
 // conversation and that folder as two feeds, in no fixed order, and the
 // files of one look in no fixed order either. So a file is matched to its
-// task by its name, never by the order files arrive in.
+// task by its name, never by the order files arrive in, and a file read
+// before the call that starts its task waits for that call.
 
 // agentFiles is what the mapper knows of the subagent files: which task
-// each one is. Its life is the mapper's: the engine builds a new mapper
-// when the conversation changes (/new, /resume), the session is removed or
-// the helper restarts, and every file is then read again.
+// each one is, and the ones still waiting for their task call. Its life is
+// the mapper's: the engine builds a new mapper when the conversation
+// changes (/new, /resume), the session is removed or the helper restarts,
+// and every file is then read again.
 type agentFiles struct {
 	// names lists the agent item ids of each task name, in call order (a
 	// later call can use a name again). Set by a task call; kept as long as
@@ -28,16 +31,48 @@ type agentFiles struct {
 	// agent is the agent item id (or dropped) a file's header was given.
 	// Set by the header; kept like headers.
 	agent map[string]string
+	// waiting holds the records of a file read before its task call. It
+	// is cleared when the call is read, when the main conversation is read
+	// past the file's start (the call is not in what was read), after
+	// agentWait, when heldMax is reached, or when the file starts over.
+	waiting map[string]*waitingFile
+	held    int // bytes held in waiting
+	// mainAt is the newest time of a main conversation entry read. Reset
+	// when the main conversation is read again from its start.
+	mainAt time.Time
 }
 
+type waitingFile struct {
+	header time.Time // the header's own time
+	since  time.Time // when the header was read
+	recs   []harness.Record
+	size   int
+}
+
+// agentWait is how long a subagent file read before its task call waits
+// for it. The two feeds start together, so the call comes within a few
+// polls when it is in the part of the conversation read at all.
+const agentWait = 10 * time.Second
+
+// heldMax bounds the bytes held for waiting files. Past it the files are
+// placed as if their call will not come.
+const heldMax = 8 << 20
+
 func newAgentFiles() agentFiles {
-	return agentFiles{names: map[string][]string{}, agent: map[string]string{}}
+	return agentFiles{names: map[string][]string{}, agent: map[string]string{}, waiting: map[string]*waitingFile{}}
 }
 
 // named records a task call's agent for a task name.
 func (f *agentFiles) named(name, aid string) {
 	if name != "" && !slices.Contains(f.names[name], aid) {
 		f.names[name] = append(f.names[name], aid)
+	}
+}
+
+// mainRead notes the time of a main conversation entry that has its own.
+func (f *agentFiles) mainRead(e map[string]any, at time.Time) {
+	if _, ok := e["timestamp"]; ok && at.After(f.mainAt) {
+		f.mainAt = at
 	}
 }
 
@@ -60,6 +95,80 @@ func (f *agentFiles) taskFor(name string, pending []string) string {
 		}
 	}
 	return ids[len(ids)-1]
+}
+
+// hold keeps a subagent file's records while it waits for its task call:
+// its header when no task of its name is known yet, and what follows.
+func (s *session) hold(rec harness.Record, e map[string]any) bool {
+	f := &s.byFile
+	if rec.Source == feedSession || rec.File == "" {
+		return false
+	}
+	header := str(e, "type") == "session"
+	if w := f.waiting[rec.File]; w != nil {
+		if !header {
+			f.add(w, rec)
+			return true
+		}
+		// The file was written again from its start: judge the new header.
+		f.held -= w.size
+		delete(f.waiting, rec.File)
+	}
+	if !header || e["parentSession"] == nil || e["parentSession"] == "" {
+		return false
+	}
+	if _, ok := s.headers[str(e, "id")]; ok || f.taskFor(taskName(rec.File), s.pending) != "" {
+		return false
+	}
+	w := &waitingFile{header: stamp(e["timestamp"], rec.At), since: rec.At}
+	f.waiting[rec.File] = w
+	f.add(w, rec)
+	return true
+}
+
+func (f *agentFiles) add(w *waitingFile, rec harness.Record) {
+	w.recs = append(w.recs, rec)
+	w.size += len(rec.Data)
+	f.held += len(rec.Data)
+}
+
+// settleFiles places the waiting files whose wait is over: bound to their
+// task when its call was read, else as files no call names.
+func (s *session) settleFiles(now time.Time) ([]harness.Item, []harness.Op) {
+	f := &s.byFile
+	if len(f.waiting) == 0 {
+		return nil, nil
+	}
+	var ready []string
+	for path, w := range f.waiting {
+		if f.taskFor(taskName(path), s.pending) != "" || f.held > heldMax ||
+			(!f.mainAt.IsZero() && f.mainAt.After(w.header)) || now.Sub(w.since) > agentWait {
+			ready = append(ready, path)
+		}
+	}
+	sort.Slice(ready, func(i, j int) bool {
+		a, b := f.waiting[ready[i]], f.waiting[ready[j]]
+		if !a.header.Equal(b.header) {
+			return a.header.Before(b.header)
+		}
+		return ready[i] < ready[j]
+	})
+	var items []harness.Item
+	var ops []harness.Op
+	readAt, cur := s.readAt, s.cur
+	for _, path := range ready {
+		w := f.waiting[path]
+		delete(f.waiting, path)
+		f.held -= w.size
+		for _, r := range w.recs {
+			if e := decode(r.Data); e != nil {
+				it, op := s.mapEntry(r, e)
+				items, ops = append(items, it...), append(ops, op...)
+			}
+		}
+	}
+	s.readAt, s.cur = readAt, cur
+	return items, ops
 }
 
 // subagentHeader starts a subagent's file: the row of the task it is named
