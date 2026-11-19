@@ -14,7 +14,11 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/amp"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/claude"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/copilot"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/cursor"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/droid"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/omp"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/source"
@@ -29,11 +33,21 @@ const SessionID = "s_enginetest"
 const TTY = "/dev/ttys042"
 
 // versions are what the fake agent binaries print for the version gate.
-var versions = map[string]string{"omp": "omp/18.21.0", "claude": "2.1.319 (Claude Code)"}
+var versions = map[string]string{"omp": "omp/18.21.0", "claude": "2.1.319 (Claude Code)",
+	"copilot": "GitHub Copilot CLI 1.0.108.", "droid": "1.5.0", "cursor": "2026.11.05-86047df", "amp": "0.0.1794312042-g1a2b3c (released 2026-11-10T00:00:00.000Z)"}
+
+// programs are the names the adapters' version commands run, where they
+// differ from the agent's id.
+var programs = map[string]string{"cursor": "cursor-agent"}
+
+// subcommands are what a fake binary prints for a subcommand an adapter
+// lists models with; `cursor-agent models` lists them as the adapter's
+// jq reads (cursor/testdata, cursor_test.go).
+var subcommands = map[string]string{"cursor": "models) printf 'Available models\\n\\ngpt-5 - GPT-5\\ncomposer-2.5 - Composer 2.5 (current)\\n';;\n"}
 
 // Options picks the agent and folders a rig serves.
 type Options struct {
-	Agent string // "omp" or "claude"
+	Agent string // "omp", "claude", "copilot", "droid", "cursor" or "amp"
 	// Home is the user's home folder, where the session files are; Cwd
 	// the session's folder under it.
 	Home string
@@ -81,8 +95,12 @@ func New(t testing.TB, opt Options) *Rig {
 		t.Fatal(err)
 	}
 	// The gate runs `<agent> --version`; any other call fails at once.
-	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo '" + versions[opt.Agent] + "';;\n*) exit 1;;\nesac\n"
-	if err := os.WriteFile(filepath.Join(r.bin, opt.Agent), []byte(script), 0o755); err != nil {
+	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] + "*) exit 1;;\nesac\n"
+	prog := opt.Agent
+	if p, ok := programs[prog]; ok {
+		prog = p
+	}
+	if err := os.WriteFile(filepath.Join(r.bin, prog), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	r.start()
