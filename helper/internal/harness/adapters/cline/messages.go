@@ -60,6 +60,7 @@ type messages struct {
 	lastMsgs   []message
 	tree       []int
 	treeAt     time.Time
+	solo       source.Solo
 }
 
 func newMessages(env harness.Env) *messages {
@@ -176,9 +177,10 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	if d.SessionID != m.session {
 		// A session of this folder newer than the one followed: a resume
 		// or a fresh start in the same pane. It must be this session's own
-		// Cline process (the manifest names its pid), not one the user
-		// started in a terminal; with no way to tell, the session followed
-		// stays.
+		// Cline process, not one the user started in a terminal: the
+		// manifest's pid says so when it has one (the recorded 3.0.74
+		// manifests have none); without it, the session moves only when
+		// no other Cline runs in the folder (source.Solo).
 		if !m.belongs(d.SessionID, d.UpdatedAt) || (m.session != "" && d.UpdatedAt <= m.updated) {
 			return nil, nil
 		}
@@ -186,7 +188,7 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 		case source.Foreign:
 			return nil, nil
 		case source.Unknown:
-			if m.session != "" {
+			if m.session != "" && !m.solo.Alone(m.env) {
 				return nil, nil
 			}
 		}
