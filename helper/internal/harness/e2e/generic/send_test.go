@@ -210,14 +210,17 @@ func busy(err error) bool {
 // storm: many clients at once against one session of the agent while it
 // works: prompts queued, reads, history, describes, completions and take
 // backs. Every call returns; the queue never holds more than its bound;
-// every prompt accepted and not taken back is typed once, in the order it
-// was accepted, when the turn ends.
+// every prompt accepted and not taken back is typed once, in the order the
+// engine queued it, when the turn ends. That order is the order of the
+// queued items' Seq (engine/send.go queues and numbers a prompt under one
+// lock); the order the clients' calls returned in is not it: two calls
+// can return in the other order than they were queued.
 func storm(t *testing.T, lv *live) {
 	r := lv.r
 	r.SetHubStatus("working")
 	const clients, rounds = 12, 6
 	var mu sync.Mutex
-	var accepted []string
+	var accepted []harness.Item
 	taken := map[string]bool{}
 	byID := map[string]string{}
 	var wg sync.WaitGroup
@@ -235,7 +238,7 @@ func storm(t *testing.T, lv *live) {
 						continue
 					}
 					mu.Lock()
-					accepted = append(accepted, text)
+					accepted = append(accepted, res.Item)
 					byID[res.Item.ID] = text
 					mu.Unlock()
 				case 2:
@@ -284,16 +287,11 @@ func storm(t *testing.T, lv *live) {
 	if queued > engine.MaxQueued {
 		t.Errorf("%d prompts queued, the bound is %d", queued, engine.MaxQueued)
 	}
+	slices.SortFunc(accepted, func(a, b harness.Item) int { return int(a.Seq - b.Seq) })
 	var want []string
-	for _, text := range accepted {
-		gone := false
-		for id, tx := range byID {
-			if tx == text && taken[id] {
-				gone = true
-			}
-		}
-		if !gone {
-			want = append(want, text)
+	for _, it := range accepted {
+		if !taken[it.ID] {
+			want = append(want, it.User.Text)
 		}
 	}
 	lv.endTurn()
