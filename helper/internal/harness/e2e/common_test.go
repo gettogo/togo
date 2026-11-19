@@ -68,7 +68,7 @@ func removeAndServeAgain(t *testing.T, start starter) {
 	st := settleUntil(r, 2)
 	r.Remove()
 	again := settleUntil(r, 2)
-	check(t, "after removal", again, l)
+	checkEdge(t, "after removal", again, l)
 	if st.Epoch == again.Epoch {
 		t.Error("the epoch is the same after the session was removed and served again")
 	}
@@ -140,5 +140,5 @@ func concurrentReaders(t *testing.T, start starter) {
 	for e := range errs {
 		t.Error(e)
 	}
-	check(t, "after the readers", st, l)
+	checkEdge(t, "after the readers", st, l)
 }

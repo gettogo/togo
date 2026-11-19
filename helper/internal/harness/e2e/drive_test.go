@@ -38,7 +38,7 @@ func settleUntil(r *enginetest.Rig, n int) enginetest.State {
 func drive(t *testing.T, r *enginetest.Rig, l *sessiongen.Layout, turns []sessiongen.Turn, points []int) enginetest.State {
 	t.Helper()
 	st := settleUntil(r, points[0])
-	check(t, "start", st, l)
+	checkEdge(t, "start", st, l)
 	done := points[0]
 	for i, p := range append(append([]int(nil), points[1:]...), len(turns)) {
 		if err := l.Append(turns[done:p]...); err != nil {
@@ -46,14 +46,14 @@ func drive(t *testing.T, r *enginetest.Rig, l *sessiongen.Layout, turns []sessio
 		}
 		done = p
 		live := settleUntil(r, p)
-		check(t, "live "+strconv.Itoa(p), live, l)
+		checkEdge(t, "live "+strconv.Itoa(p), live, l)
 		st = live
 		if i == len(points)-1 {
 			break
 		}
 		r.Restart()
 		after := settleUntil(r, p)
-		check(t, "restart "+strconv.Itoa(p), after, l)
+		checkEdge(t, "restart "+strconv.Itoa(p), after, l)
 		fail(t, "restart "+strconv.Itoa(p), restarted(live, after))
 		st = after
 	}
@@ -66,7 +66,7 @@ func restoreTwice(t *testing.T, r *enginetest.Rig, l *sessiongen.Layout, prompts
 	t.Helper()
 	r.Restart()
 	first := settleUntil(r, prompts)
-	check(t, "first restore", first, l)
+	checkEdge(t, "first restore", first, l)
 	r.Restart()
 	second := settleUntil(r, prompts)
 	fail(t, "second restore", enginetest.Reread(first, second))
@@ -254,3 +254,28 @@ func exitNotices(vs []enginetest.Violation) []enginetest.Violation {
 // driveLimit bounds each wait: the engine reads a large append to a
 // followed file at its own pace.
 const driveLimit = 30 * time.Second
+
+// checkEdge is check, except that when the log has dropped its oldest items
+// (a conversation longer than its 2000 items) a turn whose prompt was
+// dropped may start before its oldest remaining item: the turn is kept up to
+// date by every later record while its first items were dropped.
+func checkEdge(t *testing.T, where string, st enginetest.State, l *sessiongen.Layout) {
+	t.Helper()
+	vs := enginetest.Without(enginetest.Check(st, enginetest.Facts{Truth: l.Truth, Over: true}), known...)
+	if st.Discarded > 0 {
+		prompted := map[string]bool{}
+		for _, it := range userPrompts(st) {
+			prompted[it.TurnID] = true
+		}
+		var keep []enginetest.Violation
+		for _, v := range vs {
+			id, _, _ := strings.Cut(v.Detail, " ")
+			if v.Rule == "turn-start-outside" && !prompted[id] {
+				continue
+			}
+			keep = append(keep, v)
+		}
+		vs = keep
+	}
+	enginetest.Fail(t, where, vs)
+}

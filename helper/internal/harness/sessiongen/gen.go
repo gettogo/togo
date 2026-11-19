@@ -166,10 +166,22 @@ func Write(home string, p Profile, s Script) (*Layout, error) {
 	return l, l.Append(s.Turns...)
 }
 
+// Finisher is a profile that has more to write once the turns of one
+// Append are done: an agent that rewrites a whole file (Cline) writes it
+// here, once, not after every turn.
+type Finisher interface {
+	Finish(g *Gen) error
+}
+
 // Append writes more turns to the session, as the agent keeps working.
 func (l *Layout) Append(turns ...Turn) error {
 	for _, t := range turns {
 		if err := l.p.Turn(l.g, t); err != nil {
+			return err
+		}
+	}
+	if f, ok := l.p.(Finisher); ok {
+		if err := f.Finish(l.g); err != nil {
 			return err
 		}
 	}

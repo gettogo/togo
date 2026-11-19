@@ -58,7 +58,7 @@ func questions(st enginetest.State) map[string][]string {
 func TestKimiNewConversation(t *testing.T) {
 	coverage.Covers(t, "generated", "kimi/lifecycle/new_conversation", "kimi/lifecycle/helper_restart")
 	l, r := kimiStart(t, true, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 30}, sessiongen.Turn{Say: 20})
-	check(t, "first conversation", settleUntil(r, 2), l)
+	checkEdge(t, "first conversation", settleUntil(r, 2), l)
 	now(l)
 	if err := l.Append(sessiongen.Turn{New: true, Say: 20, Tools: 1, Output: 30}, sessiongen.Turn{Say: 20}); err != nil {
 		t.Fatal(err)
@@ -67,20 +67,20 @@ func TestKimiNewConversation(t *testing.T) {
 		t.Fatalf("%d logs", len(l.Mains))
 	}
 	st := settleUntil(r, 4)
-	check(t, "after /new", st, l)
+	checkEdge(t, "after /new", st, l)
 	if n := len(userPrompts(st)); n != 4 {
 		t.Fatalf("%d prompts after /new, want 4 (both conversations)", n)
 	}
 	r.Restart()
 	after := settleUntil(r, 4)
-	check(t, "after restart", after, l)
+	checkEdge(t, "after restart", after, l)
 	fail(t, "restart", restarted(st, after))
 	now(l)
 	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil {
 		t.Fatal(err)
 	}
 	more := settleUntil(r, 5)
-	check(t, "new conversation after restart", more, l)
+	checkEdge(t, "new conversation after restart", more, l)
 	fail(t, "paging", enginetest.Paging(more))
 }
 
@@ -189,11 +189,11 @@ func TestKimiExitAndRelaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 	after := settleUntil(r, 4)
-	check(t, "after the relaunch", after, l)
+	checkEdge(t, "after the relaunch", after, l)
 	r.Hub("idle")
 	r.Restart()
 	again := settleUntil(r, 4)
-	check(t, "restart", again, l)
+	checkEdge(t, "restart", again, l)
 	fail(t, "restart", exitNotices(restarted(after, again)))
 }
 
@@ -237,7 +237,7 @@ func TestKimiFailedTurn(t *testing.T) {
 	coverage.Covers(t, "generated", "kimi/lifecycle/turn_end")
 	l, r := kimiStart(t, false, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Error: true}, sessiongen.Turn{Say: 20})
 	st := settleUntil(r, 3)
-	check(t, "failed turn", st, l)
+	checkEdge(t, "failed turn", st, l)
 	if n := len(turnsIn(st, harness.StateFailed)); n != 1 {
 		t.Errorf("%d failed turns, want 1", n)
 	}
@@ -253,7 +253,7 @@ func TestKimiFailedTurn(t *testing.T) {
 	}
 	r.Restart()
 	after := settleUntil(r, 3)
-	check(t, "restart", after, l)
+	checkEdge(t, "restart", after, l)
 	fail(t, "restart", restarted(st, after))
 }
 
@@ -276,7 +276,7 @@ func TestKimiCapabilitiesInFiles(t *testing.T) {
 	turns := []sessiongen.Turn{{Say: 20, Jobs: 1}, {Say: 20}, {Say: 20}, {Say: 20}, {Say: 20}, {Say: 20, Compact: true}}
 	l, r := kimiStart(t, false, extra, turns...)
 	st := settleUntil(r, 6)
-	check(t, "files", st, l)
+	checkEdge(t, "files", st, l)
 	if got := statusOf(st); got.Model != "other/model" || got.Effort != "low" || got.Mode != "plan" {
 		t.Errorf("status model %q effort %q mode %q, want other/model low plan", got.Model, got.Effort, got.Mode)
 	}

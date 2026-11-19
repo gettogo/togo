@@ -34,7 +34,7 @@ func piStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *eng
 func TestPiNewConversation(t *testing.T) {
 	coverage.Covers(t, "generated", "pi/lifecycle/new_conversation", "pi/lifecycle/helper_restart")
 	_, l, r := piStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 30}, sessiongen.Turn{Say: 20})
-	check(t, "first conversation", settleUntil(r, 2), l)
+	checkEdge(t, "first conversation", settleUntil(r, 2), l)
 	now(l)
 	if err := l.Append(sessiongen.Turn{New: true, Say: 20, Tools: 1, Output: 30}, sessiongen.Turn{Say: 20}); err != nil {
 		t.Fatal(err)
@@ -43,20 +43,20 @@ func TestPiNewConversation(t *testing.T) {
 		t.Fatalf("%d files", len(l.Mains))
 	}
 	st := settleUntil(r, 4)
-	check(t, "after /new", st, l)
+	checkEdge(t, "after /new", st, l)
 	if n := len(userPrompts(st)); n != 4 {
 		t.Fatalf("%d prompts after /new, want 4 (both conversations)", n)
 	}
 	r.Restart()
 	after := settleUntil(r, 4)
-	check(t, "after restart", after, l)
+	checkEdge(t, "after restart", after, l)
 	fail(t, "restart", restarted(st, after))
 	// The restart follows the new conversation, not the first file.
 	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil {
 		t.Fatal(err)
 	}
 	more := settleUntil(r, 5)
-	check(t, "new conversation after restart", more, l)
+	checkEdge(t, "new conversation after restart", more, l)
 	// Stable ids: every id once.
 	fail(t, "paging", enginetest.Paging(more))
 }
@@ -76,13 +76,13 @@ func TestPiResumeOlderConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := e.rigWith(t, "pi", func(o *enginetest.Options) { o.PanePIDs = procsOf() })
-	check(t, "start", settleUntil(r, 3), l)
+	checkEdge(t, "start", settleUntil(r, 3), l)
 	now(l)
 	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil { // the resume: prompt 4, first file
 		t.Fatal(err)
 	}
 	st := settleUntil(r, 4)
-	check(t, "after resume", st, l)
+	checkEdge(t, "after resume", st, l)
 	fail(t, "paging", enginetest.Paging(st))
 }
 
@@ -147,7 +147,7 @@ func TestPiExitAndRelaunch(t *testing.T) {
 		t.Fatal(err)
 	}
 	st = settleUntil(r, 3)
-	check(t, "after the relaunch", st, l)
+	checkEdge(t, "after the relaunch", st, l)
 	if n := len(turnsIn(st, harness.StateOK)); n != 2 {
 		t.Errorf("%d finished turns after the relaunch, want 2", n)
 	}
@@ -155,7 +155,7 @@ func TestPiExitAndRelaunch(t *testing.T) {
 	// A restart over the finished file agrees with the live view.
 	r.Restart()
 	after := settleUntil(r, 3)
-	check(t, "restart", after, l)
+	checkEdge(t, "restart", after, l)
 	fail(t, "restart", exitNotices(restarted(st, after)))
 }
 
@@ -166,7 +166,7 @@ func TestPiInterruptAndError(t *testing.T) {
 	coverage.Covers(t, "generated", "pi/lifecycle/interrupt", "pi/lifecycle/turn_end")
 	_, l, r := piStart(t, nil, sessiongen.Turn{Say: 20}, sessiongen.Turn{Interrupt: true}, sessiongen.Turn{Error: true}, sessiongen.Turn{Say: 20})
 	st := settleUntil(r, 4)
-	check(t, "interrupt and error", st, l)
+	checkEdge(t, "interrupt and error", st, l)
 	if n := len(turnsIn(st, harness.StateInterrupted)); n != 1 {
 		t.Errorf("%d interrupted turns, want 1", n)
 	}
@@ -193,7 +193,7 @@ func TestPiInterruptAndError(t *testing.T) {
 	}
 	r.Restart()
 	after := settleUntil(r, 4)
-	check(t, "restart", after, l)
+	checkEdge(t, "restart", after, l)
 	fail(t, "restart", restarted(st, after))
 }
 
@@ -211,7 +211,7 @@ func TestPiCapabilitiesInFiles(t *testing.T) {
 	turns := []sessiongen.Turn{{Say: 20}, {Say: 20, Tools: 1, Output: 20}, {Say: 20}, {Say: 20, Compact: true}}
 	_, l, r := piStart(t, extra, turns...)
 	st := settleUntil(r, 4)
-	check(t, "files", st, l)
+	checkEdge(t, "files", st, l)
 	if got := statusOf(st); got.Model != "moonshotai/kimi-k2.6" || got.Effort != "high" {
 		t.Errorf("status model %q effort %q, want moonshotai/kimi-k2.6 high", got.Model, got.Effort)
 	}
