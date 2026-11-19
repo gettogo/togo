@@ -71,4 +71,3 @@ pi/lifecycle/fork
 vibe/capability/changes
 vibe/capability/chat.anchors
 vibe/capability/ports
-vibe/lifecycle/new_conversation

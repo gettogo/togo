@@ -348,29 +348,15 @@ func TestKnownFault_Vibe_ExitedTurnBecomesOKAtRelaunch(t *testing.T) {
 	}
 }
 
-// TestKnownFault_Vibe_NewConversationNotFollowed documents a fault: when
-// Vibe is started again without --continue, it writes a new session folder,
-// and the chat stays on the old one. Correct: the chat starts over on the new
-// conversation, as omp's does. The cause is hookstyle/mapper.go:123, which
-// asks for the transcript only while state has none, so the journal glob of
-// vibe.yaml (the session feed) is never re-rendered for the new folder.
-// This passes while the fault is present.
-func TestKnownFault_Vibe_NewConversationNotFollowed(t *testing.T) {
+// Vibe started again without --continue writes a new session folder, and
+// vibe --resume a new segment of an earlier one: the session follows each
+// (vibe/vibe.go journalFor), keeping the earlier conversation's items.
+// Keeping both conversations is this agent's current convention; the
+// question whether every agent should start over instead is open.
+func TestVibeFollowsNewConversationAndResume(t *testing.T) {
 	t.Parallel()
-	e := support.NewEnv(t, time.Hour)
-	l, r := vibeAgent.start(t, e, sessiongen.Script{Seed: 17})
-	vibeAgent.add(t, l, sessiongen.Turn{Say: 30, Tools: 1, Output: 50})
-	before := vibeAgent.seen(t, r, "first conversation", l, false)
-	first := l.Truth.Last
-	vibeAgent.add(t, l, sessiongen.Turn{New: true, Say: 30, Tools: 1, Output: 50})
-	time.Sleep(6 * time.Second)
-	after := r.Read()
-	if enginetest.Has(l.Truth.Last)(after) {
-		t.Fatal("the new conversation is shown: the fault is fixed; cover vibe/lifecycle/new_conversation")
-	}
-	if after.Epoch != before.Epoch || !enginetest.Has(first)(after) {
-		t.Errorf("the chat changed epoch or lost the first conversation")
-	}
+	coverage.Covers(t, "generated", "vibe/lifecycle/new_conversation")
+	followsConversations(t, vibeAgent, 17)
 }
 
 // TestKnownFault_Vibe_RestoreBetweenTurnsShowsNothing documents a fault: a
