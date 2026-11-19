@@ -12,17 +12,20 @@ import (
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/e2e/support"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
 // exports caches the tape of each pair for the tests of this file: one
-// run of a scenario is the slow part.
+// run of a scenario is the slow part, and two runs of the same pair must
+// not overlap (the session id is fixed, so the tape is the same bytes).
 var (
 	exportMu sync.Mutex
 	exports  = map[string]*exported{}
 )
 
 type exported struct {
+	once sync.Once
 	tape *Tape
 	err  error
 }
@@ -31,13 +34,32 @@ func export(t *testing.T, sc Scenario, agent string) (*Tape, error) {
 	t.Helper()
 	key := sc.ID + "/" + agent
 	exportMu.Lock()
-	defer exportMu.Unlock()
-	if e, ok := exports[key]; ok {
-		return e.tape, e.err
+	e, ok := exports[key]
+	if !ok {
+		e = &exported{}
+		exports[key] = e
 	}
-	tp, err := Export(t, sc, agent)
-	exports[key] = &exported{tp, err}
-	return tp, err
+	exportMu.Unlock()
+	e.once.Do(func() {
+		// A failed export ends its goroutine: later callers must see that.
+		e.err = fmt.Errorf("the export of %s did not finish", key)
+		e.tape, e.err = Export(t, sc, agent)
+	})
+	return e.tape, e.err
+}
+
+// representative is one agent of each way the engine reads a session: a
+// file-fed one (omp), a hook-fed one (cursor), a database-fed one
+// (crush), both generations of the API-fed one (opencode, opencode2) and
+// Codex. Every scenario runs for each, restarts included. The long run
+// (TOGO_E2E_LONG=1) takes every registered profile.
+var representative = []string{"omp", "cursor", "crush", "opencode", "opencode2", "codex"}
+
+func testAgents() []string {
+	if support.LongMode() {
+		return sessiongen.Names()
+	}
+	return representative
 }
 
 // schema is the parts of protocol/v1/schema.json the tape check reads.
@@ -220,8 +242,12 @@ func checkTape(t *testing.T, s schema, tp *Tape) {
 func TestEveryTapeIsValid(t *testing.T) {
 	s := loadSchema(t)
 	for _, sc := range Catalogue() {
-		for _, agent := range sessiongen.Names() {
+		for _, agent := range testAgents() {
 			t.Run(sc.ID+"/"+agent, func(t *testing.T) {
+				t.Parallel()
+				if sc.Applies(agent) == "" {
+					support.Heavy(t)
+				}
 				tp, err := export(t, sc, agent)
 				if sk, ok := err.(Skip); ok {
 					t.Skip(string(sk))

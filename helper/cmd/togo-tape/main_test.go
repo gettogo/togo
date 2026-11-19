@@ -8,11 +8,15 @@ import (
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness/coverage"
+	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 	"github.com/gettogo/togo/helper/internal/testtmp"
 )
 
-func TestMain(m *testing.M) { os.Exit(testtmp.Main(m)) }
+func TestMain(m *testing.M) {
+	enginetest.StandIn()
+	os.Exit(testtmp.Main(m))
+}
 
 func TestPickExpandsAllAndNames(t *testing.T) {
 	all, err := pick("all", "all")

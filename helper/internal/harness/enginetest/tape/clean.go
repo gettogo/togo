@@ -25,6 +25,7 @@ const (
 	NormWallTime  = "wall-clock-time"
 	NormWallMilli = "wall-clock-id"
 	NormPort      = "listening-port"
+	NormEvent     = "server-event-id"
 )
 
 // Cleaner scrubs a tape of what names the machine or its user and
@@ -224,8 +225,11 @@ func secretIn(v any) (string, bool) {
 }
 
 var (
-	phoneItem = regexp.MustCompile(`\bp[0-9a-f]{12}[0-9]{1,6}\b`)
-	requestID = regexp.MustCompile(`\br_[a-z2-7]{10}\b`)
+	// serverEvent is an event id the agent's server stamps from its clock
+	// and a random tail (OpenCode 2.x: evt_<time><random>).
+	serverEvent = regexp.MustCompile(`\bevt_[0-9a-f]{12,}\b`)
+	phoneItem   = regexp.MustCompile(`\bp[0-9a-f]{12}[0-9]{1,6}\b`)
+	requestID   = regexp.MustCompile(`\br_[a-z2-7]{10}\b`)
 )
 
 // clock is the synthetic time a tape's per-run timestamps are mapped to.
@@ -355,6 +359,11 @@ func (n *normaliser) text(s string) string {
 		prefix, count := id[1:13], id[13:]
 		r := "p" + n.canon(n.phone, prefix, func(i int) string { return fmt.Sprintf("%012x", 0xf00000000000+i+1) }) + count
 		n.mark(NormPhoneItem, r != id)
+		return r
+	})
+	s = serverEvent.ReplaceAllStringFunc(s, func(id string) string {
+		r := n.canon(n.reqs, id, func(i int) string { return fmt.Sprintf("evt_%017x", i+1) })
+		n.mark(NormEvent, r != id)
 		return r
 	})
 	s = requestID.ReplaceAllStringFunc(s, func(id string) string {

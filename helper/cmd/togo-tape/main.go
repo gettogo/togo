@@ -23,11 +23,16 @@ import (
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness/coverage"
+	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/enginetest/tape"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
-func main() { os.Exit(run(os.Args[1:])) }
+func main() {
+	// OpenCode 2.x's server is this binary started as a stand-in.
+	enginetest.StandIn()
+	os.Exit(run(os.Args[1:]))
+}
 
 func run(args []string) int {
 	fs := flag.NewFlagSet("togo-tape", flag.ContinueOnError)

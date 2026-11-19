@@ -173,3 +173,17 @@ func TestNormalisationIsConsistent(t *testing.T) {
 		}
 	}
 }
+
+// A server's event ids carry its clock: the same id keeps one stand-in.
+func TestServerEventIdsAreNormalised(t *testing.T) {
+	out, used, err := Cleaner{}.Clean(lines(
+		`{"jsonrpc":"2.0","id":1,"result":{"items":[{"id":"interrupted-evt_18e9638a515cfeb8b","seq":1}]}}`,
+		`{"jsonrpc":"2.0","id":2,"result":{"items":[{"id":"interrupted-evt_18e9638a515cfeb8b","seq":2},{"id":"interrupted-evt_18e9638aaaf49288b","seq":3}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := string(join(out))
+	if strings.Contains(all, "18e9638") || strings.Count(all, "evt_00000000000000001") != 2 || !strings.Contains(all, "evt_00000000000000002") {
+		t.Errorf("%s (%v)", all, used)
+	}
+}

@@ -62,7 +62,7 @@ func Export(t testing.TB, sc Scenario, agent string) (*Tape, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s/%s: %w", agent, sc.ID, err)
 	}
-	return &Tape{Lines: lines, Manifest: Manifest{ScenarioID: sc.ID, Agent: agent, Adapter: w.Rec.Adapter,
+	return &Tape{Lines: lines, Manifest: Manifest{ScenarioID: sc.ID, Agent: agent, Adapter: adapterName(agent, w.Rec.Adapter),
 		SessionID: w.Rig.ID, Normalized: norm}}, nil
 }
 
@@ -129,4 +129,13 @@ func (t *Tape) Write(dir, base string, src Source) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, base+".json"), append(manifest, '\n'), 0o644)
+}
+
+// adapterName is the adapter the manifest names: the agent's own name for
+// a variant (opencode2), so the two generations stay apart.
+func adapterName(agent, described string) string {
+	if Base(agent) != agent {
+		return agent
+	}
+	return described
 }

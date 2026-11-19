@@ -89,7 +89,7 @@ func openTurnAgent(agent string) bool {
 // dialogFor finds a real captured permission prompt of the agent in the
 // detector's testdata; "" when none.
 func dialogFor(agent string) string {
-	dir := filepath.Join(internalDir(), "detect", "testdata", agent)
+	dir := filepath.Join(internalDir(), "detect", "testdata", Base(agent))
 	files, _ := filepath.Glob(filepath.Join(dir, "*.txt"))
 	sort.Strings(files)
 	var best string
@@ -121,7 +121,7 @@ func dialogFor(agent string) string {
 	if best == "" {
 		return ""
 	}
-	return filepath.Join("detect", "testdata", agent, filepath.Base(best))
+	return filepath.Join("detect", "testdata", Base(agent), filepath.Base(best))
 }
 
 // World is one scenario's session: the files a generator wrote, the rig
@@ -143,6 +143,11 @@ type World struct {
 	late      bool
 	pending   []sessiongen.Turn
 	holdLater bool
+
+	// p is the profile; held is the message of an OpenCode 2.x turn held
+	// back (its Hold and Finish write the events themselves).
+	p    sessiongen.Profile
+	held string
 
 	hooks     bool
 	open      bool
@@ -170,7 +175,7 @@ func NewWorld(t testing.TB, scenario, agent string, turns []sessiongen.Turn) (*W
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
 		return nil, err
 	}
-	w := &World{T: t, Agent: agent, Scenario: scenario, Home: home, Cwd: cwd, hooks: hookAgent(agent), late: agent == "vibe"}
+	w := &World{T: t, p: p, Agent: agent, Scenario: scenario, Home: home, Cwd: cwd, hooks: hookAgent(agent), late: agent == "vibe"}
 	w.mark(turns)
 	if w.late {
 		w.pending, turns = turns, nil
@@ -334,6 +339,14 @@ func (w *World) Hold() error {
 		return nil
 	}
 	l := w.Layout
+	if p, ok := w.p.(*sessiongen.OpenCode2); ok {
+		msg, err := p.Hold(l, "Hold this turn")
+		if err != nil {
+			return Skip("the " + w.Agent + " profile cannot write a live turn: " + err.Error())
+		}
+		w.held = msg
+		return nil
+	}
 	turn := sessiongen.Turn{Say: 50, Tools: 1, Output: 80}
 	if w.hooks {
 		turn.Hook = &sessiongen.HookTurn{}
@@ -387,6 +400,11 @@ func (w *World) Hold() error {
 func (w *World) EndTurn() {
 	w.T.Helper()
 	switch {
+	case w.held != "":
+		if err := w.p.(*sessiongen.OpenCode2).Finish(w.Layout, w.held); err != nil {
+			w.T.Fatalf("end of the live turn: %v", err)
+		}
+		w.held = ""
 	case w.hooks:
 		w.Deliver(w.Layout.Hooks[w.heldFrom:]...)
 		w.heldFrom = len(w.Layout.Hooks)

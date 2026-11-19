@@ -3,6 +3,9 @@ package tape
 import (
 	"bytes"
 	"testing"
+
+	"github.com/gettogo/togo/helper/internal/harness/e2e/support"
+	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
 // The same scenario and seed give the same tape, byte for byte: what a
@@ -14,6 +17,7 @@ import (
 // that varies between runs, not a field to normalise: the tape is a
 // faithful record of one run.
 var unordered = map[string]string{
+	"subagents/omp":    "omp's subagent files are found on a poll: a history reset and the agent rows arrive in either order",
 	"subagents/claude": "the engine reads Claude's main file and its subagents' files on separate feeds: a history reset and the agent rows arrive in either order",
 	// Copilot's replies come from a log the engine finds on a poll, after
 	// the hook calls: whether the replies are in the chat, and so every
@@ -25,18 +29,28 @@ var unordered = map[string]string{
 }
 
 func TestSameScenarioSameTape(t *testing.T) {
-	for _, agent := range []string{"omp", "claude", "copilot", "crush", "codex", "opencode"} {
+	for _, agent := range deterministicAgents() {
 		for _, sc := range Catalogue() {
 			t.Run(sc.ID+"/"+agent, func(t *testing.T) {
+				t.Parallel()
 				if why := sc.Applies(agent); why != "" {
 					t.Skip(why)
 				}
 				if why := unordered[sc.ID+"/"+agent]; why != "" {
 					t.Skip(why)
 				}
+				support.Heavy(t)
 				var tapes [2]*Tape
 				for i := range tapes {
-					tp, err := Export(t, sc, agent)
+					var tp *Tape
+					var err error
+					if i == 0 {
+						// The first run is the one the validity test uses; the
+						// second must not overlap it (same session id).
+						tp, err = export(t, sc, agent)
+					} else {
+						tp, err = Export(t, sc, agent)
+					}
 					if sk, ok := err.(Skip); ok {
 						t.Skip(string(sk))
 					}
@@ -55,6 +69,15 @@ func TestSameScenarioSameTape(t *testing.T) {
 			})
 		}
 	}
+}
+
+// deterministicAgents are compared in the default run; the long run
+// compares every profile.
+func deterministicAgents() []string {
+	if support.LongMode() {
+		return sessiongen.Names()
+	}
+	return []string{"omp", "crush", "opencode", "opencode2", "codex"}
 }
 
 func firstDiff(a, b [][]byte) int {

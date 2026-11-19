@@ -82,7 +82,7 @@ func capability(name string) func(string) string {
 		if err != nil {
 			return "no inventory: " + err.Error()
 		}
-		if _, ok := idx[agent+"/"+coverage.KindCapability+"/"+name]; !ok {
+		if _, ok := idx[Base(agent)+"/"+coverage.KindCapability+"/"+name]; !ok {
 			return agent + "'s adapter declares no " + name + " capability"
 		}
 		return ""
@@ -96,7 +96,7 @@ func lifecycle(name string) func(string) string {
 		if err != nil {
 			return "no inventory: " + err.Error()
 		}
-		c, ok := idx[agent+"/"+coverage.KindLifecycle+"/"+name]
+		c, ok := idx[Base(agent)+"/"+coverage.KindLifecycle+"/"+name]
 		switch {
 		case !ok:
 			return agent + " is not in the coverage inventory"
@@ -130,7 +130,19 @@ var shortChat = []sessiongen.Turn{{Say: 80, Tools: 1, Output: 120}, {Say: 60}}
 
 // IsStreamed reports an agent whose chat comes from a server's event
 // stream (OpenCode and Kilo).
-func IsStreamed(agent string) bool { return enginetest.IsAPIAgent(agent) }
+func IsStreamed(agent string) bool { return enginetest.IsAPIAgent(Base(agent)) }
+
+// variants are profiles of an agent's other generation: the inventory,
+// the captures and the API server know the agent by its base name.
+var variants = map[string]string{"opencode2": "opencode"}
+
+// Base is the agent a profile belongs to: opencode for opencode2.
+func Base(agent string) string {
+	if b, ok := variants[agent]; ok {
+		return b
+	}
+	return agent
+}
 
 // hasReply is true when the page holds an assistant reply. Droid's chat
 // has none for any prompt, so a scenario does not require one; the pilot's
@@ -340,7 +352,14 @@ func interrupted(t testing.TB, agent string) (*World, error) {
 	stopped := make(chan struct{})
 	var once sync.Once
 	stop := func() { once.Do(func() { w.EndTurn(); r.SetHubStatus("idle"); close(stopped) }) }
-	r.Term.OnInterrupt = func(string) { go stop() }
+	if w.hooks {
+		// A hook call waits on the engine: end the turn beside it.
+		r.Term.OnInterrupt = func(string) { go stop() }
+	} else {
+		// The engine checks the agent stopped within a short window: end
+		// the turn before the press returns, as an agent that stops at once.
+		r.Term.OnInterrupt = func(string) { stop() }
+	}
 	res, err := w.Rec.Interrupt()
 	if err != nil {
 		return nil, fmt.Errorf("interrupt: %w", err)
