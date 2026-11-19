@@ -44,17 +44,64 @@ func TestCellsMatchRegisteredAdapters(t *testing.T) {
 	for _, c := range cells {
 		have[c.Agent] = true
 	}
+	terminal, err := TerminalAgents()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !have[TerminalAgent] {
+		t.Error("the terminal row has no cells")
+	}
 	for _, a := range agents.Registry {
-		if !have[a.ID] {
-			t.Errorf("registry agent %s has no cells", a.ID)
+		if have[a.ID] == slices.Contains(terminal, a.ID) {
+			t.Errorf("registry agent %s is exactly one of: a row of its own, or the terminal row (row %v, terminal %v)", a.ID, have[a.ID], slices.Contains(terminal, a.ID))
 		}
 	}
 	for id, b := range harness.AdapterFiles() {
 		if id == "opencode2" {
 			continue // a second file for the opencode agent
 		}
-		if len(b) > 0 && !have[id] {
-			t.Errorf("registered adapter %s has no cells", id)
+		if len(b) > 0 && !have[id] && !slices.Contains(terminal, id) {
+			t.Errorf("registered adapter %s has no cells and is not in the terminal row", id)
+		}
+	}
+}
+
+// The supported agents are the ones whose adapters declare chat; the rest
+// share the one terminal row.
+func TestRowsAreTheAgentsWithChat(t *testing.T) {
+	cells, err := Cells()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := Agents(cells)
+	want := []string{"aider", "amp", "claude", "cline", "codex", "copilot", "crush", "cursor", "droid", "goose",
+		"kilo", "kimi", "omp", "opencode", "pi", TerminalAgent, "vibe"}
+	if !slices.Equal(rows, want) {
+		t.Errorf("rows %v, want %v", rows, want)
+	}
+	terminal, err := TerminalAgents()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"auggie", "kiro", "openhands", "shell"} {
+		if !slices.Contains(terminal, id) {
+			t.Errorf("%s is not in the terminal row", id)
+		}
+	}
+	idx := Index(cells)
+	for _, ev := range terminalLifecycle {
+		if c := idx[TerminalAgent+"/lifecycle/"+ev]; c.NotApplicable != "" {
+			t.Errorf("terminal %s does not apply: %s", ev, c.NotApplicable)
+		}
+	}
+	for _, k := range []string{"terminal/capability/screen_prompt"} {
+		if c, ok := idx[k]; !ok || c.NotApplicable != "" {
+			t.Errorf("%s: want an applicable cell, got %+v", k, c)
+		}
+	}
+	for _, k := range []string{"terminal/lifecycle/resume", "terminal/lifecycle/turn_end", "terminal/scale/at_limit"} {
+		if c := idx[k]; c.NotApplicable == "" {
+			t.Errorf("%s must not apply to the terminal row", k)
 		}
 	}
 }
@@ -101,19 +148,21 @@ func TestCellsFromTempSpecs(t *testing.T) {
 		t.Fatal(err)
 	}
 	idx := Index(cells)
-	for _, k := range []string{"alpha/capability/chat", "alpha/capability/model", "alpha/lifecycle/resume", "alpha/lifecycle/interrupt", "alpha/scale/long_session", "beta/lifecycle/helper_restart"} {
+	for _, k := range []string{"alpha/capability/chat", "alpha/capability/model", "alpha/lifecycle/resume", "alpha/lifecycle/interrupt", "alpha/scale/long_session", "terminal/lifecycle/helper_restart", "terminal/capability/screen_prompt"} {
 		if c, ok := idx[k]; !ok || c.NotApplicable != "" {
 			t.Errorf("%s: want an applicable cell, got %+v (present %v)", k, c, ok)
 		}
 	}
-	for _, k := range []string{"beta/lifecycle/resume", "beta/lifecycle/turn_end", "beta/scale/at_limit", "alpha/lifecycle/fork"} {
+	for _, k := range []string{"terminal/lifecycle/resume", "terminal/lifecycle/turn_end", "terminal/scale/at_limit", "alpha/lifecycle/fork"} {
 		c, ok := idx[k]
 		if !ok || c.NotApplicable == "" {
 			t.Errorf("%s: want a not-applicable cell with a reason, got %+v (present %v)", k, c, ok)
 		}
 	}
-	if _, ok := idx["beta/capability/chat"]; ok {
-		t.Error("beta declares no capabilities, so it has no capability cells")
+	for k := range idx {
+		if strings.HasPrefix(k, "beta/") {
+			t.Errorf("%s: beta declares no chat, so it has no row (the terminal row stands for it)", k)
+		}
 	}
 	// keys come out sorted and unique
 	if !slices.IsSorted(keysOf(cells, false)) {
@@ -273,9 +322,9 @@ func TestCoversValidatesKeys(t *testing.T) {
 		t.Error("a real cell must pass")
 	}
 	for _, c := range []struct{ tier, key string }{
-		{"unit", "pi/capability/chta"},     // typo
-		{"unit", "shell/lifecycle/resume"}, // not applicable
-		{"fast", "pi/capability/chat"},     // bad tier
+		{"unit", "pi/capability/chta"},        // typo
+		{"unit", "terminal/lifecycle/resume"}, // not applicable
+		{"fast", "pi/capability/chat"},        // bad tier
 	} {
 		if !catch(func() { Covers(&fakeTB{}, c.tier, c.key) }) {
 			t.Errorf("%+v must fail the test", c)

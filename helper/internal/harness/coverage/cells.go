@@ -2,10 +2,16 @@
 // and the ratchet that keeps it from growing unnoticed.
 //
 // The expected cells are computed from the source of truth: every agent in
-// internal/agents crossed with what its adapter file under
-// internal/harness/adapters declares. Nothing is typed by hand, so a new
-// agent or a new capability adds cells and, until tests cover them, adds
-// lines the ratchet refuses.
+// internal/agents whose adapter file under internal/harness/adapters
+// declares the chat capability, crossed with what that adapter declares.
+// Nothing is typed by hand, so a new agent or a new capability adds cells
+// and, until tests cover them, adds lines the ratchet refuses.
+//
+// An agent whose adapter declares no chat (Auggie, Kiro CLI, OpenHands, the
+// shell) is not a supported agent: the terminal view only names it. One
+// row, TerminalAgent, stands for all of them: the lifecycle events that
+// apply to a session with no native chat, and the prompts the screen
+// watcher reads off the pane.
 //
 // Tests declare what they cover with Covers. The declarations are read
 // statically (ScanEvidence), never collected at run time. A cell counts as
@@ -35,6 +41,18 @@ const (
 	KindLifecycle  = "lifecycle"
 	KindScale      = "scale"
 )
+
+// TerminalAgent is the key of the one row that stands for any other
+// command-line agent in the terminal view.
+const TerminalAgent = "terminal"
+
+// ScreenPrompt is the terminal row's capability cell: a numbered menu or a
+// yes/no prompt on the screen is surfaced to the phone and answered.
+const ScreenPrompt = "screen_prompt"
+
+// terminalLifecycle are the lifecycle events that apply to a session with
+// no native chat.
+var terminalLifecycle = []string{"agent_exits", "relaunch", "session_removed", "helper_restart", "connection_drop"}
 
 // Lifecycle events every adapter is asked about.
 var Lifecycle = []string{
@@ -138,8 +156,11 @@ func CellsFrom(dir string, registry []agents.Agent) ([]Cell, error) {
 	}
 	var cells []Cell
 	for _, ag := range registry {
-		cells = append(cells, agentCells(ag, infos[ag.ID])...)
+		if in := infos[ag.ID]; in != nil && in.caps["chat"] {
+			cells = append(cells, agentCells(ag, in)...)
+		}
 	}
+	cells = append(cells, terminalCells()...)
 	sort.Slice(cells, func(i, j int) bool { return cells[i].Key() < cells[j].Key() })
 	for i := 1; i < len(cells); i++ {
 		if cells[i].Key() == cells[i-1].Key() {
@@ -222,6 +243,64 @@ func agentCells(ag agents.Agent, in *adapterInfo) []Cell {
 		add(KindScale, sc, need("chat"))
 	}
 	return cells
+}
+
+// terminalCells is the terminal row: the events a session with no native
+// chat goes through, and the screen prompt.
+func terminalCells() []Cell {
+	const noChat = "the terminal row has no native chat"
+	var cells []Cell
+	add := func(kind, name, na string) {
+		cells = append(cells, Cell{Agent: TerminalAgent, Kind: kind, Name: name, NotApplicable: na})
+	}
+	add(KindCapability, ScreenPrompt, "")
+	for _, ev := range Lifecycle {
+		na := noChat
+		if slices.Contains(terminalLifecycle, ev) {
+			na = ""
+		}
+		add(KindLifecycle, ev, na)
+	}
+	for _, sc := range Scale {
+		add(KindScale, sc, noChat)
+	}
+	return cells
+}
+
+// TerminalAgents lists the registry agents the terminal row stands for:
+// those whose adapter declares no chat capability (or has no adapter file).
+func TerminalAgents() ([]string, error) {
+	dir := AdapterDir()
+	if dir == "" {
+		return nil, fmt.Errorf("coverage: the adapter directory is not on disk")
+	}
+	paths, err := filepath.Glob(filepath.Join(dir, "*", "*.yaml"))
+	if err != nil {
+		return nil, err
+	}
+	chat := map[string]bool{}
+	for _, p := range paths {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
+		a, err := spec.Parse(b)
+		if err != nil {
+			return nil, fmt.Errorf("coverage: %s: %w", p, err)
+		}
+		if slices.Contains(a.Capabilities, "chat") {
+			for _, id := range a.Match.Agents {
+				chat[id] = true
+			}
+		}
+	}
+	var out []string
+	for _, ag := range agents.Registry {
+		if !chat[ag.ID] {
+			out = append(out, ag.ID)
+		}
+	}
+	return out, nil
 }
 
 // Index maps keys to cells.
