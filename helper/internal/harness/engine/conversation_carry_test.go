@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"testing"
+
+	"github.com/gettogo/togo/helper/internal/harness"
 )
 
 // OpenCode 2.x resumes by relaunching: the session's adapter starts again
@@ -45,5 +47,35 @@ func TestRestartedSessionNamingAnotherConversationMoves(t *testing.T) {
 	}
 	if e.convCarry.take(id) != "" {
 		t.Fatal("the carried conversation was not taken")
+	}
+}
+
+// carrier is a fake mapper that records the mapper handed to its Carry.
+type carrier struct {
+	replay
+	got harness.Mapper
+}
+
+func (c *carrier) Carry(next harness.Mapper) { c.got = next }
+
+// A start-over on another conversation hands the fresh mapper to the old
+// one's Carry before the fresh one maps the announcing record: Codex keeps
+// the top-level threads its feed described once per connection.
+func TestStartOverHandsTheFreshMapperToTheCarrier(t *testing.T) {
+	const id = "s_convcarry2"
+	e, _ := newFake(t, id, "1.2.3")
+	if _, err := e.Describe(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	e.mu.Lock()
+	s := e.sessions[id]
+	e.mu.Unlock()
+	old := &carrier{replay: replay{state: map[string]string{StateConversation: "B"}}}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.mappers["fake.events"] = old
+	fresh := s.startOverLocked("fake.events")
+	if fresh == nil || old.got != fresh || s.mappers["fake.events"] != fresh {
+		t.Fatalf("carry got %v, fresh mapper %v", old.got, fresh)
 	}
 }

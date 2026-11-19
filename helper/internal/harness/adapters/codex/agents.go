@@ -109,3 +109,31 @@ func agentRow(x harness.Item) harness.Op {
 		Started: ptr(x.Agent.Started), Open: &harness.Open{Kind: harness.OpenChat, Ref: x.ID}}
 	return harness.Op{Op: harness.OpUpsert, Section: harness.SectionAgents, Row: &row}
 }
+
+// Carry gives the fresh mapper the engine made for another conversation
+// the top-level threads this one saw described (harness.Carrier). The feed
+// joins each thread once per connection, so a thread joined before a /new
+// is not described again when the desk resumes it; knowing it is top level
+// lets its next turn take the chat back. Subagent threads are not carried:
+// only a thread described to the mapper itself as top level becomes main.
+func (a *AppServer) Carry(next harness.Mapper) {
+	n, ok := next.(*AppServer)
+	if !ok || n == a {
+		return
+	}
+	a.mu.Lock()
+	var top []string
+	for id, t := range a.threads {
+		if t.top {
+			top = append(top, id)
+		}
+	}
+	a.mu.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	for _, id := range top {
+		if n.threads[id] == nil {
+			n.threads[id] = &threadInfo{top: true}
+		}
+	}
+}

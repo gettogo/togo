@@ -186,6 +186,16 @@ type ReplayMarker interface {
 	Replaying(pre, post json.RawMessage)
 }
 
+// Carrier is a mapper whose feed tells it facts about the agent once and
+// does not repeat them: Codex's app-server describes each thread once per
+// connection. When the chat starts over on another conversation, the
+// engine hands the fresh mapper to the old one's Carry before the fresh
+// one maps anything, so those facts are kept. Nothing of the conversation
+// left (its turn, tools, plan, usage, working) may be carried.
+type Carrier interface {
+	Carry(next Mapper)
+}
+
 // MapperFactory builds a fresh mapper for one session.
 type MapperFactory func(env Env) Mapper
 
