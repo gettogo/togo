@@ -63,7 +63,10 @@ struct ComposerTextInput: UIViewRepresentable {
         guard let width = proposal.width, width > 0 else { return nil }
         let line = uiView.font?.lineHeight ?? 21
         let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: max(line, min(fitting.height, line * 6)))
+        // This text view scrolls. Respect the room left by the keyboard and the
+        // other composer rows so the field cannot spill into their space.
+        let limit = min(line * 6, proposal.height ?? .infinity)
+        return CGSize(width: width, height: max(line, min(fitting.height, limit)))
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
