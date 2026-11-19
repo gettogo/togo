@@ -32,9 +32,24 @@ func TestAppMatrixDebt(t *testing.T) {
 	if path := os.Getenv("TOGO_APP_DEBT_BASE"); path != "" {
 		base = readAppDebt(t, path)
 	}
-	// No app cells have passing execution evidence yet. A real UI
-	// results reader must supply it before any listed cell can be retired.
-	if err := appinventory.CheckRatchet(keys, debt, base, nil, ""); err != nil {
+	var proof []appinventory.Proof
+	var revision string
+	if path := os.Getenv("TOGO_APP_DEBT_PROOF"); path != "" {
+		revision = os.Getenv("TOGO_APP_DEBT_REVISION")
+		if revision == "" {
+			t.Fatal("proof requires the candidate revision")
+		}
+		file, err := os.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		proof, err = appinventory.DecodeProof(file)
+		if err != nil {
+			t.Fatalf("read app proof: %v", err)
+		}
+	}
+	if err := appinventory.CheckRatchet(keys, debt, base, proof, revision); err != nil {
 		t.Fatalf("app matrix debt (%d cells): %v", len(keys), err)
 	}
 }
