@@ -325,8 +325,8 @@ const bashPrompt = "│ Bash command               │\n│   rm -rf ./build && 
 
 func TestHookSubjectWinsOverScreen(t *testing.T) {
 	hook := wire.HookEvent{Agent: "claude", Data: wire.HookData{
-		Tool: "Bash", Command: "rm -rf ./build && make clean",
-		Subject: &wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf ./build && make clean"},
+		Tool: "Bash", Command: "rm -rf ./build &&\n  make",
+		Subject: &wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf ./build &&\n  make"},
 	}}
 	screenSubject := wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf ./build && make"}
 	pr, ok := detect.Detect(bashPrompt)
@@ -365,6 +365,18 @@ func TestHookSubjectWinsOverScreen(t *testing.T) {
 			t.Fatalf("pending = %+v", got)
 		}
 		check(t, got[0])
+	})
+	t.Run("hook about another command takes nothing", func(t *testing.T) {
+		other := hook
+		other.Data.Subject = &wire.Subject{Kind: wire.SubjectCommand, Text: "rm -rf ./build && make clean"}
+		st := New(Config{Tmux: &fakeTmux{screen: bashPrompt}, Pub: &fakePub{}})
+		st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+		if a := st.OpenFromHook(context.Background(), "s_aaaaaaaaaa", other); len(a.Options) != 0 {
+			t.Fatalf("the hook took the screen's prompt: %+v", a)
+		}
+		if got := st.Pending(""); len(got) != 1 || *got[0].Subject != screenSubject {
+			t.Fatalf("pending = %+v", got)
+		}
 	})
 	t.Run("hook without a subject takes the screen's", func(t *testing.T) {
 		st := New(Config{Tmux: &fakeTmux{screen: bashPrompt}, Pub: &fakePub{}})

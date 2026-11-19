@@ -22,12 +22,13 @@ func (s *Store) CloseAnswered(ctx context.Context, sessionID string) {
 		s.mu.Unlock()
 		return
 	}
-	id, fingerprint := cur.a.RequestID, cur.fingerprint
+	id, fingerprint, hook, agent := cur.a.RequestID, cur.fingerprint, cur.hookSubject, cur.a.Agent
 	s.mu.Unlock()
 	if screen, err := s.cfg.Tmux.CapturePane(ctx, target(sessionID)); err == nil {
 		// An approval a hook opened has no fingerprint until its prompt
-		// is read: any prompt showing may be its own.
-		if p, ok := detect.Detect(screen); ok && (fingerprint == "" || fingerprint == p.Fingerprint) {
+		// is read: a prompt showing may be its own if it asks about the
+		// same thing.
+		if p, ok := detect.Detect(screen); ok && (fingerprint == p.Fingerprint || (fingerprint == "" && hookOwns(hook, agent, p.Subject))) {
 			return
 		}
 	}

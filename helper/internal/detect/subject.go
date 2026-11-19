@@ -2,6 +2,7 @@ package detect
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -216,4 +217,34 @@ func scan(lines []string, bottomUp bool) *wire.Subject {
 		}
 	}
 	return nil
+}
+
+// SameSubject reports whether a prompt read off the screen asks about what
+// a permission hook asked about, comparing the words of each (a redraw at
+// another width moves the line breaks, never the words). The screen may
+// add the folder a command runs in ("<command> in <folder>", Cursor) and
+// may show a file relative to the session's folder. Anything cut short on
+// screen ("…", "...") is not taken as the same: when unsure, it is not.
+func SameSubject(hook, screen *wire.Subject) bool {
+	if hook == nil || screen == nil {
+		return false
+	}
+	h, s := strings.Fields(hook.Text), strings.Fields(screen.Text)
+	if len(h) == 0 || len(s) == 0 {
+		return false
+	}
+	for _, w := range s {
+		if strings.HasSuffix(w, "…") || strings.HasSuffix(w, "...") {
+			return false
+		}
+	}
+	switch {
+	case slices.Equal(h, s):
+		return true
+	case len(s) == len(h)+2 && s[len(h)] == "in" && slices.Equal(h, s[:len(h)]):
+		return true
+	case hook.Kind == wire.SubjectFile && screen.Kind == wire.SubjectFile && len(h) == 1 && len(s) == 1:
+		return strings.HasSuffix(h[0], "/"+strings.TrimPrefix(s[0], "./"))
+	}
+	return false
 }
