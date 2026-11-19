@@ -267,24 +267,12 @@ func TestGooseExitAndRelaunch(t *testing.T) {
 	}
 }
 
-// TestKnownFault_Goose_NewConversationNotFollowed documents a limit the
-// adapter names itself (goose.yaml, Attribution): a session Goose starts
-// inside its own UI (a new row in sessions.db) is not followed once the chat
-// has content; the chat stays on the old one. Correct: the chat starts over
-// on the new conversation. The cause is goose/session.go:157-159, where a
-// session that has shown messages is kept. This passes while that holds.
-func TestKnownFault_Goose_NewConversationNotFollowed(t *testing.T) {
+// Goose writes a new row of sessions.db for a session it starts in its own UI, and touches an earlier row on a resume: with no other Goose in the folder the session follows each
+// (session.go movedTo), keeping the earlier conversation's items.
+// Keeping both conversations is this agent's current convention; the
+// question whether every agent should start over instead is open.
+func TestGooseFollowsNewConversationAndResume(t *testing.T) {
 	needSQLite(t)
-	e := support.NewEnv(t, time.Hour)
-	l, r := gooseAgent.start(t, e, sessiongen.Script{Seed: 27})
-	gooseAgent.add(t, l, sessiongen.Turn{Say: 30, Tools: 1, Output: 50})
-	before := gooseAgent.seen(t, r, "first", l, false)
-	gooseAgent.add(t, l, sessiongen.Turn{New: true, Say: 30, Tools: 1, Output: 50})
-	time.Sleep(3 * time.Second)
-	if enginetest.Has(l.Truth.Last)(r.Read()) {
-		t.Fatal("the new conversation is shown: the fault is fixed; cover goose/lifecycle/new_conversation")
-	}
-	if r.Read().Epoch != before.Epoch {
-		t.Errorf("the epoch changed")
-	}
+	coverage.Covers(t, "generated", "goose/lifecycle/new_conversation")
+	followsConversations(t, gooseAgent, 27)
 }

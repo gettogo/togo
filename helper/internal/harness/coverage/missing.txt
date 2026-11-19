@@ -26,7 +26,6 @@ copilot/capability/changes
 copilot/capability/chat.anchors
 copilot/capability/ports
 crush/capability/chat.anchors
-crush/lifecycle/new_conversation
 cursor/capability/chat.anchors
 cursor/lifecycle/fork
 droid/capability/agents
@@ -36,7 +35,6 @@ droid/capability/ports
 goose/capability/changes
 goose/capability/chat.anchors
 goose/capability/ports
-goose/lifecycle/new_conversation
 kilo/capability/chat.anchors
 kilo/capability/mcp
 kilo/capability/ports
