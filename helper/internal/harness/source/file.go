@@ -407,11 +407,11 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	now := time.Now()
 	if replaying && len(recs) > 0 {
-		emit(harness.Record{Source: t.name, At: now, Replay: recs})
+		emit(harness.Record{Source: t.name, At: now, Replay: recs, File: t.path})
 		return nil
 	}
 	for _, r := range recs {
-		emit(harness.Record{Source: t.name, At: now, Data: r})
+		emit(harness.Record{Source: t.name, At: now, Data: r, File: t.path})
 	}
 	return nil
 }

@@ -33,7 +33,7 @@ func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Rec
 		if ctx.Err() != nil {
 			return
 		}
-		one := harness.Record{Source: rec.Source, At: rec.At, Data: s.e.red.JSON(rec.Replay[i])}
+		one := harness.Record{Source: rec.Source, At: rec.At, Data: s.e.red.JSON(rec.Replay[i]), File: rec.File}
 		s.last[rec.Source] = one.Data
 		items, ops := safeMap(m, one, s.e.cfg.Logf)
 		if !moved && s.movedLocked() {
