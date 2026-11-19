@@ -84,6 +84,10 @@ type Store struct {
 	// what it saw (an answer typing keys, the watcher closing a prompt),
 	// so a capture, its check and the keys sent are one step per pane.
 	paneLocks map[string]*sync.Mutex
+	// pub is Config.Pub without the write that follows each change;
+	// saver writes the open approvals off the lock (persist.go).
+	pub   wire.Publisher
+	saver *saver
 }
 
 // New returns an empty Store.
@@ -96,7 +100,9 @@ func New(cfg Config) *Store {
 		cfg.NewID = wire.NewRequestID
 	}
 	s := &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
+	s.pub = cfg.Pub
 	if cfg.Path != "" {
+		s.saver = newSaver(s.logf)
 		s.cfg.Pub = persistPub{inner: cfg.Pub, s: s}
 		s.restore()
 	}
@@ -157,7 +163,7 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		if cur.restored && cur.a.Snippet == "" && p.Snippet != "" {
 			// Read again from the screen: the snippet is not kept on disk.
 			cur.a.Snippet = p.Snippet
-			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
 		}
 		s.mu.Unlock()
 		return
@@ -172,7 +178,7 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		if cur.a.Subject == nil {
 			withSubject(&cur.a, p.Subject)
 		}
-		s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+		s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
 		s.mu.Unlock()
 		return
 	case cur != nil:
@@ -279,7 +285,7 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 			if a.Subject != nil {
 				cur.a.Subject = a.Subject
 			}
-			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
 			s.mu.Unlock()
 			return cur.a
 		}
@@ -288,7 +294,7 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 			// what it knows about the request.
 			cur.a.Source, cur.a.Agent, cur.a.Title, cur.a.Detail = a.Source, a.Agent, a.Title, a.Detail
 			cur.a.Subject = a.Subject
-			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
 			s.mu.Unlock()
 			return cur.a
 		}

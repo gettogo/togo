@@ -25,10 +25,11 @@ func keptPath(t *testing.T) string {
 func TestApprovalSurvivesRestart(t *testing.T) {
 	path := keptPath(t)
 	f := &fakeTmux{screen: menu}
-	st := New(Config{Tmux: f, Pub: &fakePub{}, Path: path})
+	st := kept(t, Config{Tmux: f, Pub: &fakePub{}, Path: path})
 	pr, _ := detect.Detect(menu)
 	st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
 	before := st.Pending("")[0]
+	st.Flush()
 	if before.Snippet == "" {
 		t.Fatal("no snippet to leave out")
 	}
@@ -44,7 +45,7 @@ func TestApprovalSurvivesRestart(t *testing.T) {
 	}
 
 	pub := &fakePub{}
-	st2 := New(Config{Tmux: f, Pub: pub, Path: path})
+	st2 := kept(t, Config{Tmux: f, Pub: pub, Path: path})
 	after := st2.Pending("")
 	if len(after) != 1 {
 		t.Fatalf("%d open after the restart", len(after))
@@ -54,7 +55,7 @@ func TestApprovalSurvivesRestart(t *testing.T) {
 	if !reflect.DeepEqual(after[0], want) {
 		t.Fatalf("after the restart:\n%+v\nbefore:\n%+v", after[0], want)
 	}
-	if len(pub.events) == 0 || pub.events[0].kind != wire.EventApprovalOpen {
+	if evs := pub.snapshot(); len(evs) == 0 || evs[0].kind != wire.EventApprovalOpen {
 		t.Fatalf("the restored approval was not announced: %+v", pub.events)
 	}
 	// The watcher reads the same prompt again: no new request, and the
@@ -69,6 +70,7 @@ func TestApprovalSurvivesRestart(t *testing.T) {
 	if len(f.sent) == 0 {
 		t.Fatal("nothing was typed")
 	}
+	st2.Flush()
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("the answered approval is still kept: %v", err)
 	}
@@ -79,18 +81,20 @@ func TestApprovalSurvivesRestart(t *testing.T) {
 func TestRestoredApprovalClosesWhenItsPromptIsGone(t *testing.T) {
 	path := keptPath(t)
 	f := &fakeTmux{screen: menu}
-	st := New(Config{Tmux: f, Pub: &fakePub{}, Path: path})
+	st := kept(t, Config{Tmux: f, Pub: &fakePub{}, Path: path})
 	pr, _ := detect.Detect(menu)
 	st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+	st.Flush()
 	f.mu.Lock()
 	f.screen = "$ "
 	f.mu.Unlock()
 	pub := &fakePub{}
-	st2 := New(Config{Tmux: f, Pub: pub, Path: path})
+	st2 := kept(t, Config{Tmux: f, Pub: pub, Path: path})
 	eventually(t, "the restored approval closes", func() bool { return len(pub.closed()) == 1 })
 	if got := pub.closed(); got[0] != wire.ResolutionDesk || len(st2.Pending("")) != 0 {
 		t.Fatalf("closed %v, open %d", got, len(st2.Pending("")))
 	}
+	st2.Flush()
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("a closed approval is still kept: %v", err)
 	}
@@ -104,27 +108,32 @@ func TestKeptApprovalsBounds(t *testing.T) {
 	var mu sync.Mutex
 	clock := func() time.Time { mu.Lock(); defer mu.Unlock(); return now }
 	f := &fakeTmux{screen: menu}
-	st := New(Config{Tmux: f, Pub: &fakePub{}, Path: path, Clock: clock, TTL: time.Hour})
+	st := kept(t, Config{Tmux: f, Pub: &fakePub{}, Path: path, Clock: clock, TTL: time.Hour})
 	st.OpenAsk(context.Background(), wire.AskParams{Title: "Ship?", Options: []string{"Yes", "No"}})
+	st.Flush()
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatalf("an ask was kept: %v", err)
 	}
 	pr, _ := detect.Detect(menu)
 	st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+	st.Flush()
 	mu.Lock()
 	now = now.Add(2 * time.Hour)
 	mu.Unlock()
-	if got := New(Config{Tmux: f, Pub: &fakePub{}, Path: path, Clock: clock}).Pending(""); len(got) != 0 {
+	expired := kept(t, Config{Tmux: f, Pub: &fakePub{}, Path: path, Clock: clock})
+	expired.Flush()
+	if got := expired.Pending(""); len(got) != 0 {
 		t.Fatalf("an expired approval came back: %+v", got)
 	}
 
 	for name, body := range map[string]string{"newer": `{"v":2,"approvals":[]}`, "garbage": `{"v":`, "huge": `{"v":1,"approvals":[` + strings.Repeat(" ", persistBytes) + `]}`} {
 		_ = os.WriteFile(path, []byte(body), 0o600)
-		st := New(Config{Tmux: f, Pub: &fakePub{}, Path: path})
+		st := kept(t, Config{Tmux: f, Pub: &fakePub{}, Path: path})
 		if len(st.Pending("")) != 0 {
 			t.Fatalf("%s: approvals read", name)
 		}
 		st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
+		st.Flush()
 		var in persisted
 		b, _ := os.ReadFile(path)
 		if json.Unmarshal(b, &in) != nil || in.V != persistVersion || len(in.Approvals) != 1 {
@@ -138,7 +147,7 @@ func TestKeptApprovalsBounds(t *testing.T) {
 func TestKeptApprovalsUnderConcurrency(t *testing.T) {
 	path := keptPath(t)
 	f := &fakeTmux{screen: menu}
-	st := New(Config{Tmux: f, Pub: &fakePub{}, Path: path})
+	st := kept(t, Config{Tmux: f, Pub: &fakePub{}, Path: path})
 	pr, _ := detect.Detect(menu)
 	var wg sync.WaitGroup
 	for i := range 16 {
@@ -157,7 +166,10 @@ func TestKeptApprovalsUnderConcurrency(t *testing.T) {
 	}
 	wg.Wait()
 	open := st.Pending("")
-	again := New(Config{Tmux: f, Pub: &fakePub{}, Path: path}).Pending("")
+	st.Flush()
+	reloaded := kept(t, Config{Tmux: f, Pub: &fakePub{}, Path: path})
+	again := reloaded.Pending("")
+	t.Cleanup(reloaded.Flush)
 	if len(again) != len(open) || len(open) == 0 {
 		t.Fatalf("%d open, %d kept", len(open), len(again))
 	}
