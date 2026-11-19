@@ -20,6 +20,7 @@ type Wire struct {
 
 	mu       sync.Mutex
 	state    map[string]string
+	file     string // the log the records come from
 	permMode string
 	planMode bool
 	turn     *turn
@@ -121,6 +122,12 @@ func (w *Wire) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if rec.File != "" {
+		if w.file != "" && rec.File != w.file {
+			harness.Moved(w.state) // a /new or a resume: another log
+		}
+		w.file = rec.File
+	}
 	items, ops := w.mapRecord(r, at)
 	for _, op := range ops {
 		if op.Row != nil || len(op.Rows) > 0 {

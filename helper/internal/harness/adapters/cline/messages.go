@@ -237,6 +237,9 @@ func (m *messages) mayMove(id string) bool {
 
 // moveTo follows session id from its start.
 func (m *messages) moveTo(id string) {
+	if m.session != "" && m.session != id {
+		harness.Moved(m.state)
+	}
 	m.lock(id)
 	m.pend = ""
 	m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
@@ -259,6 +262,9 @@ func (m *messages) Relaunched(argv []string, _ time.Time) []harness.Op {
 	defer m.mu.Unlock()
 	if id == "" || id == m.session {
 		return nil
+	}
+	if m.session != "" {
+		harness.Moved(m.state)
 	}
 	m.lock(id)
 	m.updated, m.lastMsgs, m.lastTurn, m.lastOpen, m.lastAsking = "", nil, "", false, false

@@ -170,6 +170,9 @@ func (m *db) choose() {
 		return
 	}
 	if best.ID != m.state["harness_session"] {
+		if m.state["harness_session"] != "" {
+			harness.Moved(m.state)
+		}
 		m.b.Reset()
 		m.done = map[string]bool{}
 		m.asks = map[string]asked{}
@@ -263,6 +266,9 @@ func (m *db) Relaunched(argv []string, _ time.Time) []harness.Op {
 		} else if m.state["harness_session"] != id {
 			// The feed lists only rows touched since this Togo session
 			// began, which a resumed conversation may not be.
+			if m.state["harness_session"] != "" {
+				harness.Moved(m.state)
+			}
 			m.b.Reset()
 			m.done = map[string]bool{}
 			m.asks = map[string]asked{}

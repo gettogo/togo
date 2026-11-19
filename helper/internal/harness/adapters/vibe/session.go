@@ -475,6 +475,7 @@ func (s *session) leave(at time.Time) []harness.Item {
 	s.tools, s.failed = map[string]harness.Item{}, map[string]bool{}
 	s.asks, s.gates = map[string]harness.Item{}, map[string]string{}
 	s.loaded = false
+	harness.Moved(s.state)
 	return items
 }
 
