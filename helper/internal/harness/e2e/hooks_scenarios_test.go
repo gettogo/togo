@@ -203,9 +203,13 @@ func restartPoints(a hookAgent, calls []sessiongen.HookCall) []cut {
 				if open {
 					mid = append(mid, i+1)
 				}
+			case "ask":
+				if open {
+					wait = append(wait, i+1)
+				}
 			}
 		}
-		if c.Event == a.waitEvent && open {
+		if a.waitEvent != "" && c.Event == a.waitEvent && open {
 			wait = append(wait, i+1)
 		}
 		if c.End != "" {
@@ -312,7 +316,7 @@ func exitAndRelaunch(t *testing.T, a hookAgent) {
 	gone := r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return !st.Mission.Summary.Working && st.Mission.Summary.Agents == 0 })
 	ex := *l
 	ex.Truth.Exited = true
-	enginetest.Fail(t, "after the exit", enginetest.Check(gone, enginetest.Facts{Truth: ex.Truth, Over: true}))
+	checkHook(t, "after the exit", a, gone, &ex, true)
 	notice := false
 	for _, it := range gone.Items {
 		notice = notice || it.Notice != nil
@@ -638,8 +642,11 @@ func questions(t *testing.T, a hookAgent, plan bool) {
 			t.Errorf("the answered question holds %v, want [Green]", got)
 		}
 	}
-	if got := qs[1].Question.Answered[qs[1].Question.Questions[0].ID]; len(got) != 0 {
-		t.Errorf("the cancelled question holds %v, want none", got)
+	// A cancelled question holds no answer; a refused plan holds the
+	// refusal the agent took.
+	got := qs[1].Question.Answered[qs[1].Question.Questions[0].ID]
+	if plan && len(got) != 1 || !plan && len(got) != 0 {
+		t.Errorf("the cancelled question holds %v", got)
 	}
 	if st.Mission.Summary.NeedsYou != 0 {
 		t.Errorf("%d things need you after every question closed", st.Mission.Summary.NeedsYou)

@@ -33,6 +33,9 @@ type hookAgent struct {
 	// slowStop is true when the mapper waits at the end of a turn that
 	// has no final message.
 	slowStop bool
+	// long is the number of turns of the long session, enough to pass the
+	// log's 2000 items.
+	long int
 }
 
 type kind struct {

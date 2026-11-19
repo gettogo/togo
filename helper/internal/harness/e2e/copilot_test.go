@@ -39,13 +39,13 @@ var copilotAgent = hookAgent{
 		return out
 	},
 	replies: true, canAsk: true, canApprove: true, canAgents: true,
-	waitEvent: "permissionRequest", startEvent: "sessionStart", slowStop: true,
+	waitEvent: "permissionRequest", startEvent: "sessionStart", slowStop: true, long: 340,
 }
 
 // A session of hundreds of turns, as long as the chat can keep.
 func TestCopilotLongSession(t *testing.T) {
 	coverage.Covers(t, "generated", "copilot/scale/long_session", "copilot/capability/chat", "copilot/capability/agents")
-	n := 340
+	n := copilotAgent.long
 	if longRun() {
 		n = 2000
 	}
