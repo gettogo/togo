@@ -17,8 +17,9 @@ import (
 // that varies between runs, not a field to normalise: the tape is a
 // faithful record of one run.
 var unordered = map[string]string{
-	"subagents/omp":    "omp's subagent files are found on a poll: a history reset and the agent rows arrive in either order",
-	"subagents/claude": "the engine reads Claude's main file and its subagents' files on separate feeds: a history reset and the agent rows arrive in either order",
+	"question-answered/crush": "Crush's database is polled: the answered question and the reply it follows arrive as two notifications in either order",
+	"subagents/omp":           "omp's subagent files are found on a poll: a history reset and the agent rows arrive in either order",
+	"subagents/claude":        "the engine reads Claude's main file and its subagents' files on separate feeds: a history reset and the agent rows arrive in either order",
 	// Copilot's replies come from a log the engine finds on a poll, after
 	// the hook calls: whether the replies are in the chat, and so every
 	// Seq after them, depends on when the poll ran.
@@ -61,7 +62,7 @@ func TestSameScenarioSameTape(t *testing.T) {
 				}
 				a, b := tapes[0].Bytes(), tapes[1].Bytes()
 				if !bytes.Equal(a, b) {
-					t.Errorf("two exports differ (%d and %d bytes): first difference at line %d", len(a), len(b), firstDiff(tapes[0].Lines, tapes[1].Lines))
+					t.Errorf("two exports differ (%d and %d bytes): first difference at line %d:\n%s", len(a), len(b), firstDiff(tapes[0].Lines, tapes[1].Lines), around(tapes[0].Lines, tapes[1].Lines))
 				}
 				if x, y := tapes[0].Manifest, tapes[1].Manifest; x.SessionID != y.SessionID || x.ScenarioID != y.ScenarioID {
 					t.Errorf("manifests differ: %+v %+v", x, y)
@@ -87,4 +88,19 @@ func firstDiff(a, b [][]byte) int {
 		}
 	}
 	return min(len(a), len(b)) + 1
+}
+
+// around shows the bytes where the first differing lines part.
+func around(a, b [][]byte) string {
+	i := firstDiff(a, b) - 1
+	if i >= len(a) || i >= len(b) {
+		return "(one tape is longer)"
+	}
+	x, y := a[i], b[i]
+	j := 0
+	for j < len(x) && j < len(y) && x[j] == y[j] {
+		j++
+	}
+	cut := func(s []byte) string { return string(s[max(0, j-100):min(len(s), j+100)]) }
+	return cut(x) + "\n" + cut(y)
 }
