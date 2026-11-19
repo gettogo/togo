@@ -351,10 +351,14 @@ func (t *tail) poll(emit func(harness.Record)) error {
 		// MaxRecords records of those. The records up to the one that
 		// names the session (head.go) are always kept.
 		if start := st.Size() - MaxFileRead; start > t.offset {
+			skip := true
 			if !t.lines && t.offset == 0 {
-				header = headRecords(fh, t.header)
+				var end int64
+				if header, end = headRecords(fh, t.header); start < end {
+					start, skip = end, false // inside the header: after it, once
+				}
 			}
-			t.offset, t.skip = start, true
+			t.offset, t.skip = start, skip
 		}
 	}
 	for t.offset < st.Size() {
