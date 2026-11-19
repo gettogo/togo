@@ -3,7 +3,6 @@ package omp
 import (
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -15,11 +14,12 @@ import (
 // named a task by "id" and the file after it). The engine reads the main
 // conversation and that folder as two feeds, in no fixed order, and the
 // files of one look in no fixed order either. So a file is matched to its
-// task by its name, never by the order files arrive in, and a file read
-// before the call that starts its task waits for that call.
+// task by its name, never by the order files arrive in. A file read before
+// the call that starts its task gets its row at once, under the id the
+// call gives it, and the call adopts that row (early.go): nothing waits.
 
 // agentFiles is what the mapper knows of the subagent files: which task
-// each one is, and the ones still waiting for their task call. Its life is
+// each one is, and the rows made from files no call named yet. Its life is
 // the mapper's: the engine builds a new mapper when the conversation
 // changes (/new, /resume), the session is removed or the helper restarts,
 // and every file is then read again.
@@ -31,35 +31,21 @@ type agentFiles struct {
 	// agent is the agent item id (or dropped) a file's header was given.
 	// Set by the header; kept like headers.
 	agent map[string]string
-	// waiting holds the records of a file read before its task call. It
-	// is cleared when the call is read, when the main conversation is read
-	// past the file's start (the call is not in what was read), after
-	// agentWait, when heldMax is reached, or when the file starts over.
-	waiting map[string]*waitingFile
-	held    int // bytes held in waiting
+	// headerAt is the header time of the file an agent row was given. Set
+	// with agent; a later header of the same file replaces it.
+	headerAt map[string]time.Time
+	// early holds the rows made from a file before any call named its
+	// task (early.go). Cleared when the call adopts the row; an old file's
+	// kept items are let go when the conversation is read past it.
+	early map[string]*earlyFile
 	// mainAt is the newest time of a main conversation entry read. Reset
 	// when the main conversation is read again from its start.
 	mainAt time.Time
 }
 
-type waitingFile struct {
-	header time.Time // the header's own time
-	since  time.Time // when the header was read
-	recs   []harness.Record
-	size   int
-}
-
-// agentWait is how long a subagent file read before its task call waits
-// for it. The two feeds start together, so the call comes within a few
-// polls when it is in the part of the conversation read at all.
-const agentWait = 10 * time.Second
-
-// heldMax bounds the bytes held for waiting files. Past it the files are
-// placed as if their call will not come.
-const heldMax = 8 << 20
-
 func newAgentFiles() agentFiles {
-	return agentFiles{names: map[string][]string{}, agent: map[string]string{}, waiting: map[string]*waitingFile{}}
+	return agentFiles{names: map[string][]string{}, agent: map[string]string{},
+		headerAt: map[string]time.Time{}, early: map[string]*earlyFile{}}
 }
 
 // named records a task call's agent for a task name.
@@ -81,99 +67,37 @@ func taskName(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
 }
 
-// taskFor is the agent row a file of task name belongs to: the earliest
-// call's row still waiting for its file, else the latest call's row (a
-// file read again, or read after its task ended).
-func (f *agentFiles) taskFor(name string, pending []string) string {
-	ids := f.names[name]
-	if len(ids) == 0 {
-		return ""
+// taskFor is the agent row a file of task name, whose header is dated at,
+// belongs to: the row of the latest call of that name started at or
+// before the file (a name used again has one file, holding the latest
+// run); with none so dated, the earliest still waiting for a file, else the
+// latest call's.
+func (s *session) taskFor(name string, at time.Time) string {
+	ids := s.byFile.names[name]
+	best := ""
+	for _, id := range ids {
+		if a := s.agents[id]; a != nil && !a.Agent.Started.After(at) && (best == "" || !a.Agent.Started.Before(s.agents[best].Agent.Started)) {
+			best = id
+		}
 	}
-	for _, p := range pending {
+	if best != "" {
+		return best
+	}
+	for _, p := range s.pending {
 		if slices.Contains(ids, p) {
 			return p
 		}
 	}
+	if len(ids) == 0 {
+		return ""
+	}
 	return ids[len(ids)-1]
-}
-
-// hold keeps a subagent file's records while it waits for its task call:
-// its header when no task of its name is known yet, and what follows.
-func (s *session) hold(rec harness.Record, e map[string]any) bool {
-	f := &s.byFile
-	if rec.Source == feedSession || rec.File == "" {
-		return false
-	}
-	header := str(e, "type") == "session"
-	if w := f.waiting[rec.File]; w != nil {
-		if !header {
-			f.add(w, rec)
-			return true
-		}
-		// The file was written again from its start: judge the new header.
-		f.held -= w.size
-		delete(f.waiting, rec.File)
-	}
-	if !header || e["parentSession"] == nil || e["parentSession"] == "" {
-		return false
-	}
-	if _, ok := s.headers[str(e, "id")]; ok || f.taskFor(taskName(rec.File), s.pending) != "" {
-		return false
-	}
-	w := &waitingFile{header: stamp(e["timestamp"], rec.At), since: rec.At}
-	f.waiting[rec.File] = w
-	f.add(w, rec)
-	return true
-}
-
-func (f *agentFiles) add(w *waitingFile, rec harness.Record) {
-	w.recs = append(w.recs, rec)
-	w.size += len(rec.Data)
-	f.held += len(rec.Data)
-}
-
-// settleFiles places the waiting files whose wait is over: bound to their
-// task when its call was read, else as files no call names.
-func (s *session) settleFiles(now time.Time) ([]harness.Item, []harness.Op) {
-	f := &s.byFile
-	if len(f.waiting) == 0 {
-		return nil, nil
-	}
-	var ready []string
-	for path, w := range f.waiting {
-		if f.taskFor(taskName(path), s.pending) != "" || f.held > heldMax ||
-			(!f.mainAt.IsZero() && f.mainAt.After(w.header)) || now.Sub(w.since) > agentWait {
-			ready = append(ready, path)
-		}
-	}
-	sort.Slice(ready, func(i, j int) bool {
-		a, b := f.waiting[ready[i]], f.waiting[ready[j]]
-		if !a.header.Equal(b.header) {
-			return a.header.Before(b.header)
-		}
-		return ready[i] < ready[j]
-	})
-	var items []harness.Item
-	var ops []harness.Op
-	readAt, cur := s.readAt, s.cur
-	for _, path := range ready {
-		w := f.waiting[path]
-		delete(f.waiting, path)
-		f.held -= w.size
-		for _, r := range w.recs {
-			if e := decode(r.Data); e != nil {
-				it, op := s.mapEntry(r, e)
-				items, ops = append(items, it...), append(ops, op...)
-			}
-		}
-	}
-	s.readAt, s.cur = readAt, cur
-	return items, ops
 }
 
 // subagentHeader starts a subagent's file: the row of the task it is named
 // after; else, for a file no task call names, the first task still waiting
-// for a file (omp versions that named files otherwise) or a row of its own.
+// for a file (omp versions that named files otherwise), or a row of its own
+// that the call adopts when it is read (early.go).
 func (s *session) subagentHeader(e map[string]any, at time.Time, file string) ([]harness.Item, []harness.Op) {
 	id := str(e, "id")
 	if a, ok := s.headers[id]; ok {
@@ -186,32 +110,39 @@ func (s *session) subagentHeader(e map[string]any, at time.Time, file string) ([
 		return s.bound(id, dropped, file)
 	}
 	if file != "" {
-		if aid := s.byFile.taskFor(taskName(file), s.pending); aid != "" {
-			s.dropPending([]string{aid})
+		if aid := s.taskFor(taskName(file), at); aid != "" {
+			// Earlier runs of the name wrote the same file: theirs is gone.
+			var done []string
+			for _, other := range s.byFile.names[taskName(file)] {
+				if !s.agents[other].Agent.Started.After(s.agents[aid].Agent.Started) {
+					done = append(done, other)
+				}
+			}
+			s.dropPending(done)
+			s.byFile.headerAt[aid] = at
 			return s.bound(id, aid, file)
 		}
 	}
-	if created, err := time.Parse(time.RFC3339, s.env.Vars["created"]); err == nil && len(s.pending) == 0 && at.Before(created.Add(-time.Minute)) {
-		// A subagent of an earlier session, read because its file was
-		// the newest: not part of this conversation.
-		return s.bound(id, dropped, file)
-	}
-	if len(s.pending) == 0 && s.readAt.Sub(at) > agentFresh {
-		// No task call is waiting for this file and it was written long
-		// before it is read: after a restart the conversation is read from
-		// its recent part and the subagent files whole, so this is one of
-		// an earlier turn. It is not a step of the turn that runs now.
-		return s.bound(id, dropped, file)
-	}
-	var agentID string
 	if len(s.pending) > 0 {
+		var agentID string
 		agentID, s.pending = s.pending[0], s.pending[1:]
-	} else {
-		agentID = "agent-" + id
-		it := harness.Item{ID: agentID, Kind: harness.KindAgent, At: at, TurnID: s.turnID(),
-			Agent: &harness.AgentBody{AgentID: id, Name: firstNonEmpty(str(e, "title"), "Subagent"), State: harness.StateRunning, Started: at}}
-		s.agents[agentID] = &it
+		return s.bound(id, agentID, file)
 	}
+	created, err := time.Parse(time.RFC3339, s.env.Vars["created"])
+	// A file of an earlier session (read because its file was the newest),
+	// or one written long before it is read (after a restart, an earlier
+	// turn's): not a step of the turn that runs now.
+	old := err == nil && at.Before(created.Add(-time.Minute)) || s.readAt.Sub(at) > agentFresh
+	if file != "" {
+		return s.earlyRow(id, e, at, file, old)
+	}
+	if old {
+		return s.bound(id, dropped, file)
+	}
+	agentID := "agent-" + id
+	it := harness.Item{ID: agentID, Kind: harness.KindAgent, At: at, TurnID: s.turnID(),
+		Agent: &harness.AgentBody{AgentID: id, Name: firstNonEmpty(str(e, "title"), "Subagent"), State: harness.StateRunning, Started: at}}
+	s.agents[agentID] = &it
 	return s.bound(id, agentID, file)
 }
 

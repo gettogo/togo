@@ -117,12 +117,11 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.hold(rec, e) {
-		return s.settleFiles(rec.At)
-	}
 	items, ops := s.mapEntry(rec, e)
-	more, mops := s.settleFiles(rec.At)
-	return append(items, more...), append(ops, mops...)
+	if rec.Source == feedSession {
+		s.byFile.passed()
+	}
+	return s.byFile.screen(items, ops)
 }
 
 // mapEntry maps one decoded entry. The caller holds the lock.
