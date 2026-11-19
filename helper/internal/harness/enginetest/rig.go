@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -194,11 +195,15 @@ func (r *Rig) start() {
 	if r.api != nil && r.api.v2 == nil {
 		listeners = r.apiPorts
 	}
+	// Once this engine is stopped it is a helper that exited: nothing it
+	// still has running (a hub event's goroutine, a timer) may serve the
+	// session again, as a process that is gone cannot.
+	gone := &atomic.Bool{}
 	eng := engine.New(engine.Config{
 		Redactor: red,
 		PanePIDs: panePIDs,
 		Ports:    listeners,
-		Sessions: sessions{r}, Typist: r.Term, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
+		Sessions: sessions{r: r, gone: gone}, Typist: r.Term, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
 		Approvals:    approvals{r},
 		Screen:       func(context.Context, string) (string, error) { return r.Term.Text(), nil },
 		StyledScreen: func(context.Context, string) (string, error) { return r.Term.Styled(), nil },
@@ -246,6 +251,7 @@ func (r *Rig) start() {
 		once.Do(func() {
 			// As a helper that exits: what it holds in memory goes, what
 			// it keeps under run/ for the next start stays.
+			gone.Store(true)
 			eng.Unload(r.ID)
 			r.engineStopped([]string{r.Opt.Home, r.Opt.Cwd, r.TogoHome, r.bin})
 		})
@@ -315,12 +321,18 @@ func (r *Rig) Restart() {
 // one. Files written between the two are found by the new engine's
 // restore, as after an update that took a while.
 func (r *Rig) Stop() {
-	// As the daemon does on its way out: the open approvals reach disk.
-	r.Approvals.Flush()
+	// As the daemon does on its way out (daemon/exit.go): the hooks it
+	// accepted are read and stored, it stops, and the open approvals
+	// reach disk.
+	if !r.DrainHooks(15 * time.Second) {
+		r.T.Errorf("the hook readers did not finish before the stop")
+	}
 	r.mu.Lock()
 	stop := r.stopEngine
+	store := r.Approvals
 	r.mu.Unlock()
 	stop()
+	store.Flush()
 }
 
 // Start builds a new engine over the same TOGO_HOME and files.
@@ -331,9 +343,17 @@ func (r *Rig) Deliver(event string, payload []byte) {
 	source.Hooks.Deliver(r.ID, source.Payload{Kind: source.BusHook, Event: event, Data: payload})
 }
 
-type sessions struct{ r *Rig }
+// sessions resolves the rig's session for one engine; gone is set when
+// that engine stops.
+type sessions struct {
+	r    *Rig
+	gone *atomic.Bool
+}
 
 func (s sessions) Resolve(_ context.Context, id string) (session.Session, error) {
+	if s.gone != nil && s.gone.Load() {
+		return session.Session{}, session.ErrNotFound
+	}
 	s.r.mu.Lock()
 	removed := s.r.removed
 	s.r.mu.Unlock()

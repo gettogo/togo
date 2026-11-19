@@ -13,7 +13,7 @@ import (
 // look.
 func (r *Rig) Hub(status string) {
 	r.SetStatus(status)
-	info, err := sessions{r}.Resolve(context.Background(), r.ID)
+	info, err := sessions{r: r}.Resolve(context.Background(), r.ID)
 	if err != nil {
 		r.T.Fatalf("hub: %v", err)
 	}

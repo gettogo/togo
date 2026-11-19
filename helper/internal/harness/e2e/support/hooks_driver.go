@@ -73,8 +73,7 @@ func hookStep(t testing.TB, r *enginetest.Rig, d hookstyle.Dialect, agent string
 	if len(c.Writes) == 0 {
 		r.DeliverAt(f.Hook, f.Payload, c.At)
 		// Only the events that open or close a session matter to the next
-		// call's lines: a tool's result changes no log offset, and asking
-		// whether the readers are idle costs a dump of every goroutine.
+		// call's lines: a tool's result changes no log offset.
 		if strings.Contains(strings.ToLower(c.Event), "session") {
 			*pending = true
 		}

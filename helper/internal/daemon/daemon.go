@@ -33,6 +33,12 @@ type Config struct {
 	Daemon *Daemon
 	// Logf receives diagnostics. Nil drops them.
 	Logf func(format string, args ...any)
+	// Finish, when set, runs once Run has stopped serving (the socket is
+	// closed and every connection has ended) and before it lets go of the
+	// lock and the pid file: what the daemon still writes on its way out
+	// (queued hooks, the open approvals) is written before another daemon
+	// can start. It must be bounded (exit.go).
+	Finish func()
 }
 
 // SocketPath returns the daemon socket for a TOGO_HOME.
@@ -180,6 +186,9 @@ func Run(ctx context.Context, cfg Config) error {
 		})
 	}
 	wg.Wait()
+	if cfg.Finish != nil {
+		cfg.Finish()
+	}
 	logf("daemon: stopped")
 	mu.Lock()
 	defer mu.Unlock()

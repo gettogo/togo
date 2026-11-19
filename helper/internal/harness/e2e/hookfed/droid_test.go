@@ -42,6 +42,7 @@ func TestDroidLongSession(t *testing.T) {
 }
 
 func TestDroidRestartsAtSeededPoints(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/lifecycle/helper_restart")
 	if kinds := restartScenario(t, droidAgent); len(kinds) != 5 {
 		t.Fatalf("restart points %v", kinds)

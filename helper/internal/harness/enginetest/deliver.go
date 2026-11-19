@@ -2,7 +2,6 @@ package enginetest
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness/source"
@@ -51,22 +50,12 @@ func (r *Rig) WaitCursor(after int64, limit time.Duration) bool {
 // loads is drawn a little later.
 const hookGrace = 500 * time.Millisecond
 
-// hooksIdle reports that no goroutine reading hook payloads is working on
-// one: each is waiting for the next. A payload sent to a reader that waits
-// makes it runnable at once, so after Deliver returns an idle reader has
-// finished the payload.
-func hooksIdle() bool {
-	for _, g := range stacks() {
-		if !strings.Contains(g, "harness/source.Hook.Watch") {
-			continue
-		}
-		state := g[strings.Index(g, "[")+1:]
-		state = state[:strings.IndexAny(state, ",]")]
-		if state != "select" && state != "chan receive" {
-			return false
-		}
-	}
-	return true
+// hooksIdle reports that the session's hook readers have finished with
+// every payload delivered to them: each is mapped, stored and published
+// (source.Bus.Drain). Other sessions' readers do not count, so scenarios
+// running side by side do not hold each other up.
+func (r *Rig) hooksIdle() bool {
+	return source.Hooks.Drain(r.ID, 0)
 }
 
 // WaitHook waits for the engine to draw what a delivered hook draws: it
@@ -86,8 +75,8 @@ func (r *Rig) WaitHook(after int64, limit time.Duration) bool {
 		}
 		switch {
 		case now.Sub(begin) < 5*time.Millisecond:
-			// Most hooks draw within this: no need to read the stacks.
-		case !hooksIdle():
+			// Most hooks draw within this: no need to ask the bus.
+		case !r.hooksIdle():
 			idleSince = time.Time{}
 		case idleSince.IsZero():
 			idleSince = now
@@ -113,19 +102,18 @@ func (r *Rig) SetEnded(ended bool) {
 		Session: session.Session{ID: id, Agent: r.Opt.Agent, Managed: true, Status: status}}})
 }
 
-// WaitHooksIdle waits until no hook reader is working on a payload, so
-// the hooks delivered so far are mapped and the files they name have been
-// read as far as the hooks read them. It says whether that came within
-// limit. Readers of other sessions count, which only makes it wait a
-// little longer when scenarios run side by side.
+// WaitHooksIdle waits until the session's hook readers have finished
+// with every payload delivered so far, so the hooks are mapped and the
+// files they name have been read as far as the hooks read them. It says
+// whether that came within limit.
 func (r *Rig) WaitHooksIdle(limit time.Duration) bool {
 	r.T.Helper()
-	deadline := time.Now().Add(limit)
-	for !hooksIdle() {
-		if time.Now().After(deadline) {
-			return false
-		}
-		time.Sleep(time.Millisecond)
-	}
-	return true
+	return r.DrainHooks(limit)
+}
+
+// DrainHooks waits until the session's hook readers have finished with
+// every payload delivered to them (source.Bus.Drain): each is mapped,
+// stored and published. It says whether that came within limit.
+func (r *Rig) DrainHooks(limit time.Duration) bool {
+	return source.Hooks.Drain(r.ID, limit)
 }
