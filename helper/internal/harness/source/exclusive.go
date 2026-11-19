@@ -102,7 +102,13 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 	claims.watchers[pattern][id] = me
 	claims.Unlock()
 	tails := map[string]*tail{}
-	dropped := map[string]bool{} // files left for a newer one; not taken back without evidence
+	// dropped holds the files left for a newer one, with their mtime when
+	// left: one is taken back on evidence, or when it grew since.
+	dropped := map[string]time.Time{}
+	// held says the followed file was taken because the session's own
+	// process held it: an agent that keeps its file open would hold a
+	// resumed one too, so an unheld file growing is not its resume.
+	held := false
 	type asked struct {
 		at    time.Time
 		mtime time.Time
@@ -152,7 +158,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 				// With no file yet, an agent that was already writing before
 				// the watch began (a helper restart) is found by who holds it.
 				known := env.Procs != nil && len(tails) == 0 && i < maxHeldCandidates
-				if dropped[m.path] && !rem {
+				if _, left := dropped[m.path]; left && !rem {
 					// A file left behind stays newer than the watch for ever;
 					// ask about it again only when it changed or after a while.
 					if a, ok := askedDropped[m.path]; ok && !m.mtime.After(a.mtime) && time.Since(a.at) < droppedAskEvery() {
@@ -166,11 +172,16 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 				}
 			}
 			verdicts := Attribute(ctx, env, paths)
-			take := func(m match) {
+			take := func(m match, byHold bool) {
+				held = byHold
 				for p := range tails {
 					releaseClaim(id, p)
 					delete(tails, p)
-					dropped[p] = true
+					var at time.Time
+					if fi, err := os.Stat(p); err == nil {
+						at = fi.ModTime()
+					}
+					dropped[p] = at
 				}
 				delete(dropped, m.path)
 				tails[m.path] = &tail{path: m.path, name: name, header: header, replay: true}
@@ -211,7 +222,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 					if !claimOwn(pattern, id, m.path) {
 						continue
 					}
-					take(m)
+					take(m, true)
 					switched = true
 				default:
 					switch {
@@ -219,18 +230,22 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 						continue
 					case c.remembr && len(tails) == 0:
 						if claimOwn(pattern, id, m.path) {
-							take(m)
+							take(m, false)
 							switched = true
 						}
 					case len(tails) > 0:
 						// Nobody holds the new file (an agent that appends
 						// and closes per entry, like Pi): it is this
 						// session's /new only if no other agent of the kind
-						// runs in the folder to have made it.
-						if dropped[m.path] || !m.mtime.After(started) || ambiguous() || !claimOwn(pattern, id, m.path) {
+						// runs in the folder to have made it. A file the
+						// session left that grew since is its resume, on the
+						// same condition, unless the session's process held
+						// the file it is on.
+						left, wasLeft := dropped[m.path]
+						if (wasLeft && (held || !m.mtime.After(left))) || !m.mtime.After(started) || ambiguous() || !claimOwn(pattern, id, m.path) {
 							continue
 						}
-						take(m)
+						take(m, false)
 						switched = true
 					case env.Procs == nil:
 						if c.pick && claim(pattern, id, m.path, true) {
@@ -246,7 +261,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 						if !c.pick || !(inWindow || (m.mtime.After(started) && !ambiguous())) || !latestFileless(pattern, id, m.born, created) || !claimOwn(pattern, id, m.path) {
 							continue
 						}
-						take(m)
+						take(m, false)
 						switched = true
 					}
 				}
