@@ -90,7 +90,7 @@ func (s *CodexServer) reply(c *codexConn, m codexWire) {
 	key := requestKey(m.ID)
 	s.mu.Lock()
 	req, open := s.fold.pending[key]
-	s.replies = append(s.replies, CodexCall{Conn: c.n, Method: req.Method, Params: m.Result, At: time.Now()})
+	s.replies = append(s.replies, CodexCall{Conn: c.n, ID: m.ID, Method: req.Method, Params: m.Result, At: time.Now()})
 	on := s.OnReply
 	s.mu.Unlock()
 	if !open {

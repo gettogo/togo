@@ -59,7 +59,9 @@ type CodexServer struct {
 // CodexCall is one call a client made, or one answer it gave to a server
 // request (Method is then the request's method).
 type CodexCall struct {
-	Conn   int
+	Conn int
+	// ID is the request an answer answers; empty for a call.
+	ID     json.RawMessage
 	Method string
 	Params json.RawMessage
 	At     time.Time
