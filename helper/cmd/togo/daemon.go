@@ -8,9 +8,12 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/awake"
@@ -77,10 +80,15 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 	// shut down here rather than left to its own goroutine: the hold and
 	// any disablesleep must be released on SIGINT and SIGTERM.
 	var (
-		mu     sync.Mutex
-		built  *daemon.Components
-		finish func()
+		mu        sync.Mutex
+		built     *daemon.Components
+		finish    func(hurry <-chan struct{})
+		finishing atomic.Bool
 	)
+	sig := make(chan os.Signal, 2)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sig)
+	hurry := hurryOn(sig, &finishing)
 	hostAwake := hostAwake()
 	err = daemon.Run(ctx, daemon.Config{
 		Home:   home,
@@ -105,12 +113,21 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 		},
 		Info: info,
 		Logf: logger.Printf,
+		// No connection is served any more, and the lock is still held:
+		// the accepted hooks are read and stored and the open approvals
+		// written before another daemon can start.
+		Finish: func() {
+			finishing.Store(true)
+			mu.Lock()
+			f := finish
+			mu.Unlock()
+			if f != nil {
+				f(hurry)
+			}
+		},
 	})
 	mu.Lock()
 	if built != nil {
-		// No connection is served any more: the accepted hooks are read
-		// and stored and the open approvals written before the exit.
-		finish()
 		built.Awake.Shutdown(context.WithoutCancel(ctx))
 	}
 	mu.Unlock()
@@ -136,7 +153,9 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 // Variables so tests can shorten them.
 var (
 	restartPendingWait = 10 * time.Minute
-	restartExitWait    = 10 * time.Second
+	// The daemon keeps its lock through its exit steps, up to 9 s
+	// (daemon/exit.go), so its exit is waited for past those.
+	restartExitWait    = 15 * time.Second
 	restartServiceWait = 15 * time.Second
 	restartStartWait   = daemon.StartWait
 )
