@@ -137,7 +137,12 @@ func Compose(base *api.API, o ComposeOptions) (*Components, error) {
 	c := &Components{API: base, logf: logf, followups: make(chan string, 64)}
 	c.Hub = hub.New(svc, nil)
 	pub := newDoneDedupe(c.Hub, time.Now)
-	c.Approvals = approval.New(approval.Config{Tmux: svc.Tmux, Pub: c.Hub})
+	ap := approval.Config{Tmux: svc.Tmux, Pub: c.Hub, Logf: logf}
+	if o.Home != "" {
+		// Open requests outlive a helper restart (`togo update`).
+		ap.Path = filepath.Join(o.Home, "run", "approvals.json")
+	}
+	c.Approvals = approval.New(ap)
 	w, err := watch.New(watch.Config{
 		Tmux: svc.Tmux, Sessions: svc, TogoPath: o.TogoPath, Home: o.Home,
 		Status: c.Hub, Activity: c.Hub, Prompts: ownScreens{Store: c.Approvals, c: c}, Pub: pub,
