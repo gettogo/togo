@@ -256,6 +256,13 @@ func (g *Gen) Emit(path string, at time.Time, rec any) error {
 	if err != nil {
 		return err
 	}
+	return g.EmitRaw(path, at, string(raw))
+}
+
+// EmitRaw appends one line of text to a file: for agents whose history is
+// not JSON (Aider's markdown).
+func (g *Gen) EmitRaw(path string, at time.Time, line string) error {
+	raw := []byte(line)
 	b := g.bufs[path]
 	if b == nil {
 		b = &bytes.Buffer{}

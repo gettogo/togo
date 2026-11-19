@@ -226,3 +226,27 @@ func TestClineConcurrentReaders(t *testing.T) {
 	coverage.Covers(t, "generated", "cline/scale/concurrent_requests")
 	concurrentReaders(t, clineStarter)
 }
+
+// TestKnownFault_ClineKilledTurnEndsOK documents the fault of
+// TestKnownFault_AiderKilledTurnEndsOK for Cline: when the hub reports the
+// agent exited at work, the working flag falls first and the mapper closes
+// the open turn as the pane going idle would (engine/sess.go statusChanged,
+// adapters/cline/messages.go CloseIdle), so a turn killed with a tool
+// running ends ok. Its tool does end interrupted.
+//
+// Correct: a turn open when the agent exits ends interrupted. This test
+// passes while the fault is present; when it fails the fault is fixed:
+// delete it.
+func TestKnownFault_ClineKilledTurnEndsOK(t *testing.T) {
+	_, r := clineStart(t, map[int]sessiongen.ClineTurn{1: {Unfinished: true}}, sessiongen.Turn{Say: 20})
+	r.Hub("working")
+	st := settleUntil(r, 1)
+	if len(turnsIn(st, harness.StateRunning)) != 1 {
+		t.Fatal("no turn at work before the exit")
+	}
+	r.Hub("ended")
+	st = waitFor(t, r, "the exit", func(st enginetest.State) bool { return len(turnsIn(st, harness.StateRunning)) == 0 })
+	if len(turnsIn(st, harness.StateInterrupted)) != 0 || len(turnsIn(st, harness.StateOK)) != 1 {
+		t.Fatalf("the killed turn: %d ok, %d interrupted: the fault is fixed", len(turnsIn(st, harness.StateOK)), len(turnsIn(st, harness.StateInterrupted)))
+	}
+}
