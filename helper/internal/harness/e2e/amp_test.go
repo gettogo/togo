@@ -44,21 +44,11 @@ func TestAmpRestartsAtSeededPoints(t *testing.T) {
 	}
 }
 
-// TestKnownFault_Amp_RestartDropsTheChat documents a fault: a restart of
-// the helper empties the chat of a hook-driven session. Correct: the chat
-// read so far is still there. Amp keeps its threads on its own servers
-// and writes nothing locally (amp/amp.yaml), so the helper's memory is the
-// only copy. The cause is source/hook.go:104-111 (the hook bus keeps a
-// session's last 64 payloads in memory) with engine/engine.go:202. This
-// passes while the fault is present.
-func TestKnownFault_Amp_RestartDropsTheChat(t *testing.T) {
-	before, after := restartDropsChat(t, ampAgent)
-	if before == 0 {
-		t.Fatal("nothing was drawn before the restart")
-	}
-	if after != 0 {
-		t.Fatalf("the chat survived the restart (%d of %d items): the fault is fixed", after, before)
-	}
+// The chat read so far is still there after a helper restart (`togo
+// update`): Amp keeps its threads on its own servers and writes nothing
+// locally, so the hooks the helper kept are the only copy.
+func TestAmp_RestartKeepsTheChat(t *testing.T) {
+	restartKeepsChat(t, ampAgent)
 }
 
 // A new thread (the agent's new conversation) in the same session.

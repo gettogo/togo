@@ -162,6 +162,20 @@ type Relauncher interface {
 	Relaunched(argv []string, at time.Time) []Op
 }
 
+// ReplayMarker is a mapper whose Map depends on more than the record: it reads
+// another file as it goes (Copilot's replies from its own log) or numbers
+// items with a running count. The engine keeps its marks with the hook
+// records it stores, so that a replay after a helper restart maps each
+// record as it was first mapped.
+type ReplayMarker interface {
+	// ReplayMark is where the mapper's reads and counts stand now.
+	ReplayMark() json.RawMessage
+	// Replaying makes the next Map start from pre and read no further
+	// than post, without waiting for more to be written; after that Map
+	// the mapper stands at post. A nil pre keeps where it stands.
+	Replaying(pre, post json.RawMessage)
+}
+
 // MapperFactory builds a fresh mapper for one session.
 type MapperFactory func(env Env) Mapper
 

@@ -121,11 +121,10 @@ func longScenario(t *testing.T, a hookAgent, n int) {
 
 // restartScenario restarts the engine at seeded points of a session of 60
 // turns: between turns, in the middle of one, and while the agent waits
-// (an approval, a question or a running tool). The engine keeps the chat
-// only in memory, so the turns before a restart are gone from it (see the
-// TestKnownFault_*_RestartDropsTheChat tests); what is left must be sound:
-// the hooks that follow draw turns that are exact once one whole turn has
-// passed, nothing stays running, and the summary ends idle.
+// (an approval, a question or a running tool). The hook records are kept
+// under the helper's run folder, so each restart gives back the chat it
+// had (enginetest.Restarted), sound and with the same summary, and after
+// the last turn every turn is exact and nothing is left running.
 func restartScenario(t *testing.T, a hookAgent) []string {
 	e := newEnv(t, time.Hour)
 	l := write(t, e, a, mixed(a, 60))
@@ -143,40 +142,18 @@ func restartScenario(t *testing.T, a hookAgent) []string {
 		if len(before.Items) == 0 {
 			t.Fatalf("restart %s at %d: nothing was drawn before it", c.kind, c.at)
 		}
-		fail(t, "restart "+c.kind, enginetest.Without(enginetest.Check(after, enginetest.Facts{Truth: l.Truth}), "prompt-unanswered"), l)
-		if sum := after.Mission.Summary; sum.NeedsYou != 0 {
-			t.Errorf("restart %s: %d things need you from a chat that is empty", c.kind, sum.NeedsYou)
-		}
+		fail(t, "restart "+c.kind, enginetest.Restarted(before, after), l)
+		checkHook(t, "restart "+c.kind, a, after, l, false)
 		kinds = append(kinds, c.kind)
 	}
 	run(t, r, a, l.Hooks[done:])
 	st := settled(r, lastPrompt(a, l.Hooks))
 	checkHook(t, "after restarts", a, st, l, true)
-	// Turns that began after the last restart and one more turn are
-	// exact; so are the turns after every earlier one.
-	first := 0
-	for i, x := range exp {
-		if x.id == turnID(l.Hooks[cuts[len(cuts)-1].at]) || firstPromptAfter(a, l.Hooks, cuts[len(cuts)-1].at, x.id) {
-			first = i
-			break
-		}
-	}
-	verify(t, "after restarts", a, st, exp, min(first+1, len(exp)))
+	verify(t, "after restarts", a, st, exp, 0)
 	if sum := st.Mission.Summary; sum.Working || sum.Agents != 0 || sum.NeedsYou != 0 {
 		t.Errorf("summary after the last turn: %+v", sum)
 	}
 	return kinds
-}
-
-func firstPromptAfter(a hookAgent, calls []sessiongen.HookCall, at int, id string) bool {
-	for _, c := range calls[at:] {
-		for _, k := range a.classify(c) {
-			if k.what == "prompt" {
-				return turnID(c) == id
-			}
-		}
-	}
-	return false
 }
 
 type cut struct {
@@ -240,18 +217,23 @@ func restartPoints(a hookAgent, calls []sessiongen.HookCall) []cut {
 	return cs
 }
 
-// restartDropsChat is the fault every hook-driven agent has: the engine
-// holds the chat in memory only, so a restart empties it while the agent
-// goes on. It returns the items before and after.
-func restartDropsChat(t *testing.T, a hookAgent) (before, after int) {
+// restartKeepsChat restarts the helper after a few turns of a
+// hook-driven agent: the chat after the restart is the chat before it.
+func restartKeepsChat(t *testing.T, a hookAgent) {
 	e := newEnv(t, time.Hour)
 	l := write(t, e, a, mixed(a, 4))
 	r := e.rig(t, a.name)
 	run(t, r, a, l.Hooks)
-	b := settled(r, lastPrompt(a, l.Hooks))
+	before := settled(r, lastPrompt(a, l.Hooks))
+	if len(before.Items) == 0 {
+		t.Fatal("nothing was drawn before the restart")
+	}
 	r.Restart()
-	af := r.SettleUntil(10*time.Second, nil)
-	return len(b.Items), len(af.Items)
+	after := r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return len(st.Items) >= len(before.Items) })
+	if len(after.Items) != len(before.Items) {
+		t.Errorf("%d items after the restart, %d before", len(after.Items), len(before.Items))
+	}
+	fail(t, "restart", enginetest.Restarted(before, after), l)
 }
 
 // newConversation runs two conversations and a resume of the first.

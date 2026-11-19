@@ -207,11 +207,9 @@ func (r *Rig) start() {
 	var once sync.Once
 	stop := func() {
 		once.Do(func() {
-			// Forget is how a rig stops its engine; it also deletes the
-			// session's run records, which a helper that exits keeps.
-			kept := r.keepRunRecords()
-			eng.Forget(r.ID)
-			kept()
+			// As a helper that exits: what it holds in memory goes, what
+			// it keeps under run/ for the next start stays.
+			eng.Unload(r.ID)
 			r.engineStopped([]string{r.Opt.Home, r.Opt.Cwd, r.TogoHome, r.bin})
 		})
 	}
@@ -260,11 +258,11 @@ func (a approvals) CloseDesk(requestID string) { a.store().CloseDesk(requestID) 
 //
 // That is a whole restart: the engine keeps nothing for a session outside
 // TOGO_HOME/run (the followed file, run/follow-<id>.json, source/
-// follow.go:24-68; an OpenCode conversation id and endpoint records,
-// engine/history.go:333-370 and engine/recovery.go:23-52), and Forget
-// removes only the conversation id and endpoint records
-// (engine/engine.go:188-210, engine/history.go:374, engine/recovery.go:
-// 315), which the omp and Claude Code adapters do not write.
+// follow.go; an OpenCode conversation id and endpoint records,
+// engine/history.go and engine/recovery.go; a hook-only session's hook
+// records, engine/hookstore.go), and Unload drops the engine's memory of
+// the session and the hook bus's, as the helper's exit does, and keeps
+// those files.
 func (r *Rig) Restart() {
 	r.Stop()
 	r.Start()
@@ -274,6 +272,8 @@ func (r *Rig) Restart() {
 // one. Files written between the two are found by the new engine's
 // restore, as after an update that took a while.
 func (r *Rig) Stop() {
+	// As the daemon does on its way out: the open approvals reach disk.
+	r.Approvals.Flush()
 	r.mu.Lock()
 	stop := r.stopEngine
 	r.mu.Unlock()

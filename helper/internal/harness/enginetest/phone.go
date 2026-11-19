@@ -3,6 +3,7 @@ package enginetest
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
@@ -107,10 +108,13 @@ func (r *Rig) Notified(level string) []wire.NotifyEvent {
 }
 
 // startPhone builds the approvals store and hook handlers. A helper
-// restart builds new ones: neither keeps anything on disk.
+// restart builds new ones; the store opens again the approvals it kept
+// under TOGO_HOME/run, as the daemon's does.
 func (r *Rig) startPhone() {
 	ttl := r.Opt.ApprovalTTL
-	r.Approvals = approval.New(approval.Config{Tmux: paneTmux{r}, Pub: publisher{r}, TTL: ttl})
+	r.Approvals = approval.New(approval.Config{Tmux: paneTmux{r}, Pub: publisher{r}, TTL: ttl,
+		Path: filepath.Join(r.TogoHome, "run", "approvals.json")})
+	r.T.Cleanup(r.Approvals.Flush)
 	r.Local = &local.Handlers{Hub: hub{r}, Approvals: r.Approvals, Pub: publisher{r},
 		Harness: func(id string, f wire.HookForward) {
 			if len(f.Payload) > 0 {

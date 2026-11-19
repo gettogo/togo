@@ -12,7 +12,6 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/redact"
-	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -119,6 +118,7 @@ func New(cfg Config) *Engine {
 		e.red = redact.Redactor{}
 	}
 	e.adapters = loadAdapters(cfg.AdapterDir, cfg.Logf)
+	sweepHookStores(cfg.TogoHome, cfg.Now())
 	return e
 }
 
@@ -182,31 +182,6 @@ func (e *Engine) track(info session.Session) *sess {
 	e.mu.Unlock()
 	s.carry(subs)
 	return s
-}
-
-// Forget stops serving a session and drops its state.
-func (e *Engine) Forget(id string) {
-	e.forgetEntered(id)
-	e.mu.Lock()
-	s, ok := e.sessions[id]
-	delete(e.sessions, id)
-	e.mu.Unlock()
-	if ok {
-		s.stop()
-		e.menuMu.Lock()
-		delete(e.catalogs, s)
-		e.menuMu.Unlock()
-	}
-	e.log.Forget(id)
-	e.cache.forget(id)
-	source.Hooks.Forget(id)
-	e.forgetConversation(id)
-	unlock := e.endpointOps.lock(id)
-	e.retireEndpoint(id)
-	e.dropRelaunch(id)
-	unlock()
-	typing.Delete(id)
-	draining.Delete(id)
 }
 
 // Observe takes hub events: sessions start and stop being served, and

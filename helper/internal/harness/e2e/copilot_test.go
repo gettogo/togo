@@ -77,24 +77,12 @@ func TestCopilotRestartsAtSeededPoints(t *testing.T) {
 	}
 }
 
-// TestKnownFault_Copilot_RestartDropsTheChat documents a fault: the
-// engine keeps the chat of a hook-driven session in memory only and the
-// hook bus keeps nothing for a new engine, so a restart (`togo update`)
-// empties the chat while the agent goes on. Correct: the chat read so far
-// is still there after the restart (omp and Claude Code read it back from
-// their transcript; Copilot's events.jsonl holds the replies, and the
-// prompts and tools are in no file Togo reads). The cause is
-// source/hook.go:104-111 (the bus's backlog is a session's last 64
-// payloads in memory) with engine/engine.go:202 (Forget drops it). This
-// passes while the fault is present.
-func TestKnownFault_Copilot_RestartDropsTheChat(t *testing.T) {
-	before, after := restartDropsChat(t, copilotAgent)
-	if before == 0 {
-		t.Fatal("nothing was drawn before the restart")
-	}
-	if after != 0 {
-		t.Fatalf("the chat survived the restart (%d of %d items): the fault is fixed; delete this test and the filter in restartScenario", after, before)
-	}
+// The chat read so far is still there after a helper restart (`togo
+// update`): the prompts and tools exist only as hooks, and the replies are
+// read again from Copilot's events.jsonl as far as each hook first read
+// them.
+func TestCopilot_RestartKeepsTheChat(t *testing.T) {
+	restartKeepsChat(t, copilotAgent)
 }
 
 // A second conversation (the agent's /new) and a resume of the first.
