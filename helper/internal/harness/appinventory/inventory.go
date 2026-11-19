@@ -15,6 +15,7 @@ type Variant struct {
 	ID           string
 	Agents       []string
 	VersionRange string
+	Capabilities []string
 	Screens      []Screen
 }
 
@@ -43,8 +44,9 @@ func Read(public []agents.Agent, files map[string][]byte) (Inventory, error) {
 		if adapter.Adapter != id {
 			return Inventory{}, fmt.Errorf("adapter %q declares ID %q", id, adapter.Adapter)
 		}
-		variant := Variant{ID: id, Agents: slices.Clone(adapter.Match.Agents), VersionRange: adapter.Harness.Range}
+		variant := Variant{ID: id, Agents: slices.Clone(adapter.Match.Agents), VersionRange: adapter.Harness.Range, Capabilities: slices.Clone(adapter.Capabilities)}
 		slices.Sort(variant.Agents)
+		slices.Sort(variant.Capabilities)
 		for _, agent := range variant.Agents {
 			matched[agent] = true
 		}
