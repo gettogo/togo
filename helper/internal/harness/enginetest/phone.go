@@ -112,8 +112,11 @@ func (r *Rig) Notified(level string) []wire.NotifyEvent {
 // under TOGO_HOME/run, as the daemon's does.
 func (r *Rig) startPhone() {
 	ttl := r.Opt.ApprovalTTL
-	r.Approvals = approval.New(approval.Config{Tmux: paneTmux{r}, Pub: publisher{r}, TTL: ttl,
+	store := approval.New(approval.Config{Tmux: paneTmux{r}, Pub: publisher{r}, TTL: ttl,
 		Path: filepath.Join(r.TogoHome, "run", "approvals.json")})
+	r.mu.Lock()
+	r.Approvals = store
+	r.mu.Unlock()
 	r.T.Cleanup(r.Approvals.Flush)
 	r.Local = &local.Handlers{Hub: hub{r}, Approvals: r.Approvals, Pub: publisher{r},
 		Harness: func(id string, f wire.HookForward) {
