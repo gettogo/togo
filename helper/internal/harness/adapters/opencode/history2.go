@@ -49,8 +49,13 @@ func (e *Events2) pastMessage(conv string, raw json.RawMessage) ([]harness.Item,
 	if json.Unmarshal(raw, &m) != nil || m.ID == "" {
 		return nil, nil
 	}
-	if e.main == "" && conv != "" {
-		// After a helper restart nothing else has named the session yet.
+	if conv != "" && conv != e.main && (e.main == "" || e.flagMain) {
+		// The past being read is the conversation the chat shows: after a
+		// helper restart nothing else has named it yet, and after a move
+		// the fresh mapper starts on the launch flag's (`--session`, the
+		// conversation the phone last resumed), which the terminal may
+		// have left. Once a message or an event named the conversation,
+		// another one's past is not this chat's.
 		e.setMain(conv)
 	}
 	if conv != e.main {
