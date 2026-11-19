@@ -55,3 +55,54 @@ func newestFitting(items []harness.Item, max int) ([]harness.Item, bool) {
 	}
 	return items, false
 }
+
+// fitPage keeps what fits in max encoded bytes of a page of history, and
+// reports whether anything was left out. The main conversation comes
+// first: its newest items that fit are kept, then the newest steps of
+// subagents (items with a parent) fill the room that is left. Taken
+// newest first without that order, a session whose subagent files were
+// read after the conversation gave pages of subagent steps and none of
+// the conversation. At least one item is kept; the order is unchanged.
+func fitPage(items []harness.Item, max int) ([]harness.Item, bool) {
+	sizes := make([]int, len(items))
+	total := 0
+	for i, it := range items {
+		sizes[i] = itemSize(it)
+		total += sizes[i]
+	}
+	if total <= max {
+		return items, false
+	}
+	keep := make([]bool, len(items))
+	used, first := 0, len(items)
+	for i := len(items) - 1; i >= 0; i-- { // the conversation, newest first
+		if items[i].Parent != "" {
+			continue
+		}
+		if used+sizes[i] > max && used > 0 {
+			break
+		}
+		keep[i], first = true, i
+		used += sizes[i]
+	}
+	if first == len(items) {
+		first = 0 // no conversation items at all: only steps
+	}
+	for i := len(items) - 1; i >= first; i-- { // then steps, newest first
+		if items[i].Parent == "" {
+			continue
+		}
+		if used+sizes[i] > max && used > 0 {
+			break
+		}
+		keep[i] = true
+		used += sizes[i]
+	}
+	out := make([]harness.Item, 0, len(items))
+	for i, it := range items {
+		if keep[i] {
+			out = append(out, it)
+		}
+	}
+	return out, true
+}
