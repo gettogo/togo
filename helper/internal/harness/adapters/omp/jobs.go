@@ -50,6 +50,12 @@ func (s *session) jobsSettled(e map[string]any, at time.Time) ([]harness.Item, [
 				items, ops = append(items, ai...), append(ops, ao...)
 				continue
 			}
+			if s.taskAgent(firstNonEmpty(str(jm, "agentId"), id)) {
+				// The agent's row has ended already (its own file recorded
+				// its end, read first): it keeps how it ended, and is not
+				// a job.
+				continue
+			}
 		}
 		it := s.jobs[id]
 		if it == nil {
@@ -176,6 +182,12 @@ func (s *session) runningAgent(id string) *harness.Item {
 		}
 	}
 	return nil
+}
+
+// taskAgent reports whether a task call made an agent row for this task
+// name, running or ended.
+func (s *session) taskAgent(name string) bool {
+	return name != "" && (len(s.byFile.names[name]) > 0 || s.agents["agent-"+name] != nil)
 }
 
 // agentFresh is how recent an agent's record must be, when it is read, to

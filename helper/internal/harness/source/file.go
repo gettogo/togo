@@ -8,9 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"syscall"
 	"time"
 
@@ -104,120 +101,6 @@ func readCapped(p string) ([]byte, error) {
 	return b, nil
 }
 
-// GlobEntry is one file a glob source lists.
-type GlobEntry struct {
-	Path  string            `json:"path"`
-	Name  string            `json:"name"`
-	Mtime time.Time         `json:"mtime"`
-	Head  []json.RawMessage `json:"head"`
-	Tail  []json.RawMessage `json:"tail"`
-}
-
-// Glob lists the confined files matching pattern, newest first, at most
-// MaxGlobFiles. For jsonl files Head and Tail hold the first and last
-// records; a json file's document is Head's only element. No match is an
-// empty list: a harness with no sessions yet has nothing to list.
-func Glob(pattern, format string, env harness.Env) ([]GlobEntry, error) {
-	matches, err := globConfined(pattern, env)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]GlobEntry, 0, len(matches))
-	for _, m := range matches {
-		e := GlobEntry{Path: m.path, Mtime: m.mtime.UTC(), Name: strings.TrimSuffix(filepath.Base(m.path), filepath.Ext(m.path))}
-		e.Head, e.Tail = headTail(m.path, format)
-		out = append(out, e)
-	}
-	return out, nil
-}
-
-type match struct {
-	path  string
-	mtime time.Time
-	size  int64
-	born  time.Time // creation time, zero when unknown
-}
-
-// globConfined expands, matches and confines a glob, newest first.
-func globConfined(pattern string, env harness.Env) ([]match, error) {
-	pattern = Expand(pattern, home(env))
-	if !filepath.IsAbs(pattern) {
-		pattern = filepath.Join(Expand(env.Cwd, home(env)), pattern)
-	}
-	paths, err := filepath.Glob(pattern)
-	if err != nil {
-		return nil, err
-	}
-	var out []match
-	for _, p := range paths {
-		real, err := Confine(p, env)
-		if err != nil {
-			continue
-		}
-		st, err := os.Stat(real)
-		if err != nil || !st.Mode().IsRegular() {
-			continue
-		}
-		out = append(out, match{path: real, mtime: st.ModTime(), size: st.Size(), born: birth(real, st)})
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].mtime.After(out[j].mtime) })
-	if len(out) > MaxGlobFiles {
-		out = out[:MaxGlobFiles]
-	}
-	return out, nil
-}
-
-func headTail(p, format string) (head, tail []json.RawMessage) {
-	head, tail = []json.RawMessage{}, []json.RawMessage{}
-	fh, err := openRegular(p)
-	if err != nil {
-		return
-	}
-	defer fh.Close()
-	if format != "jsonl" {
-		b, err := io.ReadAll(io.LimitReader(fh, MaxFileRead+1))
-		if err == nil && len(b) <= MaxFileRead {
-			if raw, err := Convert(b, format); err == nil {
-				head = append(head, raw)
-			}
-		}
-		return
-	}
-	first := make([]byte, 64<<10)
-	n, _ := io.ReadFull(fh, first)
-	recs := Records(dropPartialLast(first[:n], n == len(first)), 1<<30)
-	if len(recs) > globHeadRecords {
-		recs = recs[:globHeadRecords]
-	}
-	head = recs
-	st, err := fh.Stat()
-	if err != nil {
-		return
-	}
-	off := max(st.Size()-globTailBytes, 0)
-	buf := make([]byte, st.Size()-off)
-	if _, err := fh.ReadAt(buf, off); err != nil && !errors.Is(err, io.EOF) {
-		return
-	}
-	if off > 0 {
-		if i := bytes.IndexByte(buf, '\n'); i >= 0 {
-			buf = buf[i+1:]
-		}
-	}
-	tail = Records(buf, globTailRecords)
-	return
-}
-
-func dropPartialLast(b []byte, full bool) []byte {
-	if !full {
-		return b
-	}
-	if i := bytes.LastIndexByte(b, '\n'); i >= 0 {
-		return b[:i]
-	}
-	return nil
-}
-
 // Watch tails a jsonl source (or re-reads a json file on change) until
 // ctx ends.
 func (f File) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, emit func(harness.Record)) error {
@@ -234,13 +117,13 @@ func (f File) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, 
 		if err != nil {
 			return err
 		}
-		t := &tail{path: p, name: s.Name, replay: true, lines: lines}
+		t := &tail{path: p, name: s.Name, header: fs.Header, replay: true, lines: lines}
 		return pollLoop(ctx, func() error { return t.poll(emit) })
 	}
 	if fs.Exclusive {
-		return watchGlobExclusive(ctx, s.Name, fs.Glob, env, emit)
+		return watchGlobExclusive(ctx, s.Name, fs.Glob, fs.Header, env, emit)
 	}
-	return watchGlob(ctx, s.Name, fs.Glob, fs.Whole, env, emit)
+	return watchGlob(ctx, s.Name, fs.Glob, fs.Header, fs.Whole, env, emit)
 }
 
 func pollLoop(ctx context.Context, step func() error) error {
@@ -267,7 +150,7 @@ func pollLoop(ctx context.Context, step func() error) error {
 // whole reads every match from its start, whatever its age: the folder is
 // the session's own, and a file in it that no longer changes (a subagent
 // that finished before a helper restart) still has its end to tell.
-func watchGlob(ctx context.Context, name, pattern string, whole bool, env harness.Env, emit func(harness.Record)) error {
+func watchGlob(ctx context.Context, name, pattern, header string, whole bool, env harness.Env, emit func(harness.Record)) error {
 	started := time.Now()
 	created, err := time.Parse(time.RFC3339, env.Vars["created"])
 	if err != nil {
@@ -288,7 +171,7 @@ func watchGlob(ctx context.Context, name, pattern string, whole bool, env harnes
 					continue
 				}
 				if whole || (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started) {
-					tails[m.path] = &tail{path: m.path, name: name, replay: true}
+					tails[m.path] = &tail{path: m.path, name: name, header: header, replay: true}
 				}
 			}
 		}
@@ -312,6 +195,7 @@ type tail struct {
 	lines   bool
 	path    string
 	name    string
+	header  string // type of the record that names the session (spec.File.Header)
 	offset  int64
 	pending []byte
 	mtime   time.Time
@@ -342,18 +226,22 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	defer fh.Close()
 	var recs []json.RawMessage
-	var header json.RawMessage // the file's first record, kept when the replay is cut
+	var header []json.RawMessage // the file's leading records, kept when the replay is cut
 	replaying := t.replay
 	if t.replay {
 		t.replay = false
 		// Replay at most the last MaxFileRead bytes, then the last
-		// MaxRecords records of those. The first record (the session
-		// header, which names the session) is always kept.
+		// MaxRecords records of those. The records up to the one that
+		// names the session (head.go) are always kept.
 		if start := st.Size() - MaxFileRead; start > t.offset {
+			skip := true
 			if !t.lines && t.offset == 0 {
-				header = firstRecord(fh)
+				var end int64
+				if header, end = headRecords(fh, t.header); start < end {
+					start, skip = end, false // inside the header: after it, once
+				}
 			}
-			t.offset, t.skip = start, true
+			t.offset, t.skip = start, skip
 		}
 	}
 	for t.offset < st.Size() {
@@ -395,41 +283,26 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	if len(recs) > MaxRecords && !t.lines {
 		if replaying && header == nil {
-			header = recs[0] // the file's start is in view
+			header = leading(recs, t.header) // the file's start is in view
+			recs = recs[len(header):]
 		}
-		recs = recs[len(recs)-MaxRecords:]
+		if len(recs) > MaxRecords {
+			recs = recs[len(recs)-MaxRecords:]
+		}
 	}
 	if replaying && header != nil && len(recs) > 0 {
-		if len(recs) >= MaxRecords {
-			recs = recs[1:]
+		if over := len(recs) + len(header) - MaxRecords; over > 0 {
+			recs = recs[over:]
 		}
-		recs = append([]json.RawMessage{header}, recs...)
+		recs = append(append([]json.RawMessage(nil), header...), recs...)
 	}
 	now := time.Now()
 	if replaying && len(recs) > 0 {
-		emit(harness.Record{Source: t.name, At: now, Replay: recs})
+		emit(harness.Record{Source: t.name, At: now, Replay: recs, File: t.path})
 		return nil
 	}
 	for _, r := range recs {
-		emit(harness.Record{Source: t.name, At: now, Data: r})
-	}
-	return nil
-}
-
-// firstHeaderMax bounds how much of a file's start is read for its header.
-const firstHeaderMax = 64 << 10
-
-// firstRecord returns the first line of the file when it is a JSON value,
-// else nil.
-func firstRecord(fh *os.File) json.RawMessage {
-	buf := make([]byte, firstHeaderMax)
-	n, _ := fh.ReadAt(buf, 0)
-	i := bytes.IndexByte(buf[:n], '\n')
-	if i <= 0 {
-		return nil
-	}
-	if rs := Records(buf[:i], 1); len(rs) == 1 {
-		return rs[0]
+		emit(harness.Record{Source: t.name, At: now, Data: r, File: t.path})
 	}
 	return nil
 }
