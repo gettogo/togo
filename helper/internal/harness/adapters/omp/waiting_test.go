@@ -36,10 +36,10 @@ func readLater(recs []harness.Record, d time.Duration) []harness.Record {
 	return out
 }
 
-// A file read before the call that starts its task waits for the call and
-// then goes to its task: one row per task, whichever feed is read first,
-// and also for a file read long after it was written (after a restart).
-func TestFileReadBeforeItsCallWaitsForIt(t *testing.T) {
+// A file read before the call that starts its task gets the row the call
+// then adopts: one row per task, whichever feed is read first, and also for
+// a file read long after it was written (after a restart).
+func TestFileReadBeforeItsCallIsAdoptedByIt(t *testing.T) {
 	for name, late := range map[string]time.Duration{"fresh": 0, "old": time.Hour} {
 		t.Run(name, func(t *testing.T) {
 			var call []harness.Record
@@ -55,38 +55,29 @@ func TestFileReadBeforeItsCallWaitsForIt(t *testing.T) {
 			if got["sub-one-1"].Parent != "agent-AuditOne" || got["sub-two-1"].Parent != "agent-AuditTwo" {
 				t.Fatalf("steps under %q and %q", got["sub-one-1"].Parent, got["sub-two-1"].Parent)
 			}
+			if a := got["agent-AuditOne"]; a.Agent.Started.Format(time.RFC3339) != "2026-11-06T10:01:00Z" { // the call's time, not the file's
+				t.Fatalf("adopted row %+v", a.Agent)
+			}
 		})
 	}
 }
 
-// A file no call names, once the conversation was read past its start,
-// is placed as before: a fresh one gets a row of its own, an old one (an
-// earlier turn's, whose call was not read) is left out.
-func TestFileNoCallNamesIsPlacedWhenTheConversationPassesIt(t *testing.T) {
-	later := line("session", bgDone) // written after the file started
-	fresh := run(newSession(env()), opened(t), fileRecs("Stray", "sub-x"), []harness.Record{later})
-	if got := agentRowIDs(fresh); !slices.Equal(got, []string{"agent-sub-x"}) || fresh.last()["sub-x-1"].Parent != "agent-sub-x" {
+// A file no call names: a recent one shows its row at once, under its task
+// name, with nothing else needing to be read; an old one (an earlier
+// turn's, whose call was not read) is left out, also once the conversation
+// is read past it.
+func TestFileNoCallNamesIsPlacedAtOnce(t *testing.T) {
+	fresh := run(newSession(env()), opened(t), fileRecs("Stray", "sub-x"))
+	if got := agentRowIDs(fresh); !slices.Equal(got, []string{"agent-Stray"}) || fresh.last()["sub-x-1"].Parent != "agent-Stray" {
 		t.Fatalf("fresh: rows %v, step under %q", got, fresh.last()["sub-x-1"].Parent)
 	}
-	old := run(newSession(env()), opened(t), readLater(fileRecs("Stray", "sub-x"), time.Hour), readLater([]harness.Record{later}, time.Hour))
+	m := newSession(env())
+	later := line("session", bgDone) // written after the file started
+	old := run(m, opened(t), readLater(fileRecs("Stray", "sub-x"), time.Hour), readLater([]harness.Record{later}, time.Hour))
 	if got := agentRowIDs(old); len(got) != 0 {
 		t.Fatalf("old: rows %v", got)
 	}
-}
-
-// With nothing more read from the conversation, a waiting file is placed
-// after agentWait, on the next record read.
-func TestWaitingFileIsPlacedAfterTheWait(t *testing.T) {
-	m := newSession(env())
-	recs := fileRecs("Stray", "sub-x")
-	if out := run(m, opened(t), recs[:1]); len(agentRowIDs(out)) != 0 {
-		t.Fatalf("placed before the wait: %v", agentRowIDs(out))
-	}
-	out := run(m, readLater(recs[1:], agentWait+time.Second))
-	if got := agentRowIDs(out); !slices.Equal(got, []string{"agent-sub-x"}) {
-		t.Fatalf("rows %v", got)
-	}
-	if len(m.byFile.waiting) != 0 || m.byFile.held != 0 {
-		t.Fatalf("still held: %d files, %d bytes", len(m.byFile.waiting), m.byFile.held)
+	if ef := m.byFile.early["agent-Stray"]; ef == nil || !ef.gone || ef.items != nil {
+		t.Fatalf("old file's items still kept: %+v", ef)
 	}
 }
