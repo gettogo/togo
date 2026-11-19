@@ -22,6 +22,8 @@ struct UITestLaunch {
     /// A recorded helper stream the harness layers replay (`-ui-replay <name>`, a JSONL file in
     /// the app's `Replays` resources), in place of a machine's helper.
     var replay: String?
+    /// A required tape for test runs that check every request and the final verdict.
+    var strictReplay: String?
     /// The second machine needs a password before it connects (its sign-in sheet asks for it).
     var authNeeded: Bool
     /// The busy demo roster (`Samples.demoHosts`, `Samples.demoControlCenter`): two machines and
@@ -50,7 +52,12 @@ struct UITestLaunch {
         } else {
             replay = nil
         }
-        probes = arguments.contains("-ui-probes") || replay != nil
+        if let index = arguments.firstIndex(of: "-ui-strict-replay") {
+            strictReplay = arguments.indices.contains(index + 1) ? arguments[index + 1] : ""
+        } else {
+            strictReplay = nil
+        }
+        probes = arguments.contains("-ui-probes") || replay != nil || strictReplay != nil
         authNeeded = arguments.contains("-ui-auth-needed")
         demoRoster = arguments.contains("-ui-demo-roster")
         noKeyboard = arguments.contains("-ui-no-keyboard")
@@ -85,7 +92,7 @@ struct UITestLaunch {
     private let replay: ReplayHarnessServices?
 
     init(firstRun: Bool, oneMachine: Bool = false, oldHelper: Bool = false, authNeeded: Bool = false,
-         demoRoster: Bool = false, replay: ReplayHarnessServices? = nil) {
+         demoRoster: Bool = false, replay: ReplayHarnessServices? = nil, strictReplay: Bool = false) {
         // The demo roster brings its own two machines; `oneMachine` narrows the usual samples.
         let hosts = demoRoster ? Samples.demoHosts : oneMachine ? Array(Samples.hosts.prefix(1)) : Samples.hosts
         services = FakeAppServices(hosts: firstRun ? [] : hosts)
@@ -96,7 +103,7 @@ struct UITestLaunch {
                 let old = oldHelper && index == 0
                 var capabilities: Set<String> = old ? [Capability.events] : Self.capabilities
                 // A replayed helper serves harness.v1, so the first machine's agents get a chat.
-                if replay != nil, index == 0 { capabilities.insert(Capability.harness) }
+                if replay != nil || strictReplay, index == 0 { capabilities.insert(Capability.harness) }
                 // A current helper takes an agent's flags.
                 if DemoAPIFixture.enabled { capabilities.insert(Capability.launch) }
                 snapshots[machine.id] = HostViewSnapshot(
@@ -105,7 +112,7 @@ struct UITestLaunch {
                     helper: old ? Self.oldHelper : machine.helper,
                     sessions: machine.sessions,
                     // A replay brings its own requests.
-                    requests: replay == nil ? state.requests.filter { $0.hostID == machine.id } : [],
+                    requests: replay == nil && !strictReplay ? state.requests.filter { $0.hostID == machine.id } : [],
                     at: Samples.now, capabilities: capabilities
                 )
             }

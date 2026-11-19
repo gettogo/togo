@@ -41,6 +41,11 @@ import TogoMosh
     #if DEBUG
     @ObservationIgnored private var uiTestMachines: UITestMachines?
     @ObservationIgnored private var liveDemo: LiveDemo?
+    private var strictReplayRequested = false
+    private var strictReplayService: StrictReplayHarnessServices?
+    var strictReplayVerdict: String? {
+        strictReplayRequested ? strictReplayService?.verdict ?? "fixture unavailable" : nil
+    }
     #endif
 
     private static let deviceIDDefault = "sync.deviceID"
@@ -277,18 +282,22 @@ import TogoMosh
 
     #if DEBUG
     convenience init(uiTest launch: UITestLaunch) {
-        let replay = launch.replay.flatMap(ReplayScript.load).map(ReplayHarnessServices.init)
+        let strict = launch.strictReplay.flatMap(StrictReplayHarnessServices.load)
+        let replay = launch.strictReplay == nil ? launch.replay.flatMap(ReplayScript.load).map(ReplayHarnessServices.init) : nil
+        let harness: (any HarnessServices)? = strict.map { $0 as any HarnessServices } ?? replay
         let machines = UITestMachines(
             firstRun: launch.firstRun, oneMachine: launch.oneMachine, oldHelper: launch.oldHelper,
-            authNeeded: launch.authNeeded, demoRoster: launch.demoRoster, replay: replay
+            authNeeded: launch.authNeeded, demoRoster: launch.demoRoster, replay: replay, strictReplay: strict != nil
         )
         let defaults = launch.defaults()
         self.init(
             services: machines.services, reviewServices: ReviewFakes.uiTestServices(),
             onboarding: FakeOnboardingServices(outcomes: Array(repeating: .ready(OnboardingSamples.ready), count: 4)),
-            tutorial: TutorialModel(defaults: defaults), machineTools: FakeMachineTools(), harnessServices: replay
+            tutorial: TutorialModel(defaults: defaults), machineTools: FakeMachineTools(), harnessServices: harness
         )
         uiTestMachines = machines
+        strictReplayRequested = launch.strictReplay != nil
+        strictReplayService = strict
         appStorage = defaults
         if launch.helperUpdate {
             helperUpdates = HelperUpdates(

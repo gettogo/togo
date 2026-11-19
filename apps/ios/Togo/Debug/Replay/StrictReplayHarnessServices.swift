@@ -13,6 +13,15 @@ import TogoKit
         run = try StrictReplayRun(tape: StrictReplayTape(jsonl: jsonl))
     }
 
+    static func load(_ name: String) -> StrictReplayHarnessServices? {
+        guard !name.isEmpty, let file = Bundle.main.url(forResource: name, withExtension: "jsonl"),
+              let text = try? String(contentsOf: file, encoding: .utf8),
+              let service = try? StrictReplayHarnessServices(jsonl: text), service.verdict == "pending" else { return nil }
+        return service
+    }
+
+    var verdict: String { run.verdict }
+
     func verifyConsumed() throws { try run.verifyConsumed() }
 
     func describe(_ s: HarnessSubject) async throws -> HarnessDescriptor {

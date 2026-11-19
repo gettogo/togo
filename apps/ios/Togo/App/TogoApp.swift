@@ -22,7 +22,7 @@ struct TogoApp: App {
     private static func makeComposition() -> AppComposition {
         #if DEBUG
         let launch = UITestLaunch.current
-        if launch.fakes {
+        if launch.fakes || launch.strictReplay != nil {
             // Without configuring TipKit no tip shows, so no popover covers what a test taps.
             if launch.skipIntro { LaunchGate.app.skip() } else { PerfSignposts.app.afterInteractive { TogoTips.configure() } }
             return AppComposition(uiTest: launch)
@@ -45,6 +45,7 @@ struct TogoApp: App {
         // A window opened for a tab, from "Open in New Window" or a drag, arrives with it.
         WindowGroup(for: TabID.self) { $tab in
             WindowRoot(composition: composition, opening: tab)
+                .modifier(StrictReplayProbe(composition: composition))
                 // In a window of its own above the workspace cover, sheets and alerts.
                 .sceneShield(lock: resumeLock)
                 .environment(\.machineTools, composition.machineTools)

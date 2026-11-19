@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import Observation
 import TogoKit
 
 /// A strict fixture preserves the request/response pairs and intervening events. A tape
@@ -88,7 +89,7 @@ struct StrictReplayTape: Sendable {
 
 /// Test assertions can detect divergence even when a caller has caught an error and fallen
 /// back. Diagnostics report the expected line and the app's method, never parameter values.
-@MainActor final class StrictReplayRun {
+@MainActor @Observable final class StrictReplayRun {
     typealias Failure = StrictReplayTape.Failure
 
     private let tape: StrictReplayTape
@@ -96,6 +97,11 @@ struct StrictReplayTape: Sendable {
     private var failure: Failure?
 
     init(tape: StrictReplayTape) { self.tape = tape }
+
+    var verdict: String {
+        if let failure { return "failed: \(failure)" }
+        return next == nil ? "complete" : "pending"
+    }
 
     func take(_ method: String, params: some Encodable) throws -> StrictReplayTape.Exchange {
         if let failure { throw failure }
