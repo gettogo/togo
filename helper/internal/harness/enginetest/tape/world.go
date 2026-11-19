@@ -255,6 +255,23 @@ func (w *World) Start() {
 		}
 		w.Deliver(w.Layout.Hooks[:end]...)
 	}
+	w.joinedCodex()
+}
+
+// joinedCodex waits, for Codex, until the helper has connected to the
+// app-server and resumed the thread. Until then the engine describes the
+// session without the stream, so a describe taken on a slow machine would
+// differ from one taken on a fast one.
+func (w *World) joinedCodex() {
+	s := w.Rig.Codex()
+	if s == nil {
+		return
+	}
+	for deadline := time.Now().Add(30 * time.Second); s.Conns() == 0 || len(s.CallsOf("thread/resume")) == 0; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			w.T.Fatalf("%s: the helper never joined the app-server thread", w.Agent)
+		}
+	}
 }
 
 // Deliver runs hook calls as `togo hook <agent> <event>` sends them,

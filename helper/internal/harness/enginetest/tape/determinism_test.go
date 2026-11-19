@@ -26,7 +26,11 @@ var unordered = map[string]string{
 	"approval-answered/copilot":  "Copilot's replies are read from a polled log: their Seq varies",
 	"question-answered/copilot":  "Copilot's replies are read from a polled log: their Seq varies",
 	"send-while-working/copilot": "Copilot's replies are read from a polled log: their Seq varies",
-	"interrupt/copilot":          "Copilot's replies are read from a polled log: their Seq varies",
+	// opencode2's server brings the session as a stream that is written in
+	// pieces while the helper reads it: how many Seq values the first page
+	// spans (cursor 501 to 504 seen) depends on how the pieces were read.
+	"long-chat-restart/opencode2": "opencode2's session arrives as a stream read in pieces: the cursor of the first page varies",
+	"interrupt/copilot":           "Copilot's replies are read from a polled log: their Seq varies",
 }
 
 func TestSameScenarioSameTape(t *testing.T) {
