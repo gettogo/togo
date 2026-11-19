@@ -41,6 +41,11 @@ type Config struct {
 	TTL time.Duration
 	// NewID returns request ids; nil means wire.NewRequestID.
 	NewID func() string
+	// Path, when set, is where the open approvals are kept across a
+	// helper restart (persist.go): $TOGO_HOME/run/approvals.json.
+	Path string
+	// Logf logs failures to keep them; nil logs nothing.
+	Logf func(format string, args ...any)
 }
 
 // lifecycle is where an approval stands. Closed entries are kept until expiry
@@ -59,6 +64,7 @@ type entry struct {
 	fingerprint string // empty for ask approvals and hooks with no prompt on screen
 	ask         chan string
 	labels      map[int]string // an ask's option labels as given, by option number
+	restored    bool           // opened again from Config.Path after a restart
 }
 
 // notAnswerable is Approval.Answerable for a request the phone cannot
@@ -89,7 +95,18 @@ func New(cfg Config) *Store {
 	if cfg.NewID == nil {
 		cfg.NewID = wire.NewRequestID
 	}
-	return &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
+	s := &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
+	if cfg.Path != "" {
+		s.cfg.Pub = persistPub{inner: cfg.Pub, s: s}
+		s.restore()
+	}
+	return s
+}
+
+func (s *Store) logf(format string, args ...any) {
+	if s.cfg.Logf != nil {
+		s.cfg.Logf(format, args...)
+	}
 }
 
 // lockFor returns the mutex serialising work on one session's pane.
@@ -137,6 +154,11 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 	cur := s.pendingForSession(sessionID)
 	switch {
 	case cur != nil && cur.fingerprint == p.Fingerprint:
+		if cur.restored && cur.a.Snippet == "" && p.Snippet != "" {
+			// Read again from the screen: the snippet is not kept on disk.
+			cur.a.Snippet = p.Snippet
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+		}
 		s.mu.Unlock()
 		return
 	case cur != nil && cur.fingerprint == "" && cur.a.Source == wire.SourceHook:
