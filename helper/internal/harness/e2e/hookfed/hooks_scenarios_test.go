@@ -70,6 +70,11 @@ func write(t *testing.T, e support.Env, a hookAgent, turns []sessiongen.Turn) *s
 // drain waits until the engine has read what was delivered: its newest
 // Seq stays put for a while.
 func drain(r *enginetest.Rig) {
+	// Every hook delivered is mapped, stored and published first; what
+	// it starts off the hook readers (a history read) settles after.
+	if !r.DrainHooks(15 * time.Second) {
+		r.T.Errorf("the hook readers did not finish the delivered hooks")
+	}
 	prev, stable := r.Cursor(), 0
 	for stable < 3 {
 		time.Sleep(10 * time.Millisecond)

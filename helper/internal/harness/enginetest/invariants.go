@@ -303,7 +303,7 @@ func view(it harness.Item) string {
 // part only), and the mission summary is the same.
 func Restarted(before, after State) []Violation {
 	var out []Violation
-	b, a := latest(before.Items), latest(after.Items)
+	b, a := drawn(latest(before.Items)), drawn(latest(after.Items))
 	var oldest time.Time
 	for _, it := range a {
 		if it.Parent == "" && (oldest.IsZero() || it.At.Before(oldest)) {
@@ -353,6 +353,23 @@ func Reread(first, second State) []Violation {
 		out = append(out, Violation{"reread-count", fmt.Sprintf("%d items, then %d", len(first.Items), len(second.Items))})
 	}
 	return out
+}
+
+// drawn leaves out the approval items another item owns. The engine
+// adds one when it offers an open question or permission as an ask of its
+// own, after offerGrace (engine/feedapproval.go); the app never draws it
+// (TogoKit TurnFold.swift: an approval with an owner folds into its
+// owner's card). Asks are not kept across a restart (approval/persist.go
+// keepable), so after one the item is gone, and a question still open is
+// offered again under a new id. Whether one was offered at all depends on
+// how long the question waited, which a loaded test machine stretches.
+func drawn(items map[string]harness.Item) map[string]harness.Item {
+	for id, it := range items {
+		if it.Kind == harness.KindApproval && it.Approval != nil && it.Approval.Owner != "" {
+			delete(items, id)
+		}
+	}
+	return items
 }
 
 func summary(s harness.Summary) string {

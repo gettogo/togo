@@ -72,6 +72,7 @@ func TestCopilotSubagentRows(t *testing.T) {
 // permission waits; what the hooks draw afterwards is exact and nothing
 // is left running.
 func TestCopilotRestartsAtSeededPoints(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/lifecycle/helper_restart")
 	kinds := restartScenario(t, copilotAgent)
 	if len(kinds) != 5 {
