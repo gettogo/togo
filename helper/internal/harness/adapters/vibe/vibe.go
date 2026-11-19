@@ -49,14 +49,24 @@ const maxMeta = 256 << 10
 // keeps the last two. A journal held open by a process outside this
 // session's tree (a Vibe the user ran in a terminal) is never chosen, and
 // one held by the session's own process comes first; otherwise the newest
-// wins. hookstyle asks only until it has an answer, so the choice sticks.
-func journalFor(env harness.Env) string {
+// wins.
+//
+// current is the journal found before. Vibe started again without
+// --continue, or resuming another session, writes another session's
+// journal; the session moves there when its own process holds it, or when
+// it was written after current's and no other Vibe runs in the folder to
+// have written it (alone). Otherwise current stays.
+func journalFor(env harness.Env, current string, alone func() bool) string {
 	if env.Cwd == "" {
 		return ""
 	}
 	home := source.Expand("~", env.Vars[source.VarHome])
 	metas, _ := filepath.Glob(filepath.Join(home, ".vibe", "logs", "session", "unified", "*", "meta.json"))
 	created, _ := time.Parse(time.RFC3339, env.Vars["created"])
+	var curAt time.Time
+	if current != "" {
+		curAt = newestSegment(filepath.Dir(current))
+	}
 	type cand struct {
 		glob string
 		at   time.Time
@@ -73,6 +83,9 @@ func journalFor(env harness.Env) string {
 		at := newestSegment(dir)
 		if at.IsZero() || (!created.IsZero() && at.Before(created.Add(-time.Minute))) {
 			continue
+		}
+		if glob := filepath.Join(dir, "*.jsonl"); current != "" && glob != current && !at.After(curAt) {
+			continue // not written since the one followed: nothing to move to
 		}
 		b, err := os.ReadFile(m)
 		if err != nil {
@@ -95,8 +108,12 @@ func journalFor(env harness.Env) string {
 		cands = append(cands, cand{filepath.Join(dir, "*.jsonl"), at, segs})
 		all = append(all, segs...)
 	}
+	if current != "" && (len(cands) == 0 || len(cands) == 1 && cands[0].glob == current) {
+		return current // the cheap case: no other journal was written since
+	}
 	verdicts := source.Attribute(context.Background(), env, all)
 	best, bestAt, bestMine := "", time.Time{}, false
+	curMine := false
 	for _, c := range cands {
 		mine, foreign := false, false
 		for _, p := range c.segs {
@@ -107,12 +124,22 @@ func journalFor(env harness.Env) string {
 				foreign = true
 			}
 		}
+		if c.glob == current {
+			curMine = mine
+			continue
+		}
 		if foreign && !mine {
 			continue
 		}
 		if (mine && !bestMine) || (mine == bestMine && c.at.After(bestAt)) {
 			best, bestAt, bestMine = c.glob, c.at, mine
 		}
+	}
+	switch {
+	case current == "":
+		return best
+	case best == "", curMine && !bestMine, !bestMine && !alone():
+		return current
 	}
 	return best
 }
