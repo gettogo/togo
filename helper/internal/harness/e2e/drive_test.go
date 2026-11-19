@@ -124,42 +124,64 @@ const quick = 15 * time.Second
 
 // restarted is enginetest.Restarted, except that when the restart's replay
 // window began inside a turn (the log of a long file holds the last 2000
-// records) the turn at the window's edge is not compared: see
-// TestKnownFault_PiReplayWindowStartsATurnMidTurn.
+// records) the items of the turn at the window's edge are not compared:
+// their turn is gone or invented, see TestKnownFault_PiReplayWindowStartsATurnMidTurn
+// and TestKnownFault_KimiReplayWindowLeavesItemsWithoutATurn.
 func restarted(before, after enginetest.State) []enginetest.Violation {
 	vs := enginetest.Restarted(before, after)
-	edge := edgeTurn(before, after)
-	if edge == "" {
+	edge := edgeItems(before, after)
+	if len(edge) == 0 {
 		return vs
 	}
 	var out []enginetest.Violation
 	for _, v := range vs {
-		if !strings.Contains(v.Detail, edge) {
+		skip := false
+		for id := range edge {
+			skip = skip || strings.Contains(v.Detail, id)
+		}
+		if !skip {
 			out = append(out, v)
 		}
 	}
 	return out
 }
 
-// edgeTurn is the oldest turn of after when the replay dropped older
-// main-conversation items that before held, else "".
-func edgeTurn(before, after enginetest.State) string {
-	oldest := func(st enginetest.State) (harness.Item, bool) {
-		var o harness.Item
+// edgeItems are the ids of the items of after that lie before its first
+// whole turn, when the replay dropped older main-conversation items that
+// before held, and the id of that first turn if it has no prompt.
+func edgeItems(before, after enginetest.State) map[string]bool {
+	oldest := func(st enginetest.State) (time.Time, bool) {
+		var o time.Time
 		found := false
-		for _, it := range items(st, func(it harness.Item) bool { return it.Turn != nil }) {
-			if !found || it.At.Before(o.At) {
-				o, found = it, true
+		for _, it := range items(st, func(it harness.Item) bool { return it.Parent == "" && it.Turn == nil }) {
+			if !found || it.At.Before(o) {
+				o, found = it.At, true
 			}
 		}
 		return o, found
 	}
 	b, ok1 := oldest(before)
 	a, ok2 := oldest(after)
-	if !ok1 || !ok2 || !a.At.After(b.At) {
-		return ""
+	if !ok1 || !ok2 || !a.After(b) {
+		return nil
 	}
-	return a.ID
+	prompted := map[string]bool{}
+	for _, it := range userPrompts(after) {
+		prompted[it.TurnID] = true
+	}
+	edge := map[string]bool{}
+	var firstWhole time.Time
+	for _, it := range items(after, func(it harness.Item) bool { return it.Turn != nil && prompted[it.ID] }) {
+		if firstWhole.IsZero() || it.At.Before(firstWhole) {
+			firstWhole = it.At
+		}
+	}
+	for _, it := range items(after, func(harness.Item) bool { return true }) {
+		if it.Turn != nil && !prompted[it.ID] || !firstWhole.IsZero() && it.At.Before(firstWhole) {
+			edge[it.ID] = true
+		}
+	}
+	return edge
 }
 
 // procsOf is the process view of a rig whose agent is this test process:

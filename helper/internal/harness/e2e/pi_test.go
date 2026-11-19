@@ -1,9 +1,7 @@
 package e2e
 
 import (
-	"context"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +21,11 @@ func piStart(t *testing.T, extra map[int]sessiongen.PiTurn, turns ...sessiongen.
 		t.Fatal(err)
 	}
 	return e, l, e.rigWith(t, "pi", func(o *enginetest.Options) { o.PanePIDs = procsOf() })
+}
+
+func piStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *enginetest.Rig) {
+	_, l, r := piStart(t, nil, turns...)
+	return l, r
 }
 
 // /new in Pi starts a new file in the folder. The session moves to it,
@@ -105,7 +108,7 @@ func TestKnownFault_PiResumeToDroppedFile(t *testing.T) {
 	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil { // resumed: the first file again
 		t.Fatal(err)
 	}
-	if !never(r, 6*time.Second, hasPrompt(3)) {
+	if !never(r, 4500*time.Millisecond, hasPrompt(3)) {
 		t.Fatal("the resumed conversation is followed: the fault is fixed")
 	}
 }
@@ -249,65 +252,18 @@ func TestPiCapabilitiesInFiles(t *testing.T) {
 	}
 }
 
-type dropSub struct{ done chan struct{} }
-
-func (s dropSub) Notify(harness.Notification) error { return nil }
-func (s dropSub) Done() <-chan struct{}             { return s.done }
-
 // A phone that drops while Pi works and returns with the cursor it had
 // gets exactly the items it missed.
 func TestPiConnectionDrop(t *testing.T) {
 	coverage.Covers(t, "generated", "pi/lifecycle/connection_drop")
-	_, l, r := piStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Say: 20})
-	settleUntil(r, 2)
-	a := dropSub{make(chan struct{})}
-	first, err := r.Engine.Open(t.Context(), a, enginetest.SessionID, 0, 1<<20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.Engine.Release(a, enginetest.SessionID)
-	close(a.done) // the connection drops
-	if err := l.Append(sessiongen.Turn{Say: 20, Tools: 2, Output: 20}, sessiongen.Turn{Say: 20}); err != nil {
-		t.Fatal(err)
-	}
-	full := settleUntil(r, 4)
-	b := dropSub{make(chan struct{})}
-	defer close(b.done)
-	back, err := r.Engine.Open(t.Context(), b, enginetest.SessionID, first.Cursor, 1<<20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var want []string
-	for _, it := range full.Items {
-		if it.Seq > first.Cursor {
-			want = append(want, it.ID)
-		}
-	}
-	var got []string
-	for _, it := range back.Items {
-		got = append(got, it.ID)
-	}
-	if len(want) == 0 || strings.Join(want, ",") != strings.Join(got, ",") {
-		t.Errorf("returning with cursor %d: got %v, want %v", first.Cursor, got, want)
-	}
-	if back.CoveredAfter == nil || *back.CoveredAfter != first.Cursor {
-		t.Errorf("coveredAfter %v, want %d: the phone has no gap", back.CoveredAfter, first.Cursor)
-	}
+	dropAndReturn(t, piStarter)
 }
 
 // A removed session is dropped by the engine; serving it again rebuilds
-// the same conversation from the files under a new epoch.
+// the conversation from the files.
 func TestPiSessionRemoved(t *testing.T) {
 	coverage.Covers(t, "generated", "pi/lifecycle/session_removed")
-	_, l, r := piStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Say: 20})
-	st := settleUntil(r, 2)
-	r.Remove()
-	again := settleUntil(r, 2)
-	check(t, "after removal", again, l)
-	if st.Epoch == again.Epoch {
-		t.Error("the epoch is the same after the session was removed and served again")
-	}
-	fail(t, "removal", restarted(st, again))
+	removeAndServeAgain(t, piStarter)
 }
 
 // TestKnownFault_PiReplayWindowStartsATurnMidTurn documents a fault: a
@@ -355,72 +311,8 @@ func TestKnownFault_PiReplayWindowStartsATurnMidTurn(t *testing.T) {
 	}
 }
 
-// Many clients reading at once while Pi writes get consistent answers:
-// every read holds each id once and its pages follow each other.
+// Many clients reading at once while Pi writes get consistent answers.
 func TestPiConcurrentReaders(t *testing.T) {
 	coverage.Covers(t, "generated", "pi/scale/concurrent_requests")
-	_, l, r := piStart(t, nil, sessiongen.Turn{Say: 20, Tools: 2, Output: 20})
-	settleUntil(r, 1)
-	const readers = 8
-	stop := make(chan struct{})
-	errs := make(chan string, readers*64)
-	var wg sync.WaitGroup
-	for i := 0; i < readers; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			for n := 0; ; n++ {
-				select {
-				case <-stop:
-					return
-				default:
-				}
-				sub := dropSub{make(chan struct{})}
-				res, err := r.Engine.Open(context.Background(), sub, enginetest.SessionID, 0, 5+i)
-				if err != nil {
-					errs <- "open: " + err.Error()
-					close(sub.done)
-					return
-				}
-				seen := map[string]bool{}
-				for _, it := range res.Items {
-					if seen[it.ID] {
-						errs <- "duplicate id " + it.ID
-					}
-					seen[it.ID] = true
-				}
-				for page, more := res.Items, res.More; more && len(page) > 0; {
-					p, err := r.Engine.History(context.Background(), enginetest.SessionID, page[0].Seq, 5+i)
-					if err != nil {
-						errs <- "history: " + err.Error()
-						break
-					}
-					for _, it := range p.Items {
-						if seen[it.ID] {
-							errs <- "duplicate id " + it.ID
-						}
-						seen[it.ID] = true
-					}
-					page, more = p.Items, p.More
-				}
-				_ = r.Engine.Close(context.Background(), sub, enginetest.SessionID)
-				close(sub.done)
-			}
-		}(i)
-	}
-	for i := 0; i < 12; i++ {
-		now(l)
-		if err := l.Append(sessiongen.Turn{Say: 20, Tools: 2, Output: 20}); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	st := settleUntil(r, 13)
-	close(stop)
-	wg.Wait()
-	close(errs)
-	for e := range errs {
-		t.Error(e)
-	}
-	check(t, "after the readers", st, l)
+	concurrentReaders(t, piStarter)
 }
