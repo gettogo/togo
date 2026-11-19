@@ -267,21 +267,14 @@ func TestOpenCode2QueueAndErrors(t *testing.T) {
 	}
 }
 
-// TestKnownFault_OpenCode2_ResumeKeepsTheLeftConversation: after the
-// phone resumes another conversation, the chat shows that conversation's
-// past and also the prompt of the conversation the terminal left.
-//
-// Cause, not fully traced: the resume is a relaunch, which restarts the
-// session's adapter on a new server (engine/endpoint.go:222-257) but keeps
-// its item log; the new mapper names the resumed conversation from
-// --session (events2.go:58-61) as the first it sees, and a first-named
-// conversation does not start the chat over (engine/conversation.go
-// movedLocked). Item ids are kept, so the left conversation's prompt
-// stays.
-//
-// Correct: after a resume the chat holds the resumed conversation only
-// (rule 12: adapters reset when the agent's session changes).
-func TestKnownFault_OpenCode2_ResumeKeepsTheLeftConversation(t *testing.T) {
+// After the phone resumes another conversation, the chat holds the
+// resumed conversation only: nothing of the one the terminal left stays.
+// The resume relaunches OpenCode on a new server, and the helper starts
+// the session's adapter again there with its chat kept; the chat starts
+// over because the new run names another conversation than the chat
+// showed (engine/conversation.go convCarry). The phone's next prompt lands
+// in the resumed conversation once, and a helper restart keeps it.
+func TestOpenCode2PhoneResumeShowsOnlyTheResumedConversation(t *testing.T) {
 	t.Parallel()
 	s := oc2Start(t, 75, nil, sessiongen.Turn{Prompt: "In the first", Say: 20})
 	support.WaitFor(t, s.r, "the first conversation", shown("In the first"))
@@ -294,10 +287,24 @@ func TestKnownFault_OpenCode2_ResumeKeepsTheLeftConversation(t *testing.T) {
 		t.Fatalf("resume: %+v %v", res, err)
 	}
 	s.p.SetMain(first)
-	st := support.WaitFor(t, s.r, "the first conversation's past", shown("In the first"))
-	st = s.r.Settle(2 * time.Second)
-	if !shown("In the second")(st) {
-		t.Fatalf("the chat holds only the resumed conversation %q: the fault is fixed; tighten TestOpenCode2NewAndResume", textsOf(st))
+	support.WaitFor(t, s.r, "the first conversation's past", shown("In the first"))
+	if st := s.r.Settle(2 * time.Second); shown("In the second")(st) {
+		t.Fatalf("the chat still holds the conversation the terminal left: %q", textsOf(st))
+	}
+	s.r.Term.OnSubmit = func(text string) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		support.Now(s.l)
+		_ = s.l.Append(sessiongen.Turn{Prompt: text, Say: 12})
+	}
+	st := s.sendLands(t, "After the resume, from the phone")
+	if got := textsOf(st); !slices.Equal(got, []string{"In the first", "After the resume, from the phone"}) {
+		t.Fatalf("after the phone's prompt the chat holds %q", got)
+	}
+	s.r.Restart()
+	st = support.WaitFor(t, s.r, "the resumed conversation after a restart", shown("After the resume, from the phone"))
+	if got := textsOf(st); !slices.Equal(got, []string{"In the first", "After the resume, from the phone"}) {
+		t.Fatalf("after a restart the chat holds %q", got)
 	}
 }
 
