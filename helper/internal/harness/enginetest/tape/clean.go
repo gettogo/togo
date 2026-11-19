@@ -24,6 +24,7 @@ const (
 	NormNoteTime  = "notification-ts"
 	NormWallTime  = "wall-clock-time"
 	NormWallMilli = "wall-clock-id"
+	NormPort      = "listening-port"
 )
 
 // Cleaner scrubs a tape of what names the machine or its user and
@@ -42,6 +43,9 @@ type Cleaner struct {
 	// phone sent, a notice), not written by the generator, whose clock is
 	// fixed; it is replaced. Zero values leave every time as it is.
 	From, To time.Time
+	// Ports are the ports a test server listened on (chosen by the
+	// engine, different on each run); they are replaced by stand-ins.
+	Ports []int
 }
 
 // Neutral stand-ins for the machine's own paths and names.
@@ -129,7 +133,7 @@ func (c Cleaner) Clean(lines [][]byte) ([][]byte, []string, error) {
 		}
 		frames = append(frames, after)
 	}
-	used := normalise(frames, c.From, c.To)
+	used := normalise(frames, c.From, c.To, c.Ports)
 	out := make([][]byte, len(frames))
 	for i, f := range frames {
 		b, err := redact.Encode(f)
@@ -230,8 +234,8 @@ var clock = time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC)
 // normalise rewrites, in place, the fields that differ on every run, the
 // same replacement for the same value across the whole tape. It returns
 // the names of the rules that changed something, sorted.
-func normalise(frames []any, from, to time.Time) []string {
-	n := &normaliser{epochs: map[string]string{}, phone: map[string]string{}, reqs: map[string]string{}, times: map[string]string{}, used: map[string]bool{}, from: from, to: to}
+func normalise(frames []any, from, to time.Time, ports []int) []string {
+	n := &normaliser{epochs: map[string]string{}, phone: map[string]string{}, reqs: map[string]string{}, times: map[string]string{}, used: map[string]bool{}, from: from, to: to, ports: ports}
 	for i, f := range frames {
 		m, ok := f.(map[string]any)
 		if !ok {
@@ -252,6 +256,7 @@ type normaliser struct {
 	epochs, phone, reqs, times map[string]string
 	used                       map[string]bool
 	from, to                   time.Time
+	ports                      []int
 }
 
 func (n *normaliser) canon(m map[string]string, v string, name func(i int) string) string {
@@ -328,6 +333,13 @@ func (n *normaliser) text(s string) string {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil && n.inRun(t) {
 		n.mark(NormWallTime, true)
 		return n.canon(n.times, "t:"+instant(s), n.synthetic)
+	}
+	for _, p := range n.ports {
+		re := regexp.MustCompile(`(^|[^0-9])` + strconv.Itoa(p) + `([^0-9]|$)`)
+		if re.MatchString(s) {
+			n.mark(NormPort, true)
+			s = re.ReplaceAllString(s, "${1}49152${2}")
+		}
 	}
 	s = milli.ReplaceAllStringFunc(s, func(m string) string {
 		sub := milli.FindStringSubmatch(m)
