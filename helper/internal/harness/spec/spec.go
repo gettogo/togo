@@ -284,6 +284,12 @@ type File struct {
 	// every file in it is read from its start, also the ones that stopped
 	// changing before the helper began to watch.
 	Whole bool `yaml:"whole"`
+	// Header is the "type" of the record that names the session, for a
+	// jsonl file that does not open with it (omp writes a title record
+	// first). A replay cut to a file's last records keeps the file's
+	// leading records up to and including that one; without Header, or
+	// when it is not among the first few records, it keeps the first.
+	Header string `yaml:"header"`
 }
 
 // SQLite reads a harness's own database read-only through the system

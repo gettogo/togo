@@ -234,13 +234,13 @@ func (f File) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, 
 		if err != nil {
 			return err
 		}
-		t := &tail{path: p, name: s.Name, replay: true, lines: lines}
+		t := &tail{path: p, name: s.Name, header: fs.Header, replay: true, lines: lines}
 		return pollLoop(ctx, func() error { return t.poll(emit) })
 	}
 	if fs.Exclusive {
-		return watchGlobExclusive(ctx, s.Name, fs.Glob, env, emit)
+		return watchGlobExclusive(ctx, s.Name, fs.Glob, fs.Header, env, emit)
 	}
-	return watchGlob(ctx, s.Name, fs.Glob, fs.Whole, env, emit)
+	return watchGlob(ctx, s.Name, fs.Glob, fs.Header, fs.Whole, env, emit)
 }
 
 func pollLoop(ctx context.Context, step func() error) error {
@@ -267,7 +267,7 @@ func pollLoop(ctx context.Context, step func() error) error {
 // whole reads every match from its start, whatever its age: the folder is
 // the session's own, and a file in it that no longer changes (a subagent
 // that finished before a helper restart) still has its end to tell.
-func watchGlob(ctx context.Context, name, pattern string, whole bool, env harness.Env, emit func(harness.Record)) error {
+func watchGlob(ctx context.Context, name, pattern, header string, whole bool, env harness.Env, emit func(harness.Record)) error {
 	started := time.Now()
 	created, err := time.Parse(time.RFC3339, env.Vars["created"])
 	if err != nil {
@@ -288,7 +288,7 @@ func watchGlob(ctx context.Context, name, pattern string, whole bool, env harnes
 					continue
 				}
 				if whole || (i == 0 && len(tails) == 0 && !m.mtime.Before(created)) || m.mtime.After(started) {
-					tails[m.path] = &tail{path: m.path, name: name, replay: true}
+					tails[m.path] = &tail{path: m.path, name: name, header: header, replay: true}
 				}
 			}
 		}
@@ -312,6 +312,7 @@ type tail struct {
 	lines   bool
 	path    string
 	name    string
+	header  string // type of the record that names the session (spec.File.Header)
 	offset  int64
 	pending []byte
 	mtime   time.Time
@@ -342,16 +343,16 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	defer fh.Close()
 	var recs []json.RawMessage
-	var header json.RawMessage // the file's first record, kept when the replay is cut
+	var header []json.RawMessage // the file's leading records, kept when the replay is cut
 	replaying := t.replay
 	if t.replay {
 		t.replay = false
 		// Replay at most the last MaxFileRead bytes, then the last
-		// MaxRecords records of those. The first record (the session
-		// header, which names the session) is always kept.
+		// MaxRecords records of those. The records up to the one that
+		// names the session (head.go) are always kept.
 		if start := st.Size() - MaxFileRead; start > t.offset {
 			if !t.lines && t.offset == 0 {
-				header = firstRecord(fh)
+				header = headRecords(fh, t.header)
 			}
 			t.offset, t.skip = start, true
 		}
@@ -395,15 +396,18 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	if len(recs) > MaxRecords && !t.lines {
 		if replaying && header == nil {
-			header = recs[0] // the file's start is in view
+			header = leading(recs, t.header) // the file's start is in view
+			recs = recs[len(header):]
 		}
-		recs = recs[len(recs)-MaxRecords:]
+		if len(recs) > MaxRecords {
+			recs = recs[len(recs)-MaxRecords:]
+		}
 	}
 	if replaying && header != nil && len(recs) > 0 {
-		if len(recs) >= MaxRecords {
-			recs = recs[1:]
+		if over := len(recs) + len(header) - MaxRecords; over > 0 {
+			recs = recs[over:]
 		}
-		recs = append([]json.RawMessage{header}, recs...)
+		recs = append(append([]json.RawMessage(nil), header...), recs...)
 	}
 	now := time.Now()
 	if replaying && len(recs) > 0 {
@@ -412,24 +416,6 @@ func (t *tail) poll(emit func(harness.Record)) error {
 	}
 	for _, r := range recs {
 		emit(harness.Record{Source: t.name, At: now, Data: r, File: t.path})
-	}
-	return nil
-}
-
-// firstHeaderMax bounds how much of a file's start is read for its header.
-const firstHeaderMax = 64 << 10
-
-// firstRecord returns the first line of the file when it is a JSON value,
-// else nil.
-func firstRecord(fh *os.File) json.RawMessage {
-	buf := make([]byte, firstHeaderMax)
-	n, _ := fh.ReadAt(buf, 0)
-	i := bytes.IndexByte(buf[:n], '\n')
-	if i <= 0 {
-		return nil
-	}
-	if rs := Records(buf[:i], 1); len(rs) == 1 {
-		return rs[0]
 	}
 	return nil
 }
