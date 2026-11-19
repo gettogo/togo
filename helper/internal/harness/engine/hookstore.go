@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -29,7 +30,15 @@ import (
 // hookKeepBytes; past either, the oldest quarter is cut by an atomic
 // rewrite. A file not written for hookKeepAge is deleted. An unreadable
 // header, a newer version or an oversized file is ignored and replaced; a
-// line that does not parse (a torn last line) is skipped and cut.
+// line that does not parse (a torn last line) is skipped and cut. The
+// file is never opened through a symbolic link.
+//
+// A cut can fall inside a turn: the replay then starts mid-turn. The
+// hook mappers draw nothing for a tool end whose start was cut, and a
+// tool start with no prompt before it opens a turn without its prompt, so
+// the oldest turn kept may show without its prompt. The store cannot tell
+// where a turn begins without the mapper, and the cut is rare (2000
+// records), so it is left so.
 //
 // Set and cleared: written on each hook record of a hook-only session;
 // read once when the session's hook feed first starts in this process;
@@ -82,8 +91,12 @@ func hookStorePath(togoHome, id string) string {
 // for appends: an unusable file is removed, a torn last line cut.
 func (h *hookStore) load(now time.Time) []hookLine {
 	h.n, h.bytes = 0, 0
-	f, err := os.Open(h.path)
+	// Never through a link: the file is ours, in our own folder.
+	f, err := os.OpenFile(h.path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			_ = os.Remove(h.path)
+		}
 		return nil
 	}
 	defer f.Close()
@@ -116,7 +129,10 @@ func (h *hookStore) load(now time.Time) []hookLine {
 		h.bytes += int64(len(raw))
 	}
 	if good < st.Size() {
-		_ = os.Truncate(h.path, good)
+		if w, err := os.OpenFile(h.path, os.O_WRONLY|syscall.O_NOFOLLOW, 0); err == nil {
+			_ = w.Truncate(good)
+			_ = w.Close()
+		}
 	}
 	h.n = len(lines)
 	if h.n > hookKeep || h.bytes > hookKeepBytes {
@@ -141,7 +157,7 @@ func (h *hookStore) add(l hookLine) error {
 	if err := os.MkdirAll(filepath.Dir(h.path), 0o700); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(h.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(h.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return err
 	}
