@@ -106,6 +106,8 @@ type Codex struct {
 	// Approval makes the next turn's file change wait on an approval
 	// request; Ask makes it ask a question first. Each applies once.
 	Approval, Ask bool
+	// Plan makes each turn update its plan (turn/plan/updated).
+	Plan bool
 
 	journal string
 	main    string // the thread the terminal shows
@@ -184,7 +186,7 @@ func (p *Codex) Turn(g *Gen, t Turn) error {
 	}
 	prompt := t.Prompt
 	if prompt == "" || prompt == Continue {
-		prompt = "Please " + g.Text(40)
+		prompt = fmt.Sprintf("Step %d: %s", g.L.Truth.Prompts+1, g.Text(40))
 	}
 	g.L.Truth.Prompts++
 	user := CodexUserMessage(codexUUID(g), prompt)
@@ -257,7 +259,7 @@ func (p *Codex) end(g *Gen, th, turn string, start time.Time, status string, fai
 	return p.emit(g, at, CodexTurnCompleted(th, CodexTurn(turn, status, start, &at, failure)))
 }
 
-// think writes a reasoning item, streamed, and a plan.
+// think writes a reasoning item, streamed, and the plan when asked for.
 func (p *Codex) think(g *Gen, th, turn string) error {
 	id := "rs_" + g.Hex(24)
 	at := g.Tick()
@@ -266,11 +268,13 @@ func (p *Codex) think(g *Gen, th, turn string) error {
 		CodexItemStarted(th, turn, CodexReasoning(id, nil), at),
 		CodexDelta("item/reasoning/summaryTextDelta", th, turn, id, sum),
 		CodexItemCompleted(th, turn, CodexReasoning(id, []string{sum}), g.Tick()),
-		CodexPlan(th, turn, []string{"Read the code", "Make the change", "Run the tests"}, 1),
 	} {
 		if err := p.emit(g, at, m); err != nil {
 			return err
 		}
+	}
+	if p.Plan {
+		return p.emit(g, at, CodexPlan(th, turn, []string{"Read the code", "Make the change", "Run the tests"}, 1))
 	}
 	return nil
 }

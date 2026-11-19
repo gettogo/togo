@@ -25,7 +25,7 @@ func TestHonestyCodex(t *testing.T) {
 	shapes := codexShapes(t)
 	home := t.TempDir()
 	cwd := filepath.Join(home, "proj")
-	p := &Codex{}
+	p := &Codex{Plan: true}
 	l, err := Write(home, p, Script{Seed: 3, Start: time.Date(2026, 11, 18, 9, 0, 0, 0, time.UTC), Cwd: cwd, Turns: []Turn{
 		{Say: 80, Tools: 2, Output: 300},
 		{Say: 40, Agents: &Batch{Size: 3, Steps: 2, Background: true, Unreported: 1}},
