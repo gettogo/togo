@@ -56,6 +56,21 @@ func (a fileAgent) add(t *testing.T, l *sessiongen.Layout, turns ...sessiongen.T
 	}
 }
 
+// attach writes a first turn left open, waits for the chat to show it,
+// then ends it: from here the engine follows the agent's file. Start's
+// pause does not prove that on a busy machine, and finished turns written
+// before the feed found its file may never show: Vibe starts an empty
+// journal segment after each turn, and a feed that begins between turns
+// follows that one (TestKnownFault_Vibe_RestoreBetweenTurnsShowsNothing).
+// A turn still open is read whenever the feed begins.
+func (a fileAgent) attach(t *testing.T, r *enginetest.Rig, l *sessiongen.Layout) {
+	t.Helper()
+	a.add(t, l, open(sessiongen.Turn{Say: 30, Tools: 1, Output: 50}))
+	a.seen(t, r, "attached, mid turn", l, true)
+	a.add(t, l, sessiongen.Turn{Prompt: a.cont, Say: 30})
+	a.seen(t, r, "attached", l, false)
+}
+
 // open marks a turn as left open at its last tool call.
 func open(t sessiongen.Turn) sessiongen.Turn {
 	h := sessiongen.HookTurn{}
@@ -213,6 +228,7 @@ func rereadsAgree(t *testing.T, r *enginetest.Rig, l *sessiongen.Layout, last fu
 func (a fileAgent) reconnect(t *testing.T) {
 	e := support.NewEnv(t, time.Hour)
 	l, r := a.start(t, e, sessiongen.Script{Seed: 61})
+	a.attach(t, r, l)
 	for i := 0; i < 3; i++ {
 		a.add(t, l, sessiongen.Turn{Say: 50, Tools: 2, Output: 100})
 	}
@@ -283,6 +299,7 @@ func (a fileAgent) removed(t *testing.T) {
 func (a fileAgent) hammer(t *testing.T) {
 	e := support.NewEnv(t, time.Hour)
 	l, r := a.start(t, e, sessiongen.Script{Seed: 63})
+	a.attach(t, r, l)
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
 	for g := 0; g < 8; g++ {
