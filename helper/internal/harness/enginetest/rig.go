@@ -390,6 +390,12 @@ func (r *Rig) Deliver(event string, payload []byte) {
 	source.Hooks.Deliver(r.ID, source.Payload{Kind: source.BusHook, Event: event, Data: payload})
 }
 
+// DeliverStatusLine gives the engine one status line input, as `togo hook
+// claude statusline` forwards it.
+func (r *Rig) DeliverStatusLine(payload []byte) {
+	source.Hooks.Deliver(r.ID, source.Payload{Kind: source.BusStatusline, Data: payload})
+}
+
 // sessions resolves the rig's session for one engine; gone is set when
 // that engine stops.
 type sessions struct {

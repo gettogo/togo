@@ -13,6 +13,10 @@ import (
 // through its SessionStart hook, which the test delivers; a subagent's
 // file records no exit of its own. Shapes follow adapters/claude/testdata.
 type Claude struct {
+	// Extra adds records to a turn, keyed by the number of the turn's
+	// prompt (1 is the first).
+	Extra map[int]ClaudeTurn
+
 	session string
 	main    string
 	jobs    int
@@ -110,6 +114,9 @@ func (c *Claude) Turn(g *Gen, t Turn) error {
 		if err := c.entry(g, c.main, "", c.result(id, g.Text(max(t.Output, 1)), nil)); err != nil {
 			return err
 		}
+	}
+	if err := c.work(g, c.Extra[g.L.Truth.Prompts]); err != nil {
+		return err
 	}
 	var settle []string // task ids reported once the turn has ended
 	for i := 0; i < t.Jobs; i++ {

@@ -228,7 +228,7 @@ func TestClaudeMatchesRecordedFields(t *testing.T) {
 		{Compact: true, Agents: &Batch{Size: 2, Steps: 1, Background: true}, Say: 20},
 		{Interrupt: true},
 	}
-	l, err := Write(home, &Claude{}, s)
+	l, err := Write(home, &Claude{Extra: map[int]ClaudeTurn{1: {Think: true, Edits: 1, Reads: 1, Todo: []string{"Read", "Edit"}, Done: 1}}}, s)
 	if err != nil {
 		t.Fatal(err)
 	}
