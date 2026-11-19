@@ -99,7 +99,7 @@ func (r *Rig) SettleUntil(limit time.Duration, ok func(State) bool) State {
 		last = key
 		if time.Now().After(deadline) {
 			if ok != nil && !ok(st) {
-				r.T.Fatalf("the session never reached the state the test waits for")
+				r.T.Fatalf("the session never reached the state the test waits for: %d items, mission rev %d", len(st.Items), st.Mission.Rev)
 			}
 			return r.Read()
 		}

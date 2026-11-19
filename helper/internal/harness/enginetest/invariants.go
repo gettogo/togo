@@ -34,6 +34,32 @@ func Check(st State, f Facts) []Violation {
 	out = append(out, Paging(st)...)
 	out = append(out, Answered(st, f)...)
 	out = append(out, TurnTimes(st)...)
+	out = append(out, Matched(st, f)...)
+	return out
+}
+
+// Matched: an agent's own steps are the ones in its own file: the first
+// prompt under each agent item is the one its file opens with.
+func Matched(st State, f Facts) []Violation {
+	want := map[string]string{}
+	for _, a := range f.Truth.Agents {
+		want[a.Task] = a.Prompt
+	}
+	items := latest(st.Items)
+	var out []Violation
+	for _, id := range sortedKeys(items) {
+		it := items[id]
+		if it.User == nil || it.Parent == "" {
+			continue
+		}
+		ag, ok := items[it.Parent]
+		if !ok || ag.Agent == nil {
+			continue
+		}
+		if w, ok := want[ag.Agent.AgentID]; ok && w != it.User.Text {
+			out = append(out, Violation{"agent-file-mismatch", fmt.Sprintf("%s shows the steps of another agent's file (%.40q)", it.Parent, it.User.Text)})
+		}
+	}
 	return out
 }
 
@@ -277,8 +303,15 @@ func Restarted(before, after State) []Violation {
 	for _, id := range sortedKeys(a) {
 		ait := a[id]
 		bit, ok := b[id]
-		if !ok {
+		switch {
+		case !ok && ait.Parent != "":
+			out = append(out, Violation{"restart-new-agent-step", id + " (" + view(ait) + ") appears only after the restart"})
+			continue
+		case !ok:
 			out = append(out, Violation{"restart-new-item", id + " (" + view(ait) + ") appears only after the restart"})
+			continue
+		case ait.Parent != bit.Parent:
+			out = append(out, Violation{"restart-moved-agent-step", fmt.Sprintf("%s was a step of %q, is one of %q", id, bit.Parent, ait.Parent)})
 			continue
 		}
 		if view(ait) != view(bit) {
@@ -321,6 +354,31 @@ func sortedKeys(m map[string]harness.Item) []string {
 		out = append(out, k)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// Without drops the violations of the named rules, for a scenario whose
+// known faults have a TestKnownFault test of their own.
+func Without(vs []Violation, rules ...string) []Violation {
+	var out []Violation
+	for _, v := range vs {
+		keep := true
+		for _, r := range rules {
+			keep = keep && v.Rule != r
+		}
+		if keep {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// Rules counts the violations by rule.
+func Rules(vs []Violation) map[string]int {
+	out := map[string]int{}
+	for _, v := range vs {
+		out[v.Rule]++
+	}
 	return out
 }
 

@@ -121,7 +121,7 @@ func (c *Claude) Turn(g *Gen, t Turn) error {
 		if err != nil {
 			return err
 		}
-		settle = append(settle, ids...)
+		settle = append(settle, ids[:len(ids)-min(t.Agents.Unreported, len(ids))]...)
 	}
 	if t.Interrupt {
 		if err := c.entry(g, c.main, "", c.user("[Request interrupted by user]")); err != nil {

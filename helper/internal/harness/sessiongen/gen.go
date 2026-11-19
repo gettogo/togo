@@ -69,6 +69,9 @@ type Batch struct {
 	// Background returns the call at once; each agent is reported later.
 	// A foreground call returns when they are all done.
 	Background bool
+	// Unreported is how many of a background batch's agents the main
+	// conversation never reports, as when the agent is still at work.
+	Unreported int
 }
 
 // AgentTruth is what the generator knows about one subagent.

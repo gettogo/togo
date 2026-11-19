@@ -105,6 +105,8 @@ func (r *Rig) start() {
 			return r.status
 		},
 		Scale: 0.05,
+		// The engine's log goes to the test's, shown when a test fails.
+		Logf: func(format string, args ...any) { r.T.Logf("engine: "+format, args...) },
 	})
 	r.T.Cleanup(func() { r.Engine.Forget(SessionID) })
 	r.Sub = newSub()
