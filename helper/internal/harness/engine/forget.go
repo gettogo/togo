@@ -19,6 +19,7 @@ func (e *Engine) Forget(id string) {
 		_ = os.Remove(p)
 	}
 	e.forgetConversation(id)
+	e.convCarry.take(id)
 	unlock := e.endpointOps.lock(id)
 	e.retireEndpoint(id)
 	e.dropRelaunch(id)
@@ -32,6 +33,7 @@ func (e *Engine) Forget(id string) {
 // restart stays. Serving the session again restores from there.
 func (e *Engine) Unload(id string) {
 	e.unload(id)
+	e.convCarry.take(id)
 	e.dropRelaunch(id)
 	typing.Delete(id)
 	draining.Delete(id)
