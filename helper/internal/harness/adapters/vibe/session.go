@@ -166,10 +166,14 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	if id != "" && s.sid != "" && id != s.sid {
 		// The feed moved to another conversation (vibe/vibe.go journalFor):
 		// nothing of the one left goes on, and the new one's history is read.
+		// The engine starts the chat over on it (StateConversation below).
 		items = s.leave(rec.At)
 	}
 	if id != "" {
 		s.sid = id
+		// The chat starts over when this changes: a fresh mapper reads the
+		// new conversation from its history.
+		s.state[harness.StateConversation] = id
 	}
 	if !s.loaded {
 		s.loaded = true
@@ -475,7 +479,6 @@ func (s *session) leave(at time.Time) []harness.Item {
 	s.tools, s.failed = map[string]harness.Item{}, map[string]bool{}
 	s.asks, s.gates = map[string]harness.Item{}, map[string]string{}
 	s.loaded = false
-	harness.Moved(s.state)
 	return items
 }
 
