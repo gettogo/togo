@@ -141,13 +141,23 @@ func TestSubagentFileBeforeItsCall(t *testing.T) {
 				t.Fatal(err)
 			}
 			r := e.rig(t, "omp")
-			if st := r.Settle(10 * time.Second); countKind(st, harness.KindAgent) != c.earlyShown {
+			// Rows that are due are waited for by count, not by time: six
+			// 2 MiB files take a loaded machine longer to read than any
+			// fixed pause. Where none is due, the log going quiet is the
+			// only thing to wait for.
+			st := r.Settle(10 * time.Second)
+			if c.earlyShown > 0 {
+				st = r.SettleUntil(60*time.Second, func(st enginetest.State) bool {
+					return countKind(st, harness.KindAgent) >= c.earlyShown
+				})
+			}
+			if countKind(st, harness.KindAgent) != c.earlyShown {
 				t.Fatalf("%d agent rows before any task call, want %d", countKind(st, harness.KindAgent), c.earlyShown)
 			}
 			if err := os.WriteFile(l.Main(), main, 0o644); err != nil {
 				t.Fatal(err)
 			}
-			st := r.SettleUntil(20*time.Second, func(st enginetest.State) bool {
+			st = r.SettleUntil(60*time.Second, func(st enginetest.State) bool {
 				return enginetest.Has(l.Truth.Last)(st) && stepOwners(st) == c.size
 			})
 			if n := countKind(st, harness.KindAgent); n != c.size {
