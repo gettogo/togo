@@ -40,17 +40,11 @@ func TestSubagentFilesMatchedByName(t *testing.T) {
 	enginetest.Fail(t, "after the files", enginetest.Matched(st, enginetest.Facts{Truth: l.Truth}))
 }
 
-// TestKnownFault_ReportAfterExitMakesAJob documents a fault: when omp's
-// report of a background subagent (an async-result of type task) is read
-// after the agent's own file recorded its exit, the mapper finds no
-// running agent to settle and makes a finished background job of it
-// (adapters/omp/jobs.go:48-63). The Background section then shows the
-// subagent a second time, as a job, and whether it does depends on which
-// feed was read first, so a restart can drop the row again.
-//
-// Correct: a task report for an agent that already ended changes nothing.
-// This test passes while the fault is present.
-func TestKnownFault_ReportAfterExitMakesAJob(t *testing.T) {
+// TestReportAfterExitKeepsTheAgentRow: omp's report of a background
+// subagent (an async-result of type task) read after the agent's own file
+// recorded its exit leaves the agent's row as it ended, and the subagent
+// is not shown a second time as a background job.
+func TestReportAfterExitKeepsTheAgentRow(t *testing.T) {
 	e := newEnv(t, 10*time.Minute)
 	l, err := sessiongen.Write(e.home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 5, Start: e.start, Cwd: e.cwd,
 		Turns: []sessiongen.Turn{{Say: 20, Agents: &sessiongen.Batch{Size: 2, Steps: 1, Background: true, ReportLater: true}}}})
@@ -77,17 +71,9 @@ func TestKnownFault_ReportAfterExitMakesAJob(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := r.SettleUntil(10*time.Second, enginetest.Has(l.Truth.Last))
-	var jobs []enginetest.Violation
-	for _, v := range enginetest.Ended(st, enginetest.Facts{Truth: l.Truth}) {
-		if v.Rule == "agent-shown-as-job" {
-			jobs = append(jobs, v)
-		}
-	}
-	if len(jobs) == 0 {
-		t.Fatal("no subagent is shown as a job: the fault is fixed")
-	}
-	for _, v := range jobs {
-		t.Logf("still present: %s", v)
+	enginetest.Fail(t, "after the report", enginetest.Ended(st, enginetest.Facts{Truth: l.Truth}))
+	if n := countKind(st, harness.KindBackground); n != 0 {
+		t.Fatalf("%d background jobs for 2 subagents", n)
 	}
 }
 

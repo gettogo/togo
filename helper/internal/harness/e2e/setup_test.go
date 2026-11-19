@@ -84,11 +84,9 @@ func agentItems(st enginetest.State) map[string]harness.Item {
 
 // known are the rules a scenario may break today, each through a fault
 // that a TestKnownFault test documents:
-//   - agent-shown-as-job, and a restart losing such a row:
-//     TestKnownFault_ReportAfterExitMakesAJob.
 //   - agent-turn-moved, a restart changing only an agent row's turn
 //     from or to none: TestKnownFault_ClaudeAgentReadBeforeItsCall.
-var known = []string{"agent-shown-as-job", "agent-turn-moved"}
+var known = []string{"agent-turn-moved"}
 
 func check(t *testing.T, where string, st enginetest.State, l *sessiongen.Layout) {
 	t.Helper()
@@ -96,7 +94,9 @@ func check(t *testing.T, where string, st enginetest.State, l *sessiongen.Layout
 }
 
 // fail reports the violations outside the known faults. A job row named
-// after a subagent that a restart drops is the agent-shown-as-job fault.
+// after a subagent that a restart drops is reported as agent-shown-as-job,
+// and a restart adding or losing a row no task has as
+// agent-row-without-task, so the failure names the fault.
 func fail(t *testing.T, where string, vs []enginetest.Violation, layout ...*sessiongen.Layout) {
 	t.Helper()
 	l := &sessiongen.Layout{}
