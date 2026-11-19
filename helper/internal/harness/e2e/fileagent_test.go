@@ -22,6 +22,8 @@ type fileAgent struct {
 	profile func() sessiongen.Profile
 	// cont is the Prompt that continues a turn left open (Hook.Pending).
 	cont string
+	// limit bounds each wait, when it is not fileLimit.
+	limit time.Duration
 	// opts adds to the rig's options.
 	opts func(o *enginetest.Options)
 }
@@ -109,11 +111,15 @@ func latestItems(st enginetest.State) map[string]harness.Item {
 func (a fileAgent) seen(t *testing.T, r *enginetest.Rig, where string, l *sessiongen.Layout, midTurn bool) enginetest.State {
 	t.Helper()
 	ok := reached(l, midTurn)
-	deadline := time.Now().Add(fileLimit)
-	st := r.SettleUntil(fileLimit, nil)
+	limit := a.limit
+	if limit == 0 {
+		limit = fileLimit
+	}
+	deadline := time.Now().Add(limit)
+	st := r.SettleUntil(limit, nil)
 	for !ok(st) && time.Now().Before(deadline) {
 		time.Sleep(200 * time.Millisecond)
-		st = r.SettleUntil(fileLimit, nil)
+		st = r.SettleUntil(limit, nil)
 	}
 	if !ok(st) {
 		t.Errorf("%s: the chat never reached the generator's last item %q (%d items, summary %+v)", where, l.Truth.Last, len(st.Items), st.Mission.Summary)
