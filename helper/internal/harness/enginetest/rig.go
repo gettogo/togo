@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/approval"
+	"github.com/gettogo/togo/helper/internal/gitx"
 	"github.com/gettogo/togo/helper/internal/harness"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/amp"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/claude"
@@ -23,6 +24,7 @@ import (
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/cursor"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/droid"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/omp"
+	"github.com/gettogo/togo/helper/internal/harness/anchor"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/harness/source/rpc"
@@ -86,6 +88,18 @@ type Options struct {
 	// (OpenCode's opencode2): New sets it when Agent is given as such a
 	// name (variants, rig_api2.go), and Agent becomes the agent's id.
 	Adapter string
+	// Anchors gives the engine a marker over the scripted pane
+	// (anchors.go): items published while the screen is up carry the
+	// pane's position, and Locate finds it again.
+	Anchors bool
+	// Git gives the engine the machine's git, for the Changes section of
+	// a folder that is a repository.
+	Git bool
+	// Ports gives the engine a listing of the session's listening ports,
+	// which Listeners starts as and SetListeners changes; without it the
+	// section is not served.
+	Ports     bool
+	Listeners []ports.Listener
 }
 
 // asIs is a redactor that changes nothing.
@@ -117,6 +131,8 @@ type Rig struct {
 	launched bool
 	mu       sync.Mutex
 	status   string
+	// listeners are the ports SetListeners scripted.
+	listeners []ports.Listener
 	// stopEngine stops the running engine and waits for what it started.
 	stopEngine func()
 }
@@ -140,7 +156,7 @@ func New(t testing.TB, opt Options) *Rig {
 	if v, ok := variants[opt.Agent]; ok {
 		opt.Adapter, opt.Agent, version = opt.Agent, v.agent, v.version
 	}
-	r := &Rig{T: t, Opt: opt, ID: opt.ID, TogoHome: t.TempDir(), bin: filepath.Join(t.TempDir(), "bin"), Term: newTerminal(opt.Agent)}
+	r := &Rig{T: t, Opt: opt, listeners: opt.Listeners, ID: opt.ID, TogoHome: t.TempDir(), bin: filepath.Join(t.TempDir(), "bin"), Term: newTerminal(opt.Agent)}
 	if err := os.MkdirAll(r.bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +167,10 @@ func New(t testing.TB, opt Options) *Rig {
 		version = opt.Version
 	}
 	sub := subcommands[opt.Agent]
+	if opt.Agent == "omp" {
+		// `omp models ls --json`, as omp 18 prints it (omp/testdata).
+		sub = "models) cat '" + filepath.Join(sourceDir(), "harness", "adapters", "omp", "testdata", "models.json") + "';;\n"
+	}
 	if opt.Adapter == "opencode2" {
 		sub = serveCase(r.bin)
 	}
@@ -194,6 +214,16 @@ func (r *Rig) start() {
 	var listeners func(context.Context, string) ([]ports.Listener, error)
 	if r.api != nil && r.api.v2 == nil {
 		listeners = r.apiPorts
+	} else if r.Opt.Ports {
+		listeners = r.scriptedPorts
+	}
+	var git func(context.Context, string) (gitx.Status, error)
+	if r.Opt.Git {
+		git = (&gitx.Git{}).Status
+	}
+	var marker harness.Marker
+	if r.Opt.Anchors {
+		marker = &anchor.Marker{Home: r.TogoHome, Pane: termPane{r.Term}}
 	}
 	// Once this engine is stopped it is a helper that exited: nothing it
 	// still has running (a hub event's goroutine, a timer) may serve the
@@ -203,6 +233,8 @@ func (r *Rig) start() {
 		Redactor: red,
 		PanePIDs: panePIDs,
 		Ports:    listeners,
+		Git:      git,
+		Marker:   marker,
 		Sessions: sessions{r: r, gone: gone}, Typist: r.Term, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
 		Approvals:    approvals{r},
 		Screen:       func(context.Context, string) (string, error) { return r.Term.Text(), nil },
@@ -301,6 +333,21 @@ func (a approvals) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval
 }
 
 func (a approvals) CloseDesk(requestID string) { a.store().CloseDesk(requestID) }
+
+// The ways the store answers a question with the pane's keys or a waiting
+// hook (the engine finds them by interface).
+
+func (a approvals) AnswerChoice(ctx context.Context, sessionID string, answers []approval.AskAnswer) error {
+	return a.store().AnswerChoice(ctx, sessionID, answers)
+}
+
+func (a approvals) AnswerAsk(ctx context.Context, sessionID string, answers []approval.AskAnswer) error {
+	return a.store().AnswerAsk(ctx, sessionID, answers)
+}
+
+func (a approvals) AnswerQuestion(sessionID string, prompts []string, answers map[string]string) bool {
+	return a.store().AnswerQuestion(sessionID, prompts, answers)
+}
 
 // Restart stops this engine and starts another over the same TOGO_HOME
 // and files, as `togo update` restarts the helper while the agent runs.

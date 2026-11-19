@@ -38,6 +38,11 @@ var readOMP = []string{
 	"message.details.async.state", "message.details.async.jobId", "message.details.async.type",
 	"message.details.results[].id", "message.details.results[].exitCode", "message.details.results[].aborted",
 	"message.details.results[].output",
+	// bashExecution (session.go bash), the effort level, an ask's answer
+	// and the todo tool's list.
+	"message.command", "message.output", "message.exitCode", "message.cancelled", "thinkingLevel", "configured",
+	"message.details.selectedOptions[]", "message.details.phases[].name", "message.details.phases[].tasks[].content",
+	"message.details.phases[].tasks[].status",
 }
 
 // readClaude lists the paths Claude Code's mapper reads

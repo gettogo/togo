@@ -15,7 +15,14 @@ type OMP struct {
 	// TTY is the pane's terminal without /dev/ ("ttys042"); empty writes
 	// no terminal record.
 	TTY string
+	// Extra adds records to a turn, keyed by the number of the turn's
+	// prompt (1 is the first), so a script written in pieces keeps its
+	// meaning.
+	Extra map[int]OMPTurn
 
+	model  string // the model the agent runs now, after a model_change
+	open   *ompOpenAsk
+	forkOf string // the conversation a fork came from, while its file opens
 	id     string // the current conversation's id
 	main   string // its file
 	parent string // id of the last record in the main file
@@ -48,11 +55,15 @@ func (o *OMP) newFile(g *Gen) error {
 	o.id = g.Hex(10)
 	o.main = filepath.Join(o.sessionsDir(g), at.Format("2006-01-02T15-04-05-000Z")+"_"+o.id+".jsonl")
 	g.L.Mains = append(g.L.Mains, o.main)
-	o.parent = ""
+	o.parent, o.model = "", ""
 	if err := g.Emit(o.main, at, map[string]any{"type": "title", "title": g.Text(20)}); err != nil {
 		return err
 	}
-	if err := g.Emit(o.main, at, map[string]any{"type": "session", "id": o.id, "timestamp": stamp(at)}); err != nil {
+	hdr := map[string]any{"type": "session", "id": o.id, "timestamp": stamp(at)}
+	if o.forkOf != "" {
+		hdr["parentSession"] = o.forkOf
+	}
+	if err := g.Emit(o.main, at, hdr); err != nil {
 		return err
 	}
 	if err := o.entry(g, map[string]any{"type": "model_change", "model": "llama.cpp/qwen3.8-27b"}); err != nil {
@@ -86,7 +97,11 @@ func message(m map[string]any) map[string]any { return map[string]any{"type": "m
 func textBlock(s string) []any { return []any{map[string]any{"type": "text", "text": s}} }
 
 func (o *OMP) assistant(g *Gen, content []any, stop string) map[string]any {
-	return message(map[string]any{"role": "assistant", "content": content, "provider": "llama.cpp", "model": "qwen3.8-27b",
+	provider, id := "llama.cpp", "qwen3.8-27b"
+	if o.model != "" {
+		provider, id, _ = strings.Cut(o.model, "/")
+	}
+	return message(map[string]any{"role": "assistant", "content": content, "provider": provider, "model": id,
 		"usage":      map[string]any{"input": 1200 + g.Intn(800), "output": 40, "cacheRead": 800, "cost": map[string]any{"total": 0.001}},
 		"stopReason": stop})
 }
@@ -112,6 +127,10 @@ func (o *OMP) Turn(g *Gen, t Turn) error {
 			return err
 		}
 	}
+	x := o.Extra[g.L.Truth.Prompts+1]
+	if err := o.before(g, x); err != nil {
+		return err
+	}
 	if t.Compact {
 		if err := o.entry(g, map[string]any{"type": "compaction", "method": "snapcompact", "tokensBefore": 120000, "tokensAfter": 31000}); err != nil {
 			return err
@@ -134,6 +153,13 @@ func (o *OMP) Turn(g *Gen, t Turn) error {
 			return err
 		}
 	}
+	open, err := o.work(g, x)
+	if err != nil {
+		return err
+	}
+	if open {
+		return nil // the dialog is on screen: no result and no reply yet
+	}
 	for i := 0; i < t.Jobs; i++ {
 		if err := o.job(g); err != nil {
 			return err
@@ -144,7 +170,6 @@ func (o *OMP) Turn(g *Gen, t Turn) error {
 			return err
 		}
 	}
-	var err error
 	switch {
 	case t.Interrupt:
 		err = o.entry(g, o.assistant(g, []any{toolCall("call_"+g.Hex(8), "bash", map[string]any{"command": "go test ./..."})}, "aborted"))
@@ -156,7 +181,11 @@ func (o *OMP) Turn(g *Gen, t Turn) error {
 		err = o.entry(g, a)
 		g.L.Truth.Last = o.parent + "-error"
 	default:
-		err = o.entry(g, o.assistant(g, textBlock(g.Text(max(t.Say, 1))), "stop"))
+		reply := textBlock(g.Text(max(t.Say, 1)))
+		if x.Think {
+			reply = append([]any{map[string]any{"type": "thinking", "thinking": "Think about " + g.Text(20)}}, reply...)
+		}
+		err = o.entry(g, o.assistant(g, reply, "stop"))
 		g.L.Truth.Last = o.parent
 	}
 	if err != nil {

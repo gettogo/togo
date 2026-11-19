@@ -2,7 +2,6 @@ aider/capability/ports
 amp/capability/chat.anchors
 claude/capability/changes
 claude/capability/chat
-claude/capability/chat.anchors
 claude/capability/chat.history
 claude/capability/mode
 claude/capability/needs.questions
@@ -46,18 +45,7 @@ kimi/capability/agents
 kimi/capability/changes
 kimi/capability/chat.anchors
 kimi/lifecycle/resume
-omp/capability/changes
-omp/capability/chat
-omp/capability/chat.anchors
-omp/capability/chat.history
-omp/capability/effort
-omp/capability/model
-omp/capability/needs.questions
-omp/capability/plan
-omp/capability/ports
 omp/capability/settings
-omp/capability/status
-omp/lifecycle/fork
 omp/lifecycle/relaunch
 opencode/capability/chat.anchors
 opencode/capability/mcp

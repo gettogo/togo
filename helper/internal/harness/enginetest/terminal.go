@@ -38,6 +38,7 @@ type Terminal struct {
 	input  string
 	edited bool
 	log    []Input
+	hist   []string // lines scrolled off the screen's top (Output)
 	subs   []string
 	gone   bool // the pane's program ended: nothing reads input
 	// OnSubmit is the agent taking a submitted line, called outside the
