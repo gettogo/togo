@@ -199,7 +199,20 @@ func (l *Layout) Append(turns ...Turn) error {
 			return err
 		}
 	}
-	return l.g.flush()
+	if err := l.g.flush(); err != nil {
+		return err
+	}
+	if f, ok := l.p.(Flusher); ok {
+		return f.Flushed(l.g)
+	}
+	return nil
+}
+
+// Flusher is implemented by a profile that has work to do once Append has
+// written the buffered records: Vibe prunes old journal segments, and the
+// database profiles write their rows.
+type Flusher interface {
+	Flushed(g *Gen) error
 }
 
 // Now is the generator's clock: the time the next record gets.

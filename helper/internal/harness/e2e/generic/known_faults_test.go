@@ -59,4 +59,4 @@ func TestKnownFault_RelaunchKeepsDeadTurnWorking(t *testing.T) {
 // relaunchFault lists the agents with the fault: those whose own records
 // say a turn is running.
 var relaunchFault = map[string]bool{"amp": true, "claude": true, "copilot": true, "cursor": true,
-	"droid": true, "kimi": true, "omp": true, "pi": true}
+	"droid": true, "kimi": true, "omp": true, "pi": true, "vibe": true, "goose": true, "crush": true}

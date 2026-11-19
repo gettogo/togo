@@ -49,7 +49,9 @@ func dialogFor(agent string) string {
 	score := -1
 	for _, f := range files {
 		n := filepath.Base(f)
-		if strings.HasPrefix(n, "negative") || !strings.ContainsAny(n, "-") {
+		// A "-moved" capture is the screen after a cursor key: the prompt
+		// as first drawn is the one to answer.
+		if strings.HasPrefix(n, "negative") || strings.Contains(n, "-moved") || !strings.ContainsAny(n, "-") {
 			continue
 		}
 		s := 0
@@ -99,6 +101,7 @@ type live struct {
 	r      *enginetest.Rig
 	l      *sessiongen.Layout
 	hooks  bool // its chat comes from hooks
+	open   bool // the live turn is left open in the files, not held back
 	agents bool // a subagent is still running
 	// approval is the open approval, "" when the agent has no captured prompt.
 	approval string
@@ -148,7 +151,19 @@ func script(t *testing.T, agent string) (string, string, time.Time, *sessiongen.
 	return "", "", time.Time{}, nil, false
 }
 
-func hookAgent(agent string) bool { return slices.Contains(hookstyle.Agents(), agent) }
+// hookAgent reports that the agent's chat comes from hook calls. Vibe has a
+// hook dialect, but Togo installs none for it: its chat is the journal.
+func hookAgent(agent string) bool {
+	return slices.Contains(hookstyle.Agents(), agent) && !openTurnAgent(agent)
+}
+
+// openTurnAgent reports an agent whose files cannot be cut in the middle of
+// a turn (a database, or a journal folded into a snapshot after each
+// turn): the live turn is written with its last tool call unanswered
+// (Hook.Pending), and ends with the profile's Continue turn.
+func openTurnAgent(agent string) bool {
+	return slices.Contains([]string{"vibe", "goose", "crush"}, agent)
+}
 
 // start builds the session: written, read by the engine, the pane on its
 // idle screen, and the phone's chat open. A last turn is written whose
@@ -198,6 +213,14 @@ func (lv *live) holdTurn() {
 	if lv.hooks {
 		turn.Hook = &sessiongen.HookTurn{}
 	}
+	if openTurnAgent(lv.agent) {
+		turn.Hook = &sessiongen.HookTurn{Pending: true}
+		if err := l.Append(turn); err != nil {
+			lv.t.Fatalf("live turn: %v", err)
+		}
+		lv.open = true
+		return
+	}
 	main := l.Main()
 	before, _ := os.ReadFile(main)
 	calls := len(l.Hooks)
@@ -244,6 +267,13 @@ func (lv *live) endTurn() {
 	if lv.hooks {
 		lv.deliver(lv.l.Hooks[lv.heldFrom:]...)
 		lv.heldFrom = len(lv.l.Hooks)
+		return
+	}
+	if lv.open {
+		if err := lv.l.Append(sessiongen.Turn{Prompt: sessiongen.Continue, Say: 40}); err != nil {
+			lv.t.Fatalf("end of the live turn: %v", err)
+		}
+		lv.open = false
 		return
 	}
 	f, err := os.OpenFile(lv.l.Main(), os.O_WRONLY|os.O_APPEND, 0o644)
