@@ -39,6 +39,7 @@ type Payload struct {
 // feeds of the session they belong to.
 type Bus struct {
 	mu      sync.Mutex
+	idle    *sync.Cond // signalled when a queued payload is done or a feed leaves
 	backlog map[string][]Payload
 	subs    map[string]map[*busSub]bool
 	// OnDeliver, when set, is told the session of every delivery, so the
@@ -48,6 +49,9 @@ type Bus struct {
 
 type busSub struct {
 	ch chan Payload
+	// queued counts the payloads sent to ch that the feed has not yet
+	// finished with (under Bus.mu).
+	queued int
 }
 
 // Hooks is the bus the daemon delivers to and the hook runners read.
@@ -55,7 +59,9 @@ var Hooks = NewBus()
 
 // NewBus returns an empty bus.
 func NewBus() *Bus {
-	return &Bus{backlog: map[string][]Payload{}, subs: map[string]map[*busSub]bool{}}
+	b := &Bus{backlog: map[string][]Payload{}, subs: map[string]map[*busSub]bool{}}
+	b.idle = sync.NewCond(&b.mu)
+	return b
 }
 
 // Deliver hands a payload to the session's feeds. Oversized or malformed
@@ -74,18 +80,17 @@ func (b *Bus) Deliver(session string, p Payload) {
 		bl = bl[len(bl)-backlogSize:]
 	}
 	b.backlog[session] = bl
-	var subs []*busSub
+	// Sent under the lock (it never blocks), so a feed that takes the
+	// payload at once finds it counted when it reports it done.
 	for s := range b.subs[session] {
-		subs = append(subs, s)
-	}
-	on := b.OnDeliver
-	b.mu.Unlock()
-	for _, s := range subs {
 		select {
 		case s.ch <- p:
+			s.queued++
 		default: // a stuck feed loses payloads rather than blocking hooks
 		}
 	}
+	on := b.OnDeliver
+	b.mu.Unlock()
 	if on != nil {
 		on(session)
 	}
@@ -116,7 +121,68 @@ func (b *Bus) unsubscribe(session string, s *busSub) {
 	if len(b.subs[session]) == 0 {
 		delete(b.subs, session)
 	}
+	b.idle.Broadcast()
 	b.mu.Unlock()
+}
+
+// done reports that the feed has finished with one payload from its
+// queue: its record is mapped, stored and published.
+func (b *Bus) done(s *busSub) {
+	b.mu.Lock()
+	s.queued--
+	if s.queued <= 0 {
+		b.idle.Broadcast()
+	}
+	b.mu.Unlock()
+}
+
+// subscribed reports whether a feed reads the session's payloads.
+func (b *Bus) subscribed(session string) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.subs[session]) > 0
+}
+
+// queuedLocked counts the payloads delivered to the session's feeds (all
+// sessions' for "") that the feeds have not finished with.
+func (b *Bus) queuedLocked(session string) int {
+	n := 0
+	for id, subs := range b.subs {
+		if session != "" && id != session {
+			continue
+		}
+		for s := range subs {
+			n += s.queued
+		}
+	}
+	return n
+}
+
+// Drain waits until the feeds of session (every session for "") have
+// finished with every payload delivered to them, or limit passes, and
+// says whether they did. A hook's `togo hook` command has its answer once
+// Deliver returned, before its feed read it, so a helper on its way out
+// drains first: what it accepted is then stored for the next start
+// (engine/hookstore.go). A feed that stops leaves its queue behind.
+func (b *Bus) Drain(session string, limit time.Duration) bool {
+	// The deadline is taken first: the timer fires no earlier, so a wait
+	// that begins before it fires is woken by it.
+	deadline := time.Now().Add(limit)
+	timer := time.AfterFunc(limit, func() {
+		b.mu.Lock()
+		b.idle.Broadcast()
+		b.mu.Unlock()
+	})
+	defer timer.Stop()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for b.queuedLocked(session) > 0 {
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		b.idle.Wait()
+	}
+	return true
 }
 
 // Hook streams a session's hook payloads (kind hook) or status line
@@ -187,6 +253,7 @@ func (h Hook) Watch(ctx context.Context, s harness.SourceSpec, env harness.Env, 
 			return nil
 		case p := <-sub.ch:
 			send(p)
+			bus.done(sub)
 		}
 	}
 }
