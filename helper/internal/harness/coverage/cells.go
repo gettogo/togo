@@ -115,8 +115,14 @@ type adapterInfo struct {
 }
 
 // CellsFrom derives the cells from the adapter files in dir/*/*.yaml and
-// the given agents. An agent with several files (an adapter per major
-// version) gets the union of their capabilities.
+// the given agents.
+//
+// An agent with several files (an adapter per major version, as OpenCode
+// 1.x and 2.x) gets a row per file, keyed by the file's adapter name: the
+// versions declare different capabilities, reach the agent differently
+// (OpenCode 1.x takes prompts over its API, 2.x has them typed) and fail
+// differently, so a test of one version must not cover a cell of the
+// other. An agent with one file keeps the agent's id as its row.
 func CellsFrom(dir string, registry []agents.Agent) ([]Cell, error) {
 	paths, err := filepath.Glob(filepath.Join(dir, "*", "*.yaml"))
 	if err != nil {
@@ -127,7 +133,12 @@ func CellsFrom(dir string, registry []agents.Agent) ([]Cell, error) {
 	for _, a := range registry {
 		known[a.ID] = true
 	}
-	infos := map[string]*adapterInfo{}
+	type parsed struct {
+		rel string
+		a   *spec.Adapter
+	}
+	var specs []parsed
+	files := map[string]int{} // agent id -> adapter files matching it
 	for _, p := range paths {
 		b, err := os.ReadFile(p)
 		if err != nil {
@@ -142,22 +153,37 @@ func CellsFrom(dir string, registry []agents.Agent) ([]Cell, error) {
 			if !known[id] {
 				return nil, fmt.Errorf("coverage: %s matches agent %q, which is not in the agent registry", rel, id)
 			}
-			in := infos[id]
+			files[id]++
+		}
+		specs = append(specs, parsed{filepath.ToSlash(rel), a})
+	}
+	infos := map[string]*adapterInfo{}
+	rows := map[string][]string{} // agent id -> its row names, in file order
+	for _, s := range specs {
+		for _, id := range s.a.Match.Agents {
+			row := id
+			if files[id] > 1 {
+				row = s.a.Adapter
+			}
+			in := infos[row]
 			if in == nil {
 				in = &adapterInfo{caps: map[string]bool{}}
-				infos[id] = in
+				infos[row] = in
+				rows[id] = append(rows[id], row)
 			}
-			in.files = append(in.files, filepath.ToSlash(rel))
-			for _, c := range a.Capabilities {
+			in.files = append(in.files, s.rel)
+			for _, c := range s.a.Capabilities {
 				in.caps[c] = true
 			}
-			in.fork = in.fork || declaresFork(a)
+			in.fork = in.fork || declaresFork(s.a)
 		}
 	}
 	var cells []Cell
 	for _, ag := range registry {
-		if in := infos[ag.ID]; in != nil && in.caps["chat"] {
-			cells = append(cells, agentCells(ag, in)...)
+		for _, row := range rows[ag.ID] {
+			if in := infos[row]; in.caps["chat"] {
+				cells = append(cells, agentCells(row, ag, in)...)
+			}
 		}
 	}
 	cells = append(cells, terminalCells()...)
@@ -183,10 +209,12 @@ func declaresFork(a *spec.Adapter) bool {
 	return ok
 }
 
-func agentCells(ag agents.Agent, in *adapterInfo) []Cell {
+// agentCells are the cells of one row: the agent's, or one version's of
+// it when the agent has an adapter file per version.
+func agentCells(row string, ag agents.Agent, in *adapterInfo) []Cell {
 	var cells []Cell
 	add := func(kind, name, na string) {
-		cells = append(cells, Cell{Agent: ag.ID, Kind: kind, Name: name, NotApplicable: na})
+		cells = append(cells, Cell{Agent: row, Kind: kind, Name: name, NotApplicable: na})
 	}
 	if in != nil {
 		caps := make([]string, 0, len(in.caps))

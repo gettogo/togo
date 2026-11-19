@@ -57,9 +57,6 @@ func TestCellsMatchRegisteredAdapters(t *testing.T) {
 		}
 	}
 	for id, b := range harness.AdapterFiles() {
-		if id == "opencode2" {
-			continue // a second file for the opencode agent
-		}
 		if len(b) > 0 && !have[id] && !slices.Contains(terminal, id) {
 			t.Errorf("registered adapter %s has no cells and is not in the terminal row", id)
 		}
@@ -75,7 +72,7 @@ func TestRowsAreTheAgentsWithChat(t *testing.T) {
 	}
 	rows := Agents(cells)
 	want := []string{"aider", "amp", "claude", "cline", "codex", "copilot", "crush", "cursor", "droid", "goose",
-		"kilo", "kimi", "omp", "opencode", "pi", TerminalAgent, "vibe"}
+		"kilo", "kimi", "omp", "opencode", "opencode2", "pi", TerminalAgent, "vibe"}
 	if !slices.Equal(rows, want) {
 		t.Errorf("rows %v, want %v", rows, want)
 	}
@@ -167,6 +164,39 @@ func TestCellsFromTempSpecs(t *testing.T) {
 	// keys come out sorted and unique
 	if !slices.IsSorted(keysOf(cells, false)) {
 		t.Error("cells are not sorted by key")
+	}
+}
+
+// An agent with an adapter file per major version has a row per file,
+// named by the file's adapter, each with that file's capabilities only:
+// evidence for one version cannot cover a cell of the other.
+func TestEachVersionOfAnAgentIsItsOwnRow(t *testing.T) {
+	dir := t.TempDir()
+	writeSpec(t, dir, "alpha", "chat, plan")
+	two := strings.ReplaceAll(fmt.Sprintf(tmpl, "alpha", "chat, background"), "adapter: alpha", "adapter: alpha2")
+	if err := os.WriteFile(filepath.Join(dir, "alpha", "alpha2.yaml"), []byte(two), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cells, err := CellsFrom(dir, testAgents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows := Agents(cells); !slices.Equal(rows, []string{"alpha", "alpha2", TerminalAgent}) {
+		t.Fatalf("rows %v", rows)
+	}
+	idx := Index(cells)
+	for _, k := range []string{"alpha/capability/plan", "alpha2/capability/background", "alpha2/lifecycle/helper_restart", "alpha2/lifecycle/relaunch"} {
+		if c, ok := idx[k]; !ok || c.NotApplicable != "" {
+			t.Errorf("%s: want an applicable cell, got %+v (present %v)", k, c, ok)
+		}
+	}
+	for _, k := range []string{"alpha/capability/background", "alpha2/capability/plan"} {
+		if _, ok := idx[k]; ok {
+			t.Errorf("%s is a cell: one version's capability was given to the other", k)
+		}
+	}
+	if c := idx["alpha2/lifecycle/resume"]; c.NotApplicable == "" || !strings.Contains(c.NotApplicable, "alpha/alpha2.yaml") {
+		t.Errorf("alpha2's resume cell names the wrong file: %+v", c)
 	}
 }
 
