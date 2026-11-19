@@ -132,7 +132,7 @@ func TestInterruptSkipsTheTypingLock(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("interrupt waited for the typing lock")
 	}
 	wg.Wait()

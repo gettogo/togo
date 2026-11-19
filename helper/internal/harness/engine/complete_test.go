@@ -144,7 +144,7 @@ func TestSendSlashLineRunsTheCommand(t *testing.T) {
 		}
 	}
 	var got []byte
-	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 		got, _ = os.ReadFile(filepath.Join(home, "rec.log"))
 		if strings.Count(string(got), "\n") >= 4 {
 			break

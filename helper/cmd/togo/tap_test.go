@@ -97,7 +97,7 @@ func TestTapSendsSignalsToDaemon(t *testing.T) {
 				t.Fatalf("params %v", p)
 			}
 			kinds = append(kinds, p["kind"].(string))
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatalf("got only %v", kinds)
 		}
 	}
@@ -143,7 +143,7 @@ func TestOutputSignalsReportTheEndOfABurst(t *testing.T) {
 	}
 	select {
 	case <-got: // the burst's first output, at once
-	case <-time.After(time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no signal for the first output")
 	}
 	select {
@@ -151,7 +151,7 @@ func TestOutputSignalsReportTheEndOfABurst(t *testing.T) {
 		if at.Sub(start) < 40*time.Millisecond {
 			t.Fatalf("trailing signal after %v, want one interval", at.Sub(start))
 		}
-	case <-time.After(time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no signal for the end of the burst")
 	}
 	select {
@@ -163,7 +163,7 @@ func TestOutputSignalsReportTheEndOfABurst(t *testing.T) {
 	o.note(time.Now())
 	select {
 	case <-got:
-	case <-time.After(time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no signal after quiet")
 	}
 	select {

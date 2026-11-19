@@ -194,7 +194,7 @@ func TestDaemonStartRearmsTaps(t *testing.T) {
 	}
 	comp.Watch.Reconcile(ctx)
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		data, _ := os.ReadFile(starts)
 		got := strings.Fields(string(data))

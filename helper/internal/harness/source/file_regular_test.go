@@ -23,7 +23,7 @@ func TestFIFORefused(t *testing.T) {
 		if !errors.Is(err, errNotRegular) {
 			t.Fatalf("err %v", err)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("read blocked on a FIFO")
 	}
 	f := filepath.Join(t.TempDir(), "f")

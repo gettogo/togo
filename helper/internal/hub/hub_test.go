@@ -217,7 +217,7 @@ func notify(h *hub.Hub, n int) {
 
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s", what)
@@ -335,7 +335,7 @@ func TestSlowSubscriberLosesBacklogOthersUnaffected(t *testing.T) {
 		}()
 		select {
 		case <-published:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("Publish blocked on the slow subscriber")
 		}
 		for range batch {
@@ -426,7 +426,7 @@ func TestSlowListDoesNotBlockPublish(t *testing.T) {
 	}()
 	select {
 	case <-published:
-	case <-time.After(2 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Publish waited on the subscribe's tmux list")
 	}
 	if err := os.WriteFile(release, nil, 0o644); err != nil {

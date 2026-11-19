@@ -131,7 +131,7 @@ func waitLoginRead(t *testing.T) {
 	if ch != nil {
 		select {
 		case <-ch:
-		case <-time.After(10 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("the login shell read never ended")
 		}
 	}

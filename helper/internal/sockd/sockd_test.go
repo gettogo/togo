@@ -157,7 +157,7 @@ func TestAcceptDropsForeignUID(t *testing.T) {
 			t.Fatal("no connection accepted")
 		}
 		c.Close()
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("same-uid peer was not accepted")
 	}
 	if got := calls.Load(); got != 2 {

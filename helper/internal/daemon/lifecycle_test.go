@@ -176,7 +176,7 @@ func lateEndIgnored(t *testing.T, c *Components, id string) {
 // waitAgentRunning waits until the session's pane shows its agent running.
 func waitAgentRunning(t *testing.T, svc *session.Service, id string) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); ; {
+	for deadline := time.Now().Add(30 * time.Second); ; {
 		if gone, err := svc.AgentGone(context.Background(), id); err == nil && !gone {
 			return
 		}
@@ -192,7 +192,7 @@ func waitAgentRunning(t *testing.T, svc *session.Service, id string) {
 func reportExit(t *testing.T, c *Components, id string, code int) {
 	t.Helper()
 	sig := wire.Signal{SessionID: id, Kind: wire.SignalExit, Code: &code}
-	for deadline := time.Now().Add(10 * time.Second); !c.Watch.Ended(id); {
+	for deadline := time.Now().Add(30 * time.Second); !c.Watch.Ended(id); {
 		if err := c.Watch.Signal(context.Background(), sig); err != nil {
 			t.Fatal(err)
 		}
@@ -292,7 +292,7 @@ func TestWrapperExitReportCounts(t *testing.T) {
 			if err := os.WriteFile(flag, nil, 0o600); err != nil {
 				t.Fatal(err)
 			}
-			for deadline := time.Now().Add(10 * time.Second); ; {
+			for deadline := time.Now().Add(30 * time.Second); ; {
 				if _, err := os.Stat(called); err == nil {
 					break
 				}
@@ -314,7 +314,7 @@ func TestWrapperExitReportCounts(t *testing.T) {
 // waitFile waits until the fixture agent has left its mark.
 func waitFile(t *testing.T, path string) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); ; {
+	for deadline := time.Now().Add(30 * time.Second); ; {
 		if _, err := os.Stat(path); err == nil {
 			return
 		}

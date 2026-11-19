@@ -4,6 +4,24 @@ The helper and the app are versioned separately. A newer helper always works wit
 
 ## Helper
 
+### 1.1.1 (2026-11-19)
+
+**Changed**
+
+- For a few dialogs the helper can't read from the screen (Copilot CLI's run-command and path-access dialogs, Droid's file-create dialog), the request on the phone is titled as the agent's dialog, without the command line. It can still be answered from the phone.
+
+**Fixed**
+
+- After `togo update` or a helper restart, the chat of a Copilot CLI, Droid, Cursor CLI or Amp session was empty. It now shows the conversation as it was.
+- A request waiting for an answer was lost when the helper restarted, so Approve or Deny from an earlier notification did nothing. Open requests are now kept and can still be answered.
+- A request could show one command while its buttons acted on another, when a prompt was answered at the desk just before the next one appeared. A request now answers only the prompt it was opened for.
+- `togo update` could drop approvals and agent events that arrived as the helper was restarting. The helper now saves them before it exits.
+- In OMP, a subagent's row could show another subagent's steps, appear twice, or turn into a background job that vanished, and this changed between restarts. Each subagent now has one row with its own steps.
+- In OMP, a long session could lose its conversation after a helper restart. It now keeps it.
+- In OpenCode 2.x, after resuming a conversation from the phone, picking another conversation in the terminal left the chat empty. The chat now shows that conversation.
+- In Claude Code, every send was refused with "input line already holds text" while Claude showed a suggested next prompt. Sends now go through.
+- A chat on a long session with busy subagents opened nearly empty, because subagent steps used up the page. A page now holds the asked number of messages from the main conversation.
+
 ### 1.1.0 (2026-11-17)
 
 **Added**
@@ -140,6 +158,16 @@ The helper and the app are versioned separately. A newer helper always works wit
 First release.
 
 ## App
+
+### 1.1.1
+
+**Fixed**
+
+- Choices in a request with several questions and long options overlapped each other. Each choice now takes the height its text needs.
+- A long draft overlapped attached pictures and the model control. The message field now scrolls within the space it has.
+- A notice above the message field was cut off with an ellipsis. It now wraps in full.
+- The timer in the compact Live Activity was off centre and cut off. It now fits and is centred.
+- A large glass shape could flash over the chat when a session opened. It no longer appears.
 
 ### 1.1.0 (2026-11-17)
 

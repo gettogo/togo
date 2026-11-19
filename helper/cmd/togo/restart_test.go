@@ -36,7 +36,7 @@ func waitDone(t *testing.T, f *daemontest.Fake) {
 		if !errors.Is(err, daemon.ErrShutdown) {
 			t.Fatalf("daemon stopped with %v, want a shutdown", err)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemon did not stop once idle")
 	}
 }

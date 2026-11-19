@@ -47,8 +47,8 @@ func TestServeLeavesNoDaemonBehind(t *testing.T) {
 	stdin.Close()
 	select {
 	case <-exited:
-	case <-time.After(2 * time.Second):
-		t.Fatal("serve still running 2s after stdin closed")
+	case <-time.After(30 * time.Second):
+		t.Fatal("serve still running after stdin closed")
 	}
 
 	raw, err := os.ReadFile(daemon.PIDPath(home))

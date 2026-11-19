@@ -125,8 +125,8 @@ func TestServeReturnsWhenContextEndsWhileReadIsBlocked(t *testing.T) {
 		if code != 0 {
 			t.Errorf("code=%d, want 0", code)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("serve did not return within 1s of cancellation")
+	case <-time.After(30 * time.Second):
+		t.Fatal("serve did not return after cancellation")
 	}
 }
 

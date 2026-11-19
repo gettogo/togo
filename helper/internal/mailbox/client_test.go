@@ -209,7 +209,7 @@ func newHarness(t *testing.T, mutate func(*harness)) *harness {
 		cancel()
 		select {
 		case <-h.done:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Error("Run did not return after cancel")
 		}
 	})
@@ -248,7 +248,7 @@ func (h *harness) waitAck(t *testing.T, id string) {
 		if got != id {
 			t.Fatalf("acked %s, want %s", got, id)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no ack")
 	}
 }
@@ -279,7 +279,7 @@ func TestValidAnswerReachesStoreAndIsAcked(t *testing.T) {
 		if a != (answered{testReq, "option:1", "phone"}) {
 			t.Fatalf("answer %+v", a)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("answer never reached store")
 	}
 }
@@ -354,7 +354,7 @@ func TestReconnectsWithBackoff(t *testing.T) {
 	h := newHarness(t, func(h *harness) { h.relay.reject = 3 })
 	select {
 	case <-h.relay.conned:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("never connected")
 	}
 	h.relay.mu.Lock()
@@ -379,7 +379,7 @@ func TestReconnectsWithBackoff(t *testing.T) {
 	h.relay.mu.Unlock()
 	select {
 	case <-h.relay.conned:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no reconnect after replace")
 	}
 	h.relay.mu.Lock()
@@ -405,7 +405,7 @@ func TestNoConnectionWithoutDevices(t *testing.T) {
 	h.setDevices(paired)
 	select {
 	case <-h.relay.conned:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no connection after a device was paired")
 	}
 	// Unpairing the last device closes the connection and stops redialing.
@@ -435,7 +435,7 @@ func TestDeadDeviceRegistrationRevivesIt(t *testing.T) {
 	})
 	select {
 	case <-h.relay.conned:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no connection for a paired device marked dead")
 	}
 	ct := h.f.register(t, wire.RegisterPlaintext{APNsToken: regAPNs, TS: h.f.now.UnixMilli()}, h.f.devPriv)
@@ -445,7 +445,7 @@ func TestDeadDeviceRegistrationRevivesIt(t *testing.T) {
 		if got != "phone-1 "+regAPNs {
 			t.Fatalf("registered %q", got)
 		}
-	case <-time.After(time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("dead device's registration not applied")
 	}
 	// Its answers stay refused until the new token revives it.

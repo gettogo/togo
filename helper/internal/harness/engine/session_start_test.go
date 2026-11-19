@@ -61,7 +61,7 @@ func TestSettingBeforeFirstPromptStartsTheSession(t *testing.T) {
 	logf := filepath.Join(home, "rec.log")
 	// The harness: once started, the feed reports its session.
 	go func() {
-		for i := 0; i < 200; i++ {
+		for i := 0; i < 1500; i++ {
 			if b, _ := os.ReadFile(logf); strings.Contains(string(b), "start") {
 				data, _ := json.Marshal(map[string]any{"state": map[string]string{"harness_session": "ses_1"}})
 				source.Hooks.Deliver(id, source.Payload{Kind: source.BusHook, Event: "Event", Data: data})

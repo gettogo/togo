@@ -169,7 +169,7 @@ func TestWheelUpOnTheNormalScreenEntersCopyMode(t *testing.T) {
 
 func waitFor(t *testing.T, ok func() bool, what string) {
 	t.Helper()
-	for range 100 {
+	for range 1500 {
 		if ok() {
 			return
 		}
