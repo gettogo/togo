@@ -107,6 +107,19 @@ func (r *Rig) SettleUntil(limit time.Duration, ok func(State) bool) State {
 	}
 }
 
+// Has is true once the log holds an item with this id, such as the
+// generator's Truth.Last.
+func Has(id string) func(State) bool {
+	return func(st State) bool {
+		for _, it := range st.Items {
+			if it.ID == id {
+				return true
+			}
+		}
+		return false
+	}
+}
+
 func fingerprint(st State) string {
 	var top int64
 	for _, it := range st.Items {

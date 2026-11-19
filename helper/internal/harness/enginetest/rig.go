@@ -6,6 +6,7 @@ package enginetest
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -42,7 +43,17 @@ type Options struct {
 	Created time.Time
 	// MaxItems is the engine's item log size; 0 keeps the default.
 	MaxItems int
+	// NoRedact passes records through unredacted. Redaction has its own
+	// tests, and it is four fifths of the time a restore of a large file
+	// takes (eight times that under the race detector).
+	NoRedact bool
 }
+
+// asIs is a redactor that changes nothing.
+type asIs struct{}
+
+func (asIs) JSON(raw json.RawMessage) json.RawMessage { return raw }
+func (asIs) String(s string) string                   { return s }
 
 // Rig is a running engine over one session.
 type Rig struct {
@@ -92,7 +103,12 @@ func (r *Rig) start() {
 	if r.Opt.MaxItems > 0 {
 		log.Max = r.Opt.MaxItems
 	}
+	var red harness.Redactor
+	if r.Opt.NoRedact {
+		red = asIs{}
+	}
 	r.Engine = engine.New(engine.Config{
+		Redactor: red,
 		Sessions: sessions{r}, Typist: typist{}, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
 		Screen:    func(context.Context, string) (string, error) { return "", nil },
 		Cursor:    func(context.Context, string) (int, int, bool, error) { return 0, 0, false, nil },
@@ -129,9 +145,17 @@ func (r *Rig) start() {
 // (engine/engine.go:188-210, engine/history.go:374, engine/recovery.go:
 // 315), which the omp and Claude Code adapters do not write.
 func (r *Rig) Restart() {
-	r.Engine.Forget(SessionID)
-	r.start()
+	r.Stop()
+	r.Start()
 }
+
+// Stop stops the engine, as the helper being down; Start builds a new
+// one. Files written between the two are found by the new engine's
+// restore, as after an update that took a while.
+func (r *Rig) Stop() { r.Engine.Forget(SessionID) }
+
+// Start builds a new engine over the same TOGO_HOME and files.
+func (r *Rig) Start() { r.start() }
 
 // Deliver sends a hook payload as the agent's hook command would.
 func (r *Rig) Deliver(event string, payload []byte) {

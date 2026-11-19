@@ -69,8 +69,12 @@ type Batch struct {
 	// Background returns the call at once; each agent is reported later.
 	// A foreground call returns when they are all done.
 	Background bool
+	// ReportLater writes omp's report of each background agent at the
+	// start of the next turn instead of this one.
+	ReportLater bool
 	// Unreported is how many of a background batch's agents the main
-	// conversation never reports, as when the agent is still at work.
+	// conversation never reports, as when the agent is still at work
+	// and its file ends without a reply or an exit.
 	Unreported int
 }
 
@@ -96,6 +100,10 @@ type Truth struct {
 	Jobs    []string
 	// Exited is true once the agent recorded its own exit.
 	Exited bool
+	// Last is the id of the main-conversation item the last record
+	// written makes: the newest reply, or the notice of an interrupted or
+	// failed turn. Tests wait for it.
+	Last string
 }
 
 // Layout lists the files written. Append continues the same session.
@@ -226,16 +234,22 @@ func (g *Gen) Shuffle(n int) []int { return g.rnd.Perm(n) }
 var words = strings.Fields("the parser reads each record and keeps the newest state for the session " +
 	"so a test can check what the engine reports after a restart of the helper process")
 
-// Text returns about n bytes of plain prose, at least one word.
+// Text returns n bytes of plain prose (at least one byte), so a test can
+// size a file to the byte.
 func (g *Gen) Text(n int) string {
+	n = max(n, 1)
 	var b strings.Builder
-	for b.Len() == 0 || b.Len() < n {
+	for b.Len() < n {
 		if b.Len() > 0 {
 			b.WriteByte(' ')
 		}
 		b.WriteString(words[g.rnd.Intn(len(words))])
 	}
-	return b.String()
+	s := b.String()[:n]
+	if strings.HasSuffix(s, " ") {
+		s = s[:n-1] + "s"
+	}
+	return s
 }
 
 // Emit appends one record to a file.

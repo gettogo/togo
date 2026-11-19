@@ -21,6 +21,12 @@ type OMP struct {
 	parent string // id of the last record in the main file
 	jobs   int    // omp numbers background jobs bg_1, bg_2, ...
 	tasks  int
+	later  []report // background agents reported at the next turn
+}
+
+type report struct {
+	name  string
+	truth int
 }
 
 func (o *OMP) Name() string { return "omp" }
@@ -98,6 +104,9 @@ func toolResult(id string, out string, details map[string]any) map[string]any {
 }
 
 func (o *OMP) Turn(g *Gen, t Turn) error {
+	if err := o.reportLater(g); err != nil {
+		return err
+	}
 	if t.New {
 		if err := o.newFile(g); err != nil {
 			return err
@@ -139,13 +148,16 @@ func (o *OMP) Turn(g *Gen, t Turn) error {
 	switch {
 	case t.Interrupt:
 		err = o.entry(g, o.assistant(g, []any{toolCall("call_"+g.Hex(8), "bash", map[string]any{"command": "go test ./..."})}, "aborted"))
+		g.L.Truth.Last = o.parent + "-interrupted"
 	case t.Error:
 		a := o.assistant(g, []any{}, "error")
 		a["message"].(map[string]any)["errorStatus"] = 401
 		a["message"].(map[string]any)["errorMessage"] = "401 Incorrect API key provided"
 		err = o.entry(g, a)
+		g.L.Truth.Last = o.parent + "-error"
 	default:
 		err = o.entry(g, o.assistant(g, textBlock(g.Text(max(t.Say, 1))), "stop"))
+		g.L.Truth.Last = o.parent
 	}
 	if err != nil {
 		return err
@@ -203,7 +215,7 @@ func (o *OMP) batch(g *Gen, b Batch) error {
 	base := len(g.L.Truth.Agents)
 	for _, i := range order {
 		prompt := tasks[i].(map[string]any)["task"].(string)
-		if err := o.subagent(g, names[i], prompt, b.Steps); err != nil {
+		if err := o.subagent(g, names[i], prompt, b.Steps, i >= b.Size-b.Unreported); err != nil {
 			return err
 		}
 	}
@@ -218,13 +230,35 @@ func (o *OMP) batch(g *Gen, b Batch) error {
 		return o.entry(g, toolResult(call, fmt.Sprintf("%d tasks finished", b.Size), map[string]any{"results": results}))
 	}
 	for _, i := range g.Shuffle(b.Size) {
+		if i < b.Size-b.Unreported {
+			o.later = append(o.later, report{names[i], base + slot(order, i)})
+		}
+	}
+	if b.ReportLater {
+		return nil
+	}
+	return o.reportLater(g)
+}
+
+// reportLater writes omp's async-result for each background agent not yet
+// reported, then the agent's reply to them.
+func (o *OMP) reportLater(g *Gen) error {
+	if len(o.later) == 0 {
+		return nil
+	}
+	for _, r := range o.later {
 		if err := o.entry(g, map[string]any{"type": "custom_message", "customType": "async-result",
-			"details": map[string]any{"jobs": []any{map[string]any{"jobId": names[i], "agentId": names[i], "type": "task", "status": "completed", "label": names[i]}}}}); err != nil {
+			"details": map[string]any{"jobs": []any{map[string]any{"jobId": r.name, "agentId": r.name, "type": "task", "status": "completed", "label": r.name}}}}); err != nil {
 			return err
 		}
-		g.L.Truth.Agents[base+slot(order, i)].Settled = true
+		g.L.Truth.Agents[r.truth].Settled = true
 	}
-	return o.entry(g, o.assistant(g, textBlock("The agents are back."), "stop"))
+	o.later = nil
+	if err := o.entry(g, o.assistant(g, textBlock("The agents are back."), "stop")); err != nil {
+		return err
+	}
+	g.L.Truth.Last = o.parent
+	return nil
 }
 
 // slot is the position of v in order.
@@ -239,11 +273,12 @@ func slot(order []int, v int) int {
 
 // subagent writes one subagent's whole file: title, header naming the
 // main file, the assignment, its steps, its reply and its exit (omp 18.21
-// ends every subagent file with session_exit).
-func (o *OMP) subagent(g *Gen, name, prompt string, steps int) error {
+// ends every subagent file with session_exit). An open agent's file stops
+// after its steps: it is still at work.
+func (o *OMP) subagent(g *Gen, name, prompt string, steps int, open bool) error {
 	path := filepath.Join(strings.TrimSuffix(o.main, ".jsonl"), name+".jsonl")
 	g.L.Subagents = append(g.L.Subagents, path)
-	g.L.Truth.Agents = append(g.L.Truth.Agents, AgentTruth{Task: name, Prompt: prompt, File: path, Exited: true})
+	g.L.Truth.Agents = append(g.L.Truth.Agents, AgentTruth{Task: name, Prompt: prompt, File: path, Exited: !open})
 	at := g.Tick()
 	if err := g.Emit(path, at, map[string]any{"type": "title", "title": ""}); err != nil {
 		return err
@@ -275,6 +310,9 @@ func (o *OMP) subagent(g *Gen, name, prompt string, steps int) error {
 		if err := sub(toolResult(id, "main.go:12\nlexer.go:40", nil)); err != nil {
 			return err
 		}
+	}
+	if open {
+		return nil // still at work
 	}
 	if err := sub(o.assistant(g, textBlock(name+" finished"), "stop")); err != nil {
 		return err

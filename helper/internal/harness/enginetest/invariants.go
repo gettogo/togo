@@ -93,6 +93,10 @@ func Ended(st State, f Facts) []Violation {
 			over[a.Task] = "the conversation reported its end"
 		}
 	}
+	tasks := map[string]bool{}
+	for _, a := range f.Truth.Agents {
+		tasks[a.Task] = true
+	}
 	jobs := map[string]bool{}
 	for _, j := range f.Truth.Jobs {
 		jobs[j] = true
@@ -105,12 +109,18 @@ func Ended(st State, f Facts) []Violation {
 	sort.Strings(ids)
 	for _, id := range ids {
 		it := items[id]
+		if it.Agent != nil && len(tasks) > 0 && !tasks[it.Agent.AgentID] {
+			out = append(out, Violation{"agent-row-without-task", id + " is a row for no task the conversation started"})
+		}
 		if it.Agent != nil && running(it.Agent.State) {
 			if why, ok := over[it.Agent.AgentID]; ok {
 				out = append(out, Violation{"agent-running-after-end", fmt.Sprintf("%s is %s but %s", id, it.Agent.State, why)})
 			} else if f.Truth.Exited {
 				out = append(out, Violation{"agent-running-after-exit", id + " is running after the agent exited"})
 			}
+		}
+		if it.Background != nil && tasks[it.Background.JobID] {
+			out = append(out, Violation{"agent-shown-as-job", id + " shows subagent " + it.Background.JobID + " as a background job"})
 		}
 		if it.Background != nil && running(it.Background.State) && (jobs[it.Background.JobID] || f.Truth.Exited) {
 			out = append(out, Violation{"job-running-after-end", id + " is running but the job settled"})
@@ -313,6 +323,11 @@ func Restarted(before, after State) []Violation {
 		case ait.Parent != bit.Parent:
 			out = append(out, Violation{"restart-moved-agent-step", fmt.Sprintf("%s was a step of %q, is one of %q", id, bit.Parent, ait.Parent)})
 			continue
+		}
+		if ait.TurnID == "" && bit.TurnID != "" && a[bit.TurnID].ID == "" {
+			// The restore window begins inside this turn: its prompt and
+			// turn are older than the part of the file a restore reads.
+			bit.TurnID = ""
 		}
 		if view(ait) != view(bit) {
 			out = append(out, Violation{"restart-changed", fmt.Sprintf("%s was %s, is %s", id, view(bit), view(ait))})

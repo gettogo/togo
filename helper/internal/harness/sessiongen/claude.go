@@ -65,6 +65,14 @@ func (c *Claude) result(id, out string, use map[string]any) map[string]any {
 	return e
 }
 
+// reply writes an assistant text in the main transcript; its item is the
+// message id.
+func (c *Claude) reply(g *Gen, text string) error {
+	a := c.assistant(g, map[string]any{"type": "text", "text": text})
+	g.L.Truth.Last = a["message"].(map[string]any)["id"].(string)
+	return c.entry(g, c.main, "", a)
+}
+
 func (c *Claude) turnEnd(g *Gen) error {
 	return c.entry(g, c.main, "", map[string]any{"type": "system", "subtype": "turn_duration", "durationMs": 8000, "isMeta": false})
 }
@@ -128,7 +136,7 @@ func (c *Claude) Turn(g *Gen, t Turn) error {
 			return err
 		}
 	} else {
-		if err := c.entry(g, c.main, "", c.assistant(g, map[string]any{"type": "text", "text": g.Text(max(t.Say, 1))})); err != nil {
+		if err := c.reply(g, g.Text(max(t.Say, 1))); err != nil {
 			return err
 		}
 		if err := c.turnEnd(g); err != nil {
@@ -166,7 +174,7 @@ func (c *Claude) notify(g *Gen, task string) error {
 			g.L.Truth.Agents[i].Settled = true
 		}
 	}
-	if err := c.entry(g, c.main, "", c.assistant(g, map[string]any{"type": "text", "text": task + " is back."})); err != nil {
+	if err := c.reply(g, task+" is back."); err != nil {
 		return err
 	}
 	return c.turnEnd(g)

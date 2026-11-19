@@ -1,8 +1,3 @@
-//go:build !race
-
-// The race detector slows the engine's reading of a session this size
-// past a few minutes, so this scenario runs only without it.
-
 package e2e
 
 import (
@@ -11,60 +6,81 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/harness/coverage"
 	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
-// longOMP is a two-day-old omp session of 210 turns: four tool calls of
+// longOMP is a two-day-old omp session of n turns: four tool calls of
 // 10 KB output per turn, a background job every 20 turns, a compaction,
-// and six background batches of 5 or 6 subagents (33 files).
-func longOMP() []sessiongen.Turn {
-	batches := map[int]int{15: 5, 45: 5, 80: 6, 115: 5, 150: 6, 185: 6}
-	turns := make([]sessiongen.Turn, 210)
+// and background batches of 5 or 6 subagents.
+func longOMP(n int) []sessiongen.Turn {
+	sizes := []int{5, 5, 6, 5, 6, 6}
+	turns := make([]sessiongen.Turn, n)
 	for i := range turns {
 		t := sessiongen.Turn{Say: 300, Tools: 4, Output: 10_000}
 		if i%20 == 7 {
 			t.Jobs = 1
 		}
-		if i == 100 {
+		if i == n/2 {
 			t.Compact = true
 		}
-		if n, ok := batches[i]; ok {
-			t.Agents = &sessiongen.Batch{Size: n, Steps: 3, Background: true}
+		if k := i / 35; i%35 == 15 && k < len(sizes) {
+			t.Agents = &sessiongen.Batch{Size: sizes[k], Steps: 3, Background: true}
 		}
 		turns[i] = t
 	}
 	return turns
 }
 
-// The engine follows a long session as the agent writes it and is
-// restarted at five points; every rule holds before and after each one.
+// The long scenario's size. The default crosses every restore limit
+// (main file over 8 MiB and 2,000 records, six subagent batches, 33
+// files) with two restart points; TOGO_E2E_LONG=1 adds three more.
+func longPoints() int {
+	if os.Getenv("TOGO_E2E_LONG") != "" {
+		return 5
+	}
+	return 2
+}
+
+// The engine follows a long session as the agent writes it. At each
+// point the helper restarts on the same files and must show the same
+// chat; then it is down while the agent works on, and the next engine
+// restores what was written meanwhile. Every rule holds throughout.
 func TestOMPLongSessionWithRestarts(t *testing.T) {
+	coverage.Covers(t, "generated", "omp/scale/long_session", "omp/lifecycle/helper_restart",
+		"omp/capability/agents", "omp/capability/background")
 	e := newEnv(t, 48*time.Hour)
-	turns := longOMP()
-	points := cuts(11, 5, 20, len(turns))
+	turns := longOMP(210)
+	points := append(cuts(11, longPoints(), 20, len(turns)-3), len(turns)-3)
 	l, err := sessiongen.Write(e.home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 11, Start: e.start, Cwd: e.cwd, Turns: turns[:points[0]]})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := e.rig(t, "omp")
-	st := r.SettleUntil(settleLimit, hasPrompt(points[0]))
-	check(t, "start", st, l)
+	r := e.rigWith(t, enginetest.Options{Agent: "omp", NoRedact: true})
+	check(t, "start", r.SettleUntil(settleLimit, enginetest.Has(l.Truth.Last)), l)
 	done := points[0]
-	for i, p := range append(points[1:], len(turns)) {
-		if err := l.Append(turns[done:p]...); err != nil {
+	for i, p := range points {
+		if i > 0 {
+			// The helper is down while the agent works up to p.
+			r.Stop()
+			if err := l.Append(turns[done:p]...); err != nil {
+				t.Fatal(err)
+			}
+			r.Start()
+			check(t, "restored "+strconv.Itoa(p), r.SettleUntil(settleLimit, enginetest.Has(l.Truth.Last)), l)
+		}
+		// The agent keeps working while the helper follows it.
+		if err := l.Append(turns[p : p+3]...); err != nil {
 			t.Fatal(err)
 		}
-		done = p
-		live := r.SettleUntil(settleLimit, hasPrompt(p))
-		check(t, "live "+strconv.Itoa(p), live, l)
-		if i == len(points)-1 {
-			break // the last append is checked by the restarts below
-		}
+		done = p + 3
+		live := r.SettleUntil(settleLimit, enginetest.Has(l.Truth.Last))
+		check(t, "live "+strconv.Itoa(done), live, l)
 		r.Restart()
-		after := r.SettleUntil(settleLimit, hasPrompt(p))
-		check(t, "restart "+strconv.Itoa(p), after, l)
-		fail(t, "restart "+strconv.Itoa(p), enginetest.Restarted(live, after))
+		after := r.SettleUntil(settleLimit, enginetest.Has(l.Truth.Last))
+		check(t, "restart "+strconv.Itoa(done), after, l)
+		fail(t, "restart "+strconv.Itoa(done), enginetest.Restarted(live, after), l)
 	}
 	if fi, err := os.Stat(l.Main()); err != nil || fi.Size() <= 8<<20 || l.Records[l.Main()] <= 2000 {
 		t.Fatalf("main file %d bytes, %d records: want above 8 MiB and 2000", fi.Size(), l.Records[l.Main()])
@@ -73,13 +89,11 @@ func TestOMPLongSessionWithRestarts(t *testing.T) {
 		t.Fatalf("%d subagent files, want 33", len(l.Subagents))
 	}
 	r.Restart()
-	first := r.SettleUntil(settleLimit, hasPrompt(len(turns)))
-	check(t, "first restore", first, l)
+	second := r.SettleUntil(settleLimit, enginetest.Has(l.Truth.Last))
 	r.Restart()
-	second := r.SettleUntil(settleLimit, hasPrompt(len(turns)))
-	fail(t, "second restore", enginetest.Reread(first, second))
+	third := r.SettleUntil(settleLimit, enginetest.Has(l.Truth.Last))
+	fail(t, "second restore", enginetest.Reread(second, third), l)
 }
 
-// settleLimit bounds each wait: the engine reads a large append to a
-// followed file at its own pace.
-const settleLimit = 30 * time.Second
+// settleLimit bounds each wait.
+const settleLimit = 60 * time.Second
