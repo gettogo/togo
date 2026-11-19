@@ -48,6 +48,7 @@ type Events2 struct {
 	shellsEnded []string        // shells that ended with no row, newest last
 	pastTurn    string          // turn of the past message being mapped (history2.go)
 	loc         located         // the followed conversation's folder (needs2.go)
+	flagMain    bool            // main comes from the launch flag alone (history2.go)
 }
 
 // NewEvents2 returns a 2.x mapper for one session.
@@ -57,6 +58,7 @@ func NewEvents2(env harness.Env) *Events2 {
 		turns: map[string]*turn{}, turnOf: map[string]string{}, inbox: map[string]string{}, open: map[string]harness.Item{}}
 	if id := sessionFlag(env.Argv); id != "" {
 		e.setMain(id)
+		e.flagMain = true
 	}
 	return e
 }
@@ -302,6 +304,7 @@ func (e *Events2) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 }
 
 func (e *Events2) setMain(id string) {
+	e.flagMain = false
 	if id != e.main {
 		// The folder a move named was the last conversation's.
 		delete(e.state, "conversation_cwd")
