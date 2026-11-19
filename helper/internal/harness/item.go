@@ -400,4 +400,8 @@ type Record struct {
 	// restores it atomically instead of publishing historical transitions.
 	// Nil means an ordinary live record; Data keeps its usual mapper shape.
 	Replay []json.RawMessage
+	// File is the path of the file a file source read the record from,
+	// for a mapper that serves several files through one feed (a glob).
+	// Empty for other sources. Internal: never sent or logged.
+	File string
 }

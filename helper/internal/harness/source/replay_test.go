@@ -31,6 +31,9 @@ func TestInitialTranscriptReplayIsOneDelivery(t *testing.T) {
 	if len(delivered[0].Replay) != len(Records(fixture, 1<<30)) {
 		t.Fatal("restoration did not retain the mapper records")
 	}
+	if delivered[0].File != path {
+		t.Fatalf("restored records name file %q, want %q", delivered[0].File, path)
+	}
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +48,9 @@ func TestInitialTranscriptReplayIsOneDelivery(t *testing.T) {
 	}
 	if len(delivered) != 2 || delivered[1].Replay != nil || !json.Valid(delivered[1].Data) {
 		t.Fatal("new output did not remain a live record")
+	}
+	if delivered[1].File != path {
+		t.Fatalf("live record names file %q, want %q", delivered[1].File, path)
 	}
 }
 

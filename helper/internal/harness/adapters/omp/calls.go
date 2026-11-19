@@ -60,6 +60,7 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 			if !slices.Contains(s.taskCalls[callID], aid) { // a replay reads the call again
 				s.taskCalls[callID] = append(s.taskCalls[callID], aid)
 				s.pending = append(s.pending, aid)
+				s.byFile.named(t.id, aid)
 			}
 			items = append(items, *a)
 			ops = append(ops, s.agentRow(a))

@@ -40,6 +40,7 @@ type session struct {
 	agents    map[string]*harness.Item
 	headers   map[string]string // subagent header id -> agent item id
 	files     map[string]bool
+	byFile    agentFiles // which agent each subagent file is (files.go)
 	cost      float64
 	usage     map[string]any
 
@@ -61,7 +62,7 @@ func newSession(env harness.Env) *session {
 	return &session{env: env, cwd: env.Cwd, state: map[string]string{}, parents: map[string]string{},
 		tools: map[string]*harness.Item{}, asks: map[string]*harness.Item{}, taskCalls: map[string][]string{}, agents: map[string]*harness.Item{},
 		headers: map[string]string{}, files: map[string]bool{}, detached: map[string]bool{},
-		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}, jobs: map[string]*harness.Item{}}
+		todoBefore: map[string][]todoPhase{}, todoUnread: map[string]bool{}, jobs: map[string]*harness.Item{}, byFile: newAgentFiles()}
 }
 
 func (s *session) Name() string { return MapperSession }
@@ -116,11 +117,21 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.mapEntry(rec, e)
+}
+
+// mapEntry maps one decoded entry. The caller holds the lock.
+func (s *session) mapEntry(rec harness.Record, e map[string]any) ([]harness.Item, []harness.Op) {
 	at := stamp(e["timestamp"], rec.At)
 	s.readAt = rec.At
 	main := rec.Source == feedSession
+	if a, ok := s.byFile.agent[rec.File]; ok && !main && rec.File != "" {
+		// An entry of a file whose header was read: that file's agent,
+		// whichever file's header came last.
+		s.cur = a
+	}
 	if str(e, "type") == "session" {
-		return s.header(e, at, main)
+		return s.header(e, at, main, rec.File)
 	}
 	// Every entry is placed, also the ones not shown: a note omp adds (a
 	// background result, a reminder) is the parent of what the agent says
@@ -209,7 +220,7 @@ const feedSubagents = "subagents"
 // header says of a parent: /fork writes a new main conversation that names
 // the one it came from (seen on 18.20). A file of the subagents feed, or of
 // a mapper fed without feed names, is a subagent's when it names a parent.
-func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.Item, []harness.Op) {
+func (s *session) header(e map[string]any, at time.Time, main bool, file string) ([]harness.Item, []harness.Op) {
 	id := str(e, "id")
 	parent := e["parentSession"]
 	if main || parent == nil || parent == "" {
@@ -228,43 +239,7 @@ func (s *session) header(e map[string]any, at time.Time, main bool) ([]harness.I
 		}
 		return nil, nil
 	}
-	if a, ok := s.headers[id]; ok {
-		s.cur = a
-		return nil, nil
-	}
-	var agentID string
-	if hs := s.state["harness_session"]; hs != "" && !strings.HasSuffix(str(e, "parentSession"), "_"+hs+".jsonl") {
-		// A subagent of another omp's session in the same folder (one the
-		// user ran outside Togo, or an earlier session of this pane).
-		s.headers[id], s.cur = dropped, dropped
-		return nil, nil
-	}
-	if created, err := time.Parse(time.RFC3339, s.env.Vars["created"]); err == nil && len(s.pending) == 0 && at.Before(created.Add(-time.Minute)) {
-		// A subagent of an earlier session, read because its file was
-		// the newest: not part of this conversation.
-		s.headers[id], s.cur = dropped, dropped
-		return nil, nil
-	}
-	if len(s.pending) == 0 && s.readAt.Sub(at) > agentFresh {
-		// No task call is waiting for this file and it was written long
-		// before it is read: after a restart the conversation is read from
-		// its recent part and the subagent files whole, so this is one of
-		// an earlier turn. It is not a step of the turn that runs now.
-		s.headers[id], s.cur = dropped, dropped
-		return nil, nil
-	}
-	if len(s.pending) > 0 {
-		agentID, s.pending = s.pending[0], s.pending[1:]
-	} else {
-		agentID = "agent-" + id
-		it := harness.Item{ID: agentID, Kind: harness.KindAgent, At: at, TurnID: s.turnID(),
-			Agent: &harness.AgentBody{AgentID: id, Name: firstNonEmpty(str(e, "title"), "Subagent"), State: harness.StateRunning, Started: at}}
-		s.agents[agentID] = &it
-	}
-	s.headers[id] = agentID
-	s.cur = agentID
-	it := *s.agents[agentID]
-	return []harness.Item{it}, []harness.Op{s.agentRow(&it)}
+	return s.subagentHeader(e, at, file)
 }
 
 // restart forgets what the main conversation accumulated, for a header
