@@ -50,6 +50,7 @@ func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Rec
 			i = -1
 			continue
 		}
+		s.followedLocked()
 		s.publishLocked(items, ops)
 		s.afterRecordLocked()
 	}

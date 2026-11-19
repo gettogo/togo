@@ -641,6 +641,8 @@ func (s *sess) recordLocked(mapper string, rec harness.Record) {
 		pre = replayMark(m)
 		items, ops = safeMap(m, rec, s.e.cfg.Logf)
 		s.movedLocked()
+	} else {
+		s.followedLocked() // before publishing: the record's items are the new conversation's
 	}
 	s.keepHookLocked(rec, pre, replayMark(m))
 	s.warnPlanLocked(m)
@@ -686,7 +688,7 @@ func safeMap(m harness.Mapper, rec harness.Record, logf func(string, ...any)) (i
 func (s *sess) afterRecordLocked() {
 	s.syncFeedsLocked()
 	st := s.stateLocked()
-	s.followedLocked(st[harness.StateMoves])
+	s.followedLocked()
 	if t := st["turn"]; t != "" {
 		s.turn = t
 	}
