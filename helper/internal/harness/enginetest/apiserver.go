@@ -74,7 +74,7 @@ type failRule struct {
 }
 
 // apiUsers are the Basic auth user names of the agents (opencode.yaml:10,
-// kilo.yaml:13).
+// kilo.yaml:14).
 var apiUsers = map[string]string{"opencode": "opencode", "kilo": "kilo"}
 
 // IsAPIAgent reports an agent the rig serves through an APIServer.

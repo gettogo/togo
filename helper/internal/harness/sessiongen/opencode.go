@@ -15,7 +15,7 @@ import (
 // helper finds the server on the port it picked at launch (engine/
 // endpoint.go EndpointArgs: `--port N`, a fresh password in
 // OPENCODE_SERVER_PASSWORD or KILO_SERVER_PASSWORD, Basic auth as
-// "opencode" or "kilo"; opencode.yaml:10, kilo.yaml:13) and reads it over
+// "opencode" or "kilo"; opencode.yaml:10, kilo.yaml:14) and reads it over
 // HTTP. The test API server (enginetest.APIServer) plays the journal on
 // /event as the agent's stream and answers the routes the adapter reads
 // from what the journal holds.
@@ -25,21 +25,21 @@ import (
 //   - feed: GET /event, server-sent events, reconnecting with backoff
 //     (source/httpsrc/sse.go:192); a reconnect is reported to the mapper
 //     as stream.reconnected (sse.go:232), which closes open questions
-//     (events.go:146). The stream has no history: events sent while the
+//     (events.go:141). The stream has no history: events sent while the
 //     helper is away are lost, and 1.x has no history route (opencode.yaml
 //     feeds has no history).
-//   - mapper events (events.go:95-155): session.created/updated (the main
+//   - mapper events (events.go:94-155): session.created/updated (the main
 //     session, its model and agent; a session with a parentID is a
 //     subagent), tui.session.select, message.updated (a user message
 //     starts a turn and, in another top-level session, moves the chat
-//     there: events.go:288), message.part.updated and .delta (text,
+//     there: events.go:291), message.part.updated and .delta (text,
 //     reasoning, tools: parts.go), session.status (busy, idle, retry,
 //     offline), session.idle, session.diff (changes), todo.updated (plan),
 //     question.asked/replied/rejected, permission.asked/replied,
 //     session.compacted, session.error.
 //   - sources: GET /session (resume list), /config/providers (models,
 //     providers), /provider, /agent, /command, /mcp, and per session
-//     /session/{id}/todo, /children, /diff (opencode.yaml:24-75).
+//     /session/{id}/todo, /children, /diff (opencode.yaml:20-73).
 //   - actions, all API calls, none typed: send is POST
 //     /session/{id}/prompt_async; interrupt POST /session/{id}/abort;
 //     answers POST /permission/{id}/reply ({"reply"}) or
@@ -47,7 +47,7 @@ import (
 //     /api/session/{id}/model; mode POST /api/session/{id}/agent; a /
 //     line POST /session/{id}/command; compact POST
 //     /session/{id}/summarize; resume POST /tui/select-session; a start
-//     before the first prompt POST /session (opencode.yaml:113-174).
+//     before the first prompt POST /session (opencode.yaml:110-170).
 //
 // Each event carries only fields that the helper reads and that are found
 // in the real recordings (adapters/opencode/testdata/events.sse, OpenCode
