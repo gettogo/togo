@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -33,18 +34,25 @@ func approvalAcrossRestart(t *testing.T) (*enginetest.Rig, wire.Approval, []wire
 	return r, before, after, r.Answer(before.RequestID, wire.DecisionApprove)
 }
 
-// TestKnownFault_ApprovalLostOnRestart documents a fault: approvals live
-// only in the helper's memory (helper/internal/approval), so a helper
-// restart (`togo update`) loses the open request. The prompt still on
-// screen is read again as a new request with a new id, and an answer
-// from the notification sent before the restart finds nothing.
-//
-// Correct: the request open before the restart is still open after it,
-// under the same id, with the same options and expiry, and its answer is
-// typed into the pane. This test passes while the fault is present.
-func TestKnownFault_ApprovalLostOnRestart(t *testing.T) {
-	_, before, after, err := approvalAcrossRestart(t)
-	if after[0].RequestID == before.RequestID && err == nil {
-		t.Fatal("the approval survived the restart and its answer was taken: the fault is fixed")
+// The approval open before a helper restart (`togo update`) is still open
+// after it, under the same id, with the same options and expiry; the
+// prompt read again opens nothing new, and the answer from the
+// notification sent before the restart is typed into the pane.
+func TestApprovalSurvivesRestart(t *testing.T) {
+	r, before, after, err := approvalAcrossRestart(t)
+	if len(after) != 1 || after[0].RequestID != before.RequestID {
+		t.Fatalf("open after the restart: %+v, before: %s", after, before.RequestID)
+	}
+	if !reflect.DeepEqual(after[0].Options, before.Options) || !after[0].ExpiresAt.Equal(*before.ExpiresAt) {
+		t.Errorf("after the restart %+v, before %+v", after[0], before)
+	}
+	if err != nil {
+		t.Fatalf("answer after the restart: %v", err)
+	}
+	if r.Term.Dialog() != nil {
+		t.Fatal("the prompt is still on screen after the answer")
+	}
+	if got := r.Closed()[before.RequestID]; got != wire.ByPhone {
+		t.Errorf("closed as %q, want %q", got, wire.ByPhone)
 	}
 }
