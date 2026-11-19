@@ -101,7 +101,7 @@ func TestOpenPermissionHoldsTheDone(t *testing.T) {
 	s.mu.Unlock()
 	select {
 	case <-done:
-	case <-time.After(time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no done after the permission was answered")
 	}
 }

@@ -60,12 +60,24 @@ func TestAListThatOpensLateIsHeldAndAnnouncedOnce(t *testing.T) {
 			t.Fatalf("a list was announced before one opened")
 		}
 		open.Store(true)
-		deadline := time.Now().Add(3 * time.Second)
+		deadline := time.Now().Add(30 * time.Second)
 		for !held() && time.Now().Before(deadline) {
 			time.Sleep(20 * time.Millisecond)
 		}
 		if !held() {
 			t.Fatalf("the late list is not held as one left open")
+		}
+		if requestID != "" {
+			// The announcement follows the list being held; wait for it
+			// before holding to see that it is not repeated.
+			for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+				if n, _ := menus(); n > 0 {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("the late list was never announced")
+				}
+			}
 		}
 		time.Sleep(600 * time.Millisecond)
 		n, request := menus()

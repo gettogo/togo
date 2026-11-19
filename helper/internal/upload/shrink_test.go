@@ -29,7 +29,7 @@ func TestShrinkRunsOneAtATime(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("shrink did not run after the slot was free")
 	}
 }

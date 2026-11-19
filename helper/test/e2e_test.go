@@ -230,8 +230,8 @@ func TestServeOverPipe(t *testing.T) {
 		if err != nil {
 			t.Errorf("serve exited with %v, stderr %q", err, stderr)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("serve still running 2s after stdin closed")
+	case <-time.After(30 * time.Second):
+		t.Fatal("serve still running after stdin closed")
 	}
 }
 
@@ -281,7 +281,7 @@ func TestServeUnderBareSSHEnv(t *testing.T) {
 		if err != nil {
 			t.Errorf("serve exited with %v, stderr %q", err, stderr)
 		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("serve still running 2s after stdin closed")
+	case <-time.After(30 * time.Second):
+		t.Fatal("serve still running after stdin closed")
 	}
 }

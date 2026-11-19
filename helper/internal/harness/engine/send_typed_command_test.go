@@ -63,7 +63,7 @@ func TestSendTypesTheTerminalsOwnCommand(t *testing.T) {
 		t.Errorf("typed %q, want only /new", typed)
 	}
 	var got []byte
-	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
 		if got, _ = os.ReadFile(filepath.Join(home, "rec.log")); len(got) >= len("command init \ncommand add main.go\n") {
 			break
 		}

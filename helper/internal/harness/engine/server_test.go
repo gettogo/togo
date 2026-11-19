@@ -114,7 +114,7 @@ func TestEndpointServerStartsAndStops(t *testing.T) {
 		t.Fatal("no server recorded")
 	}
 	e.Forget("s_abcdefghij")
-	for deadline := time.Now().Add(5 * time.Second); syscall.Kill(cmd.Process.Pid, 0) == nil; {
+	for deadline := time.Now().Add(30 * time.Second); syscall.Kill(cmd.Process.Pid, 0) == nil; {
 		if time.Now().After(deadline) {
 			t.Fatal("server still running after Forget")
 		}

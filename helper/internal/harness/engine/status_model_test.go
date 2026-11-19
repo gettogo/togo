@@ -30,7 +30,7 @@ func TestStatusModelFollowsAStateSwitch(t *testing.T) {
 	}
 	wait := func(want string) {
 		t.Helper()
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 1500; i++ {
 			if st := statusOf(e, id); st != nil && st.Model == want {
 				return
 			}

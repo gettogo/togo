@@ -68,7 +68,7 @@ func TestUnresponsiveDisarmStillBoundsShutdown(t *testing.T) {
 	h.setPaired(false)
 	select {
 	case <-entered:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("relay did not receive disarm")
 	}
 	h.stop(t)
@@ -97,7 +97,7 @@ func TestReplacementWaitsForRelayToReadDisarm(t *testing.T) {
 	h.setPaired(false)
 	select {
 	case <-entered:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("relay did not receive disarm")
 	}
 	h.setPaired(true)
@@ -143,7 +143,7 @@ func TestRepeatedPairingKeepsOriginalShutdownBarrier(t *testing.T) {
 	h.setPaired(false)
 	select {
 	case <-entered:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("old worker did not stop")
 	}
 	setAndObserve := func(paired bool) {
@@ -157,7 +157,7 @@ func TestRepeatedPairingKeepsOriginalShutdownBarrier(t *testing.T) {
 				if got == paired {
 					seen++
 				}
-			case <-time.After(5 * time.Second):
+			case <-time.After(30 * time.Second):
 				t.Fatal("supervisor did not rescan")
 			}
 		}

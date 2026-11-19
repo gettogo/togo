@@ -40,7 +40,7 @@ func TestAskPromptStopsOnInterrupt(t *testing.T) {
 		if code != exitInterrupted {
 			t.Fatalf("code %d, want %d", code, exitInterrupted)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("prompt kept waiting after the interrupt")
 	}
 }

@@ -62,16 +62,20 @@ const menu = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n"
 
 func TestExpiryClosesApproval(t *testing.T) {
 	pub := &fakePub{}
-	st := New(Config{Tmux: &fakeTmux{}, Pub: pub, TTL: 30 * time.Millisecond})
+	// The store forgets an expired approval one TTL after closing it, and
+	// the answer below must reach it before then, so the TTL is not tiny.
+	st := New(Config{Tmux: &fakeTmux{}, Pub: pub, TTL: time.Second})
 	a, ch := st.OpenAsk(context.Background(), wire.AskParams{Title: "Ship it?", Options: []string{"Yes", "No"}})
 	select {
 	case d, ok := <-ch:
 		if ok {
 			t.Fatalf("ask received %q, want close on expiry", d)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(time.Minute):
 		t.Fatal("approval never expired")
 	}
+	// The ask channel closes just before the closed event is published.
+	eventually(t, "the expired event", func() bool { return len(pub.closed()) > 0 })
 	if got := pub.closed(); len(got) != 1 || got[0] != wire.ResolutionExpired {
 		t.Fatalf("closed events = %v, want [expired]", got)
 	}

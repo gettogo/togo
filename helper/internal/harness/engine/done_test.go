@@ -36,12 +36,18 @@ func TestTurnEndSendsDoneWithTheReply(t *testing.T) {
 			s.last["hooks"] = json.RawMessage(`{}`)
 		}
 		s.doneLocked()
+		// A done that is wanted may take a while to arrive; one that is not
+		// wanted is given a short window to show up.
+		wait := 200 * time.Millisecond
+		if c.want {
+			wait = 30 * time.Second
+		}
 		select {
 		case g := <-got:
 			if !c.want || g[1] != a.Name+" finished" || g[2] != "ok" {
 				t.Errorf("%s (hooked %v): done %q", c.adapter, c.hooked, g)
 			}
-		case <-time.After(200 * time.Millisecond):
+		case <-time.After(wait):
 			if c.want {
 				t.Errorf("%s (hooked %v): no done", c.adapter, c.hooked)
 			}

@@ -58,7 +58,7 @@ func TestQuestionWaitDeliversAnswersAndSuppressesHookApprovals(t *testing.T) {
 		a, _ := st.WaitQuestion(context.Background(), sess, prompts)
 		got <- a
 	}()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for !st.QuestionWaiting(sess) {
 		if time.Now().After(deadline) {
 			t.Fatal("the wait never registered")

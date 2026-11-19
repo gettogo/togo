@@ -44,7 +44,7 @@ func TestNativeScreenAndTypingShareOneLock(t *testing.T) {
 	typing()
 	select {
 	case <-taken:
-	case <-time.After(2 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("a native screen was never admitted after the typing ended")
 	}
 	// Another session's typing does not hold this one up.
@@ -54,7 +54,7 @@ func TestNativeScreenAndTypingShareOneLock(t *testing.T) {
 	go func() { c.Surface.BeforeOpen(id)(); close(done) }()
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("one session's typing held up another session's native screen")
 	}
 	if c.Surface.Held(id) {

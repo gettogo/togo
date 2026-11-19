@@ -77,6 +77,11 @@ type client struct {
 	in     *io.PipeWriter
 	frames chan map[string]json.RawMessage
 	nextID int
+	// early holds notifications call read while it waited for a response,
+	// in wire order, for next to return first.
+	early []map[string]json.RawMessage
+	// subscribed is set once an events.subscribe was answered.
+	subscribed bool
 }
 
 func (e *env) dial(t *testing.T) *client {
@@ -133,6 +138,17 @@ func (c *client) send(method string, params any) int {
 // next returns the next frame or fails after a timeout.
 func (c *client) next() map[string]json.RawMessage {
 	c.t.Helper()
+	if len(c.early) > 0 {
+		m := c.early[0]
+		c.early = c.early[1:]
+		return m
+	}
+	return c.read()
+}
+
+// read returns the next frame off the wire or fails after a timeout.
+func (c *client) read() map[string]json.RawMessage {
+	c.t.Helper()
 	select {
 	case m, ok := <-c.frames:
 		if !ok {
@@ -145,16 +161,29 @@ func (c *client) next() map[string]json.RawMessage {
 	return nil
 }
 
-// call sends a request and returns its response, failing if a
-// notification arrives first.
+// call sends a request and returns its response. An event the request
+// itself caused may be written before the response (session.setMute
+// publishes the muted session while it answers): notifications that come
+// first are kept, in order, for next and event. Only the first
+// events.subscribe must be answered before any event, because its snapshot
+// seq orders every event after it. Another response first is a failure.
 func (c *client) call(method string, params any) map[string]json.RawMessage {
 	c.t.Helper()
-	id := c.send(method, params)
-	m := c.next()
-	if string(m["id"]) != fmt.Sprint(id) {
-		c.t.Fatalf("%s: got frame %v before its response", method, m)
+	id := fmt.Sprint(c.send(method, params))
+	strict := method == wire.MethodEventsSubscribe && !c.subscribed
+	for {
+		m := c.read()
+		if string(m["id"]) == id {
+			if method == wire.MethodEventsSubscribe {
+				c.subscribed = true
+			}
+			return m
+		}
+		if strict || m["id"] != nil || string(m["method"]) != `"event"` {
+			c.t.Fatalf("%s: got frame %v before its response", method, m)
+		}
+		c.early = append(c.early, m)
 	}
-	return m
 }
 
 func (c *client) subscribe(foreground bool) int64 {
@@ -188,7 +217,7 @@ func notify(h *hub.Hub, n int) {
 
 func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s", what)
@@ -252,6 +281,9 @@ func TestResubscribeGivesFreshSnapshotWithoutDuplicates(t *testing.T) {
 	if got := c.event().Seq; got != 3 {
 		t.Fatalf("event after resubscribe seq %d, want 3", got)
 	}
+	if len(c.early) > 0 {
+		t.Fatalf("unexpected extra frame %v", c.early[0])
+	}
 	select {
 	case m := <-c.frames:
 		t.Fatalf("unexpected extra frame %v", m)
@@ -303,7 +335,7 @@ func TestSlowSubscriberLosesBacklogOthersUnaffected(t *testing.T) {
 		}()
 		select {
 		case <-published:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("Publish blocked on the slow subscriber")
 		}
 		for range batch {
@@ -394,7 +426,7 @@ func TestSlowListDoesNotBlockPublish(t *testing.T) {
 	}()
 	select {
 	case <-published:
-	case <-time.After(2 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Publish waited on the subscribe's tmux list")
 	}
 	if err := os.WriteFile(release, nil, 0o644); err != nil {

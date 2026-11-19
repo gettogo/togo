@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -15,6 +16,25 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/session"
 )
+
+// waitSendBlockedOnTypingLock waits until a goroutine inside Send is parked
+// on the typing lock. Send reads the conversation before it waits for the
+// lock, so by then it has seen the conversation the test means it to see.
+func waitSendBlockedOnTypingLock(t *testing.T) {
+	t.Helper()
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+		var b strings.Builder
+		if err := pprof.Lookup("goroutine").WriteTo(&b, 2); err != nil {
+			t.Fatal(err)
+		}
+		for _, g := range strings.Split(b.String(), "\n\n") {
+			if strings.Contains(g, "(*Engine).Send(") && strings.Contains(g, "sync.Mutex.Lock") {
+				return
+			}
+		}
+	}
+	t.Fatal("the send never reached the typing lock")
+}
 
 // Seen live on omp 18.20, OpenCode 2.3 and others: the agent moved to a new
 // conversation in its terminal and the chat kept the old conversation's
@@ -192,6 +212,15 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		}
 		return users, notices
 	}
+	// moveTo reports that the agent moved to conv and waits for the chat to
+	// start over: a new log epoch. The epoch is read first so the log
+	// exists; a move before anything made the log would name its first
+	// epoch, the same name a counter gives the log before a move.
+	moveTo := func(conv string) {
+		before := e.log.Epoch(id)
+		deliver(id, map[string]any{"state": map[string]string{"conversation": conv}})
+		waitFor(t, func() bool { return e.log.Epoch(id) != before })
+	}
 	deliver(id, map[string]any{"state": map[string]string{"conversation": "A"}})
 	waitFor(t, func() bool { s, _ := e.served(ctx, id); s.mu.Lock(); defer s.mu.Unlock(); return s.conv == "A" })
 
@@ -202,8 +231,7 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		done <- err
 	}()
 	waitFor(t, func() bool { return strings.Contains(sentLog(), "direct") })
-	deliver(id, map[string]any{"state": map[string]string{"conversation": "B"}})
-	waitFor(t, func() bool { return e.log.Epoch(id) == "e2" })
+	moveTo("B")
 	if err := os.WriteFile(filepath.Join(home, "release"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -224,9 +252,8 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		_, err := e.Send(ctx, harness.SendRequest{Session: id, Text: "waiting", Mode: harness.SendNow})
 		done <- err
 	}()
-	time.Sleep(100 * time.Millisecond)
-	deliver(id, map[string]any{"state": map[string]string{"conversation": "B2"}})
-	waitFor(t, func() bool { return e.log.Epoch(id) == "e3" })
+	waitSendBlockedOnTypingLock(t)
+	moveTo("B2")
 	l.Unlock()
 	if err := <-done; !errors.As(err, &moved) || !strings.Contains(moved.Detail, "was not sent") {
 		t.Fatalf("send that waited across the move = %v, want the not-sent error", err)
@@ -241,8 +268,7 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 	queue(t, e, id, "queued")
 	status.Store("idle")
 	waitFor(t, func() bool { return strings.Contains(sentLog(), "queued") })
-	deliver(id, map[string]any{"state": map[string]string{"conversation": "C"}})
-	waitFor(t, func() bool { return e.log.Epoch(id) == "e4" })
+	moveTo("C")
 	if err := os.WriteFile(filepath.Join(home, "release"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
