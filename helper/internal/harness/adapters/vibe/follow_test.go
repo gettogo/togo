@@ -115,6 +115,9 @@ func TestSessionChangeResetsTheMapper(t *testing.T) {
 	if _, ok := m.turns[first]; ok || len(m.order) != 1 {
 		t.Fatalf("the left conversation's turns are kept: %v", m.order)
 	}
+	if n := m.State()[harness.StateMoves]; n != "1" {
+		t.Fatalf("moves %q after a move, want 1: the engine ends what the left conversation had", n)
+	}
 }
 
 // The review's sequence: the pane moves at t=0 while alone; at t=3 a

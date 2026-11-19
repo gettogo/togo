@@ -197,6 +197,9 @@ func (m *db) choose() {
 		return
 	}
 	if best.ID != m.state["harness_session"] {
+		if m.state["harness_session"] != "" {
+			harness.Moved(m.state)
+		}
 		m.b.Reset()
 		m.asks, m.early = map[string]harness.Item{}, map[string]map[string][]string{}
 		m.state["harness_session"] = best.ID

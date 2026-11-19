@@ -82,6 +82,24 @@ func (s *sess) movedLocked() bool {
 	return true
 }
 
+// followedLocked ends what belonged to the conversation a mapper left
+// when it followed the agent to another one and the chat keeps both
+// (harness.StateMoves): the running turn and its tools end interrupted,
+// queued prompts are withdrawn (they were written for the conversation
+// left), and open questions close, so no answer is typed into a pane
+// that shows another conversation. The chat is not started over.
+func (s *sess) followedLocked(moves string) {
+	if moves == s.moves {
+		return
+	}
+	s.moves = moves
+	if moves == "" || moves == "0" {
+		return
+	}
+	s.agentExitedLocked()
+	s.turn, s.awaitReply, s.awaitText = "", false, ""
+}
+
 // convCarry keeps, per session, the conversation the chat showed when the
 // session's adapter was started again on a new endpoint, until the new
 // run's mappers name theirs. It is taken once, and dropped with the

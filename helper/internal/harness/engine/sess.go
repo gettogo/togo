@@ -37,6 +37,8 @@ type sess struct {
 	// (see conversation.go).
 	conv    string
 	convGen uint64
+	// moves is the last harness.StateMoves the mappers reported.
+	moves string
 	// catalogPending: the harness's own command list is still being read;
 	// the last command completion said so.
 	catalogPending bool
@@ -684,6 +686,7 @@ func safeMap(m harness.Mapper, rec harness.Record, logf func(string, ...any)) (i
 func (s *sess) afterRecordLocked() {
 	s.syncFeedsLocked()
 	st := s.stateLocked()
+	s.followedLocked(st[harness.StateMoves])
 	if t := st["turn"]; t != "" {
 		s.turn = t
 	}

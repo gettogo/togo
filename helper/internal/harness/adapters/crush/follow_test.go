@@ -63,6 +63,9 @@ func TestCrushFollowsAConversationItStartsItself(t *testing.T) {
 	if got := settles(m, "b"); got != "b" {
 		t.Fatalf("session %q after the new one, want b", got)
 	}
+	if n := m.State()[harness.StateMoves]; n != "1" {
+		t.Fatalf("moves %q after a move, want 1: the engine ends what the left conversation had", n)
+	}
 	m.Map(rec(t, srow("b", 200)))
 	if got := m.State()["harness_session"]; got != "b" {
 		t.Fatalf("session %q before b has messages, want b", got)

@@ -88,6 +88,9 @@ func (s *Session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			return nil, nil
 		}
 		items, ops := s.endTurn(harness.StateInterrupted, at)
+		if prev := s.state["harness_session"]; prev != "" && prev != e.ID {
+			harness.Moved(s.state) // a /new or a resume: another conversation
+		}
 		s.state["harness_session"] = e.ID
 		return items, ops
 	case "message":
