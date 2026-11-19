@@ -68,8 +68,11 @@ func CountKind(st enginetest.State, kind string) int {
 // heavy bounds how many of the large scenarios run at once: each reads
 // thousands of records and, under the race detector, uses a core for
 // minutes, so on a small machine more than a few at a time only make the
-// waits in every test of the package run out.
-var heavy = make(chan struct{}, max(1, min(4, runtime.GOMAXPROCS(0)/2)))
+// waits in every test of the package run out. One place per two cores,
+// rounded up: on three cores one place left two idle for the minutes the
+// hook-fed package took, and it ran past the ten minute limit of a
+// hosted runner.
+var heavy = make(chan struct{}, max(1, min(4, (runtime.GOMAXPROCS(0)+1)/2)))
 
 // Heavy takes a place among the large scenarios, after t.Parallel, and
 // gives it back when the test ends.
