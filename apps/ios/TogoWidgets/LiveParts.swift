@@ -26,21 +26,26 @@ struct LiveMark: View {
 struct LiveClock: View {
     @Environment(\.liveClockFrozenAt) private var frozenAt
     let since: Int
+    var compact = false
 
     var body: some View {
         Text(verbatim: placeholder)
             .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(compact ? 0.4 : 1)
             .hidden()
-            .overlay(alignment: .trailing) {
+            .overlay(alignment: compact ? .center : .trailing) {
                 LiveElapsed(since: since)
-                    .multilineTextAlignment(.trailing)
+                    .minimumScaleFactor(compact ? 0.4 : 1)
+                    .multilineTextAlignment(compact ? .center : .trailing)
             }
-            .fixedSize()
+            .fixedSize(horizontal: !compact, vertical: true)
     }
 
     /// "00:00" under 50 minutes, else "0:00:00": room for the next hour before the next push.
     private var placeholder: String {
         let elapsed = (frozenAt ?? Date()).timeIntervalSince(LiveCopy.sinceDate(since))
+        if compact, elapsed >= 9 * 3600 { return LiveElapsed.format(elapsed + 3600) }
         return elapsed < 50 * 60 ? "00:00" : "0:00:00"
     }
 }

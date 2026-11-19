@@ -150,6 +150,9 @@ struct QuestionRow: View {
         // motion: state change — the card dims in place while its answer is on its way.
         .opacity(locked ? 0.6 : 1)
         .motion(.respond, value: locked)
+        // The chat scrolls the card as a whole. A short proposal must not compress
+        // the button rows around text that already wraps at its full height.
+        .fixedSize(horizontal: false, vertical: true)
         .clipped()
         .modifier(NeedsCard())
         .accessibilityElement(children: .contain)

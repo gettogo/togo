@@ -54,7 +54,7 @@ struct ScreenRequest: Identifiable {
     var id: String
 }
 
-/// A notice under the field: what did not work, and the one thing to do about it ("Open
+/// A notice above the field: what did not work, and the one thing to do about it ("Open
 /// terminal" after a stop that did not land, "Try again" after a prompt that did not go).
 struct ComposerNoticeLine: View {
     let text: String
@@ -74,6 +74,8 @@ struct ComposerNoticeLine: View {
     private var words: some View {
         Text(text)
             .font(.footnote.weight(.semibold))
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
             // A hint about the words in the field is not a failure.
             .foregroundStyle(action == .sendAsText ? Color.togoMute : PrimitiveTint.fail)
             .accessibilityAddTraits(.updatesFrequently)
