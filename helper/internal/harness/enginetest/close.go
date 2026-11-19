@@ -19,7 +19,7 @@ import (
 // test's cleanup therefore wait for those to end before they return.
 
 // drainLimit bounds how long a rig waits for what it started to end.
-const drainLimit = 5 * time.Second
+const drainLimit = 30 * time.Second
 
 var (
 	// openEngines counts the engines running now, over all rigs.

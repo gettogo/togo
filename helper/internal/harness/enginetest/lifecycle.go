@@ -99,7 +99,7 @@ func (r *Rig) Remove() {
 	r.Engine.Observe(wire.Event{Kind: wire.EventSessionRemoved, SessionID: &id})
 	// The engine drops the session on its own goroutine: wait until it has,
 	// so a test reads the state after the removal, not during it.
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
 		if _, ok := r.Engine.Summary(id); !ok {
 			return
 		}

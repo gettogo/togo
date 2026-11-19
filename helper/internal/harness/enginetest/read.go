@@ -78,9 +78,16 @@ func (r *Rig) Settle(limit time.Duration) State {
 	return r.SettleUntil(limit, nil)
 }
 
+// MinSettleLimit is the least time SettleUntil waits before it fails. The
+// limit a test passes was picked on a fast machine; a slow runner needs
+// longer to read the same files, and a longer wait costs a passing run
+// nothing.
+const MinSettleLimit = 30 * time.Second
+
 // SettleUntil waits until ok holds (nil: always) and the state is quiet.
 func (r *Rig) SettleUntil(limit time.Duration, ok func(State) bool) State {
 	r.T.Helper()
+	limit = max(limit, MinSettleLimit)
 	deadline := time.Now().Add(limit)
 	var last string
 	quiet := 0

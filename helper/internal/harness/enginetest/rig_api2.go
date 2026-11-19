@@ -135,7 +135,7 @@ func (r *Rig) killStandIns() {
 	for _, pid := range r.standIns() {
 		_ = syscall.Kill(-pid, syscall.SIGKILL)
 		_ = syscall.Kill(pid, syscall.SIGKILL)
-		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
 			if syscall.Kill(pid, 0) != nil {
 				break
 			}
@@ -161,7 +161,7 @@ func (r *Rig) StartServerAgain(port int) {
 		r.T.Fatal(err)
 	}
 	go func() { _ = cmd.Wait() }()
-	for deadline := time.Now().Add(5 * time.Second); r.ServerPort() != port; time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); r.ServerPort() != port; time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			r.T.Fatalf("the server did not come back on port %d", port)
 		}

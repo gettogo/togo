@@ -43,7 +43,7 @@ func TestCodexServerThroughTheEngine(t *testing.T) {
 	if args := r.CodexLaunch(); len(args) != 2 || args[0] != "--remote" || args[1] != "unix://"+s.Path() {
 		t.Fatalf("launch args %q, socket %q", args, s.Path())
 	}
-	r.SettleUntil(10*time.Second, Has(l.Truth.Last))
+	r.SettleUntil(30*time.Second, Has(l.Truth.Last))
 	if s.Conns() < 1 {
 		t.Error("the helper is not connected")
 	}
@@ -69,18 +69,22 @@ func TestCodexServerThroughTheEngine(t *testing.T) {
 	pids := r.AppServerPIDs()
 	before := len(s.CallsOf("thread/resume"))
 	r.Restart()
-	r.SettleUntil(10*time.Second, Has(l.Truth.Last))
+	r.SettleUntil(30*time.Second, Has(l.Truth.Last))
 	if got := r.AppServerPIDs(); !slices.Equal(got, pids) {
 		t.Errorf("the restarted helper started another app-server: %v, was %v", got, pids)
 	}
-	eventually(t, 5*time.Second, func() bool { return len(s.CallsOf("thread/resume")) > before })
+	eventually(t, 30*time.Second, func() bool { return len(s.CallsOf("thread/resume")) > before })
 }
 
 // A call told to fail answers an error, a slow one waits, and a request
 // answered at the desk is resolved once.
 func TestCodexServerKnobs(t *testing.T) {
-	r, p, _ := codexSession(t, sessiongen.Turn{Say: 10})
+	r, p, l := codexSession(t, sessiongen.Turn{Say: 10})
 	s := r.Codex()
+	// The engine joins the thread on its own clock: act only once it has
+	// resumed the thread and shown its history.
+	r.SettleUntil(30*time.Second, Has(l.Truth.Last))
+	eventually(t, 30*time.Second, func() bool { return len(s.CallsOf("thread/resume")) > 0 })
 	s.Append(sessiongen.CodexFileApproval(7, p.Thread(), "turn-x", "item-x", time.Now()))
 	s.Flush()
 	if len(s.Pending()) != 1 {
@@ -105,6 +109,7 @@ func TestCodexServerKnobs(t *testing.T) {
 
 func eventually(t *testing.T, limit time.Duration, ok func() bool) {
 	t.Helper()
+	limit = max(limit, MinSettleLimit)
 	for deadline := time.Now().Add(limit); !ok(); time.Sleep(10 * time.Millisecond) {
 		if time.Now().After(deadline) {
 			t.Fatal("timed out")

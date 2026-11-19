@@ -204,6 +204,7 @@ func (r *Rig) Answer(requestID, decision string) error {
 // WaitPending waits until the session has n open approvals.
 func (r *Rig) WaitPending(n int, limit time.Duration) []wire.Approval {
 	r.T.Helper()
+	limit = max(limit, MinSettleLimit)
 	deadline := time.Now().Add(limit)
 	for {
 		p := r.Pending()

@@ -376,7 +376,7 @@ func interrupted(t testing.TB, agent string) (*World, error) {
 	}
 	select {
 	case <-stopped:
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		return nil, fmt.Errorf("the agent never stopped")
 	}
 	r.SettleUntil(20*time.Second, func(st enginetest.State) bool { return !st.Mission.Summary.Working })

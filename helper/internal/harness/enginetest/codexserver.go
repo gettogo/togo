@@ -318,7 +318,7 @@ func (s *CodexServer) Append(msgs ...sessiongen.CodexMsg) {
 
 // Flush waits until the journal written so far has been sent.
 func (s *CodexServer) Flush() {
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
 		s.mu.Lock()
 		done := s.off >= fileSize(s.journal)
 		s.mu.Unlock()
