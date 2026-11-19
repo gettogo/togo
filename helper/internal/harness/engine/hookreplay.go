@@ -53,8 +53,27 @@ func (s *sess) replayHooksLocked(feed, mapper string) {
 	}
 	s.hookReplayed[feed] = true
 	lines := h.load(s.e.cfg.Now())
-	if rec, ok := replayRecord(feed, lines); ok {
-		s.restoreLocked(s.ctx, mapper, rec)
+	rec, ok := replayRecord(feed, lines)
+	if !ok {
+		return
+	}
+	if from := s.restoreLocked(s.ctx, mapper, rec); from > 0 {
+		// The store spans a move to another conversation: only what the
+		// chat now shows is kept, so the next restart does not read the
+		// conversation left again.
+		h.remove(false)
+		n := 0
+		for _, l := range lines {
+			if l.Feed == feed {
+				n++
+				if n <= from {
+					continue
+				}
+			}
+			if err := h.add(l); err != nil {
+				s.e.cfg.Logf("harness: %s: a hook record could not be kept: %v", s.ad.Adapter.Adapter, err)
+			}
+		}
 	}
 }
 
