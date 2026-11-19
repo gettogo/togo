@@ -81,3 +81,26 @@ func TestReplayKeepsOnlyTheFirstRecordOtherwise(t *testing.T) {
 		}
 	}
 }
+
+// A cut that starts inside the leading records (the file is only a little
+// over one read) replays each of them once.
+func TestReplayCutInsideTheLeadingRecordsKeepsThemOnce(t *testing.T) {
+	big := `{"type":"title","title":"` + strings.Repeat("t", 1000) + `"}`
+	body := []byte(big + "\n" + sessionLine + "\n")
+	pad := strings.Repeat("x", 1<<20)
+	for i := 0; len(body) < MaxFileRead+500; i++ {
+		body = append(body, `{"type":"message","n":`+strconv.Itoa(i)+`,"pad":"`+pad+"\"}\n"...)
+	}
+	// The read starts 500 bytes in: inside the title line.
+	body = body[:MaxFileRead+500]
+	recs := replayWith(t, body, "session")
+	n := 0
+	for _, r := range recs {
+		if string(r) == sessionLine {
+			n++
+		}
+	}
+	if n != 1 || string(recs[1]) != sessionLine {
+		t.Fatalf("session record replayed %d times; second=%.40s", n, recs[1])
+	}
+}
