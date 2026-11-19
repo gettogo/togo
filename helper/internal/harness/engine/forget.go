@@ -19,6 +19,7 @@ func (e *Engine) Forget(id string) {
 		_ = os.Remove(p)
 	}
 	e.forgetConversation(id)
+	source.RemoveFollows(e.cfg.TogoHome, id)
 	e.convCarry.take(id)
 	unlock := e.endpointOps.lock(id)
 	e.retireEndpoint(id)

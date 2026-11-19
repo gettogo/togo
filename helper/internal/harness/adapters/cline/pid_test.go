@@ -6,16 +6,18 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
 
 // fakeProcs is a fixed process tree; Cline needs no open-file lookup.
-// others says whether another Cline runs in the folder.
+// others says whether another Cline runs in the folder; it can change.
 type fakeProcs struct {
 	tree   []int
 	others bool
+	flip   *atomic.Bool
 }
 
 func (f fakeProcs) Tree(context.Context) []int { return f.tree }
@@ -23,7 +25,12 @@ func (fakeProcs) Holders(context.Context, []string) (map[string][]int, error) {
 	return nil, nil
 }
 
-func (f fakeProcs) Others(context.Context, []string, string) (bool, error) { return f.others, nil }
+func (f fakeProcs) Others(context.Context, []string, string) (bool, error) {
+	if f.flip != nil {
+		return f.flip.Load(), nil
+	}
+	return f.others, nil
+}
 
 var _ harness.Procs = fakeProcs{}
 
@@ -78,28 +85,5 @@ func TestMessagesKeepsSessionWithoutEvidence(t *testing.T) {
 	}
 	if items, _ := m.Map(harness.Record{Data: other}); len(items) != 0 || m.State()["harness_session"] != fixtureID {
 		t.Fatalf("switched without evidence: %v", m.State())
-	}
-}
-
-// The recorded manifests carry no pid. A /new writes a newer session of
-// the folder: with no other Cline there it is this pane's, and the chat
-// moves to it; a resume of the first (its document rewritten later) moves
-// it back.
-func TestMessagesFollowsANewSessionWithoutPidWhenAlone(t *testing.T) {
-	h, doc := home(t)
-	other := addSession(t, h, "1794200000003_nopid", 0, doc)
-	e := env(h, "2026-11-08T03:37:52Z")
-	e.Agent = "cline"
-	e.Procs = fakeProcs{tree: []int{100}}
-	m := newMessages(e)
-	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
-		t.Fatal("first session not followed")
-	}
-	if items, _ := m.Map(harness.Record{Data: other}); len(items) == 0 || m.State()["harness_session"] != "1794200000003_nopid" {
-		t.Fatalf("the new session is not followed: %v", m.State())
-	}
-	resumed := strings.Replace(string(doc), "2026-11-08T03:38:03.002Z", "2026-11-08T05:02:00.000Z", 1)
-	if items, _ := m.Map(harness.Record{Data: []byte(resumed)}); len(items) == 0 || m.State()["harness_session"] != fixtureID {
-		t.Fatalf("the resume is not followed: %v", m.State())
 	}
 }

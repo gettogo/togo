@@ -1,10 +1,12 @@
 package vibe
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -44,23 +46,23 @@ func TestJournalForFollowsANewConversation(t *testing.T) {
 	env := harness.Env{Cwd: "/w/proj", Agent: "vibe", Vars: map[string]string{source.VarHome: home}}
 	env.Procs = heldProcs{tree: []int{10, 11}}
 	yes, no := func() bool { return true }, func() bool { return false }
-	if got := journalFor(env, "", yes); got != first {
+	if got := journalFor(context.Background(), env, "", yes); got != first {
 		t.Fatalf("first pick %q, want %q", got, first)
 	}
-	if got := journalFor(env, first, no); got != first {
+	if got := journalFor(context.Background(), env, first, no); got != first {
 		t.Fatalf("nothing newer: %q", got)
 	}
 	second, secondSeg := vibeSession(t, home, "second", time.Minute)
-	if got := journalFor(env, first, no); got != first {
+	if got := journalFor(context.Background(), env, first, no); got != first {
 		t.Fatalf("moved with another Vibe in the folder: %q", got)
 	}
-	if got := journalFor(env, first, yes); got != second {
+	if got := journalFor(context.Background(), env, first, yes); got != second {
 		t.Fatalf("the new conversation is not followed: %q", got)
 	}
 	// Back to the first (vibe --resume): its journal is written last.
 	now := time.Now()
 	_ = os.Chtimes(firstSeg, now, now)
-	if got := journalFor(env, second, yes); got != first {
+	if got := journalFor(context.Background(), env, second, yes); got != first {
 		t.Fatalf("the resume is not followed: %q", got)
 	}
 	// A newer journal another process holds is never taken; one the
@@ -68,11 +70,11 @@ func TestJournalForFollowsANewConversation(t *testing.T) {
 	later := now.Add(time.Second)
 	_ = os.Chtimes(secondSeg, later, later)
 	env.Procs = heldProcs{tree: []int{10, 11}, holders: map[string][]int{secondSeg: {99}}}
-	if got := journalFor(env, first, yes); got != first {
+	if got := journalFor(context.Background(), env, first, yes); got != first {
 		t.Fatalf("took a journal another process holds: %q", got)
 	}
 	env.Procs = heldProcs{tree: []int{10, 11}, holders: map[string][]int{secondSeg: {11}}}
-	if got := journalFor(env, first, no); got != second {
+	if got := journalFor(context.Background(), env, first, no); got != second {
 		t.Fatalf("the journal the session's process holds is not followed: %q", got)
 	}
 }
@@ -113,4 +115,37 @@ func TestSessionChangeResetsTheMapper(t *testing.T) {
 	if _, ok := m.turns[first]; ok || len(m.order) != 1 {
 		t.Fatalf("the left conversation's turns are kept: %v", m.order)
 	}
+}
+
+// The review's sequence: the pane moves at t=0 while alone; at t=3 a
+// second Vibe starts in the folder and writes its journal. Each look asks
+// the process view afresh (hookstyle guess.go, Solo.Check), so the second
+// Vibe is seen and the chat stays.
+func TestJournalForDoesNotFollowASecondVibeAfterAMove(t *testing.T) {
+	home := t.TempDir()
+	first, _ := vibeSession(t, home, "first", 3*time.Minute)
+	env := harness.Env{Cwd: "/w/proj", Agent: "vibe", Vars: map[string]string{source.VarHome: home}}
+	procs := &flipProcs{}
+	env.Procs = procs
+	s := &source.Solo{Also: []string{"vibe-acp", "vibe-app-server"}}
+	alone := func() bool { return s.Check(env) }
+	second, _ := vibeSession(t, home, "second", 2*time.Minute)
+	if got := journalFor(context.Background(), env, first, alone); got != second {
+		t.Fatalf("t=0: %q, want the new conversation", got)
+	}
+	procs.others.Store(true)
+	vibeSession(t, home, "third", time.Minute)
+	if got := journalFor(context.Background(), env, second, alone); got != second {
+		t.Fatalf("followed the second Vibe's journal: %q", got)
+	}
+}
+
+type flipProcs struct{ others atomic.Bool }
+
+func (*flipProcs) Tree(context.Context) []int { return []int{10} }
+func (*flipProcs) Holders(context.Context, []string) (map[string][]int, error) {
+	return nil, nil
+}
+func (p *flipProcs) Others(context.Context, []string, string) (bool, error) {
+	return p.others.Load(), nil
 }

@@ -33,7 +33,9 @@ const (
 
 func init() {
 	harness.RegisterAdapterFile("vibe", adapterFile)
-	hookstyle.Register(hookstyle.Options{Name: MapperHooks, Transcript: journalFor})
+	// vibe-acp and vibe-app-server, installed with Vibe 3.1, run the same
+	// local harness and write the same session store.
+	hookstyle.Register(hookstyle.Options{Name: MapperHooks, Transcript: journalFor, Siblings: []string{"vibe-acp", "vibe-app-server"}})
 	harness.RegisterMapper(MapperSession, func(env harness.Env) harness.Mapper { return newSession(env) })
 }
 
@@ -55,8 +57,10 @@ const maxMeta = 256 << 10
 // --continue, or resuming another session, writes another session's
 // journal; the session moves there when its own process holds it, or when
 // it was written after current's and no other Vibe runs in the folder to
-// have written it (alone). Otherwise current stays.
-func journalFor(env harness.Env, current string, alone func() bool) string {
+// have written it (alone, a lookup begun after the journal was found).
+// Otherwise current stays. It walks folders and asks the process view:
+// the caller runs it away from the session's lock (hookstyle guess.go).
+func journalFor(ctx context.Context, env harness.Env, current string, alone func() bool) string {
 	if env.Cwd == "" {
 		return ""
 	}
@@ -111,7 +115,7 @@ func journalFor(env harness.Env, current string, alone func() bool) string {
 	if current != "" && (len(cands) == 0 || len(cands) == 1 && cands[0].glob == current) {
 		return current // the cheap case: no other journal was written since
 	}
-	verdicts := source.Attribute(context.Background(), env, all)
+	verdicts := source.Attribute(ctx, env, all)
 	best, bestAt, bestMine := "", time.Time{}, false
 	curMine := false
 	for _, c := range cands {
