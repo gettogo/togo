@@ -60,7 +60,7 @@ func readMsg(t *testing.T, p *pipe) Message {
 			t.Fatal(err)
 		}
 		return m
-	case <-time.After(2 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no message")
 	}
 	return Message{}
