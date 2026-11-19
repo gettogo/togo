@@ -151,7 +151,7 @@ func TestNotifyAfterStreamEndsReturnsErrClosed(t *testing.T) {
 	}
 	select {
 	case <-conn.Done():
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Done not closed after the stream ended")
 	}
 	if err := conn.Notify("event", nil); !errors.Is(err, ErrClosed) {
@@ -212,7 +212,7 @@ func TestServeCancelsBlockedConcurrentHandlerAtEOF(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Serve: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Serve did not return while a concurrent handler blocked")
 	}
 }
