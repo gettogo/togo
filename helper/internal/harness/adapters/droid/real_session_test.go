@@ -3,6 +3,7 @@ package droid
 import (
 	"bufio"
 	"encoding/json"
+	"github.com/gettogo/togo/helper/internal/harness/coverage"
 	"os"
 	"reflect"
 	"strings"
@@ -52,6 +53,7 @@ func realCalls(t *testing.T) map[string][2]json.RawMessage {
 }
 
 func TestRealAskUserQuestionnaire(t *testing.T) {
+	coverage.Covers(t, "unit", "droid/capability/needs.questions")
 	c := realCalls(t)["AskUser"]
 	q, ok := droidAsk("AskUser", c[0])
 	if !ok || len(q.Questions) != 1 {

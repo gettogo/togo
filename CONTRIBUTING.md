@@ -30,7 +30,7 @@ The helper, agent adapters, relay and protocol schema build and test on macOS or
 
 ## Good first issues
 
-- **Agent adapters.** Each agent Togo supports has an adapter in `helper/internal/harness/adapters`: a YAML file naming the agent's structured sources (hooks, status line, transcripts, an app server) and actions, plus small Go mappers that turn them into chat items. The Claude Code and Codex ones show the full shape; `hookstyle` covers agents whose hooks follow Claude Code's. Fixes for an agent's newer version, and adapters for agents Togo does not know yet, are welcome.
+- **Agent adapters.** Each agent Togo supports has an adapter in `helper/internal/harness/adapters`: a YAML file naming the agent's structured sources (hooks, status line, transcripts, an app server) and actions, plus small Go mappers that turn them into chat items. The Claude Code and Codex ones show the full shape; `hookstyle` covers agents whose hooks follow Claude Code's. Fixes for an agent's newer version, and adapters for agents Togo does not know yet, are welcome. A new adapter, or a new capability in an existing one, must come with tests for its cells: `make coverage-matrix` lists them per agent, and the test `TestCoverageRatchet` fails until each cell has a test that names it with `coverage.Covers` or is listed in `helper/internal/harness/coverage/missing.txt`, a list that may only get shorter.
 - **Themes.** Terminal color themes for the app.
 - **Keyboard presets.** Key rows above the software keyboard for particular agents and tools.
 

@@ -1,7 +1,7 @@
 .PHONY: lint test build check-trailers relay-test lint-motion \
 	togokit-test ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-launch-perf ios-scroll-perf ios-snapshots ios-snapshots-record \
 	ios-release-check release-build release-test install-test repo-docs-check tokens tokens-check togopush-test watch-test \
-	replay-check conformance ci-scripts-test
+	replay-check conformance ci-scripts-test coverage-matrix
 
 IOS_DIR := apps/ios
 IOS_PROJECT := $(IOS_DIR)/Togo.xcodeproj
@@ -36,6 +36,11 @@ replay-check:
 # model calls: make conformance ARGS="--only opencode,pi --openrouter"
 conformance:
 	scripts/check-conformance.sh $(ARGS)
+
+# Which agent, capability and lifecycle cells have tests, and which are still on the list in
+# helper/internal/harness/coverage/missing.txt.
+coverage-matrix:
+	cd helper && go run ./internal/harness/coverage/cmd/coverage-report
 
 ci-scripts-test:
 	scripts/ci/install-agents-test.sh

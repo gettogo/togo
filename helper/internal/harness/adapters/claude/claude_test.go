@@ -3,6 +3,7 @@ package claude
 import (
 	"bufio"
 	"encoding/json"
+	"github.com/gettogo/togo/helper/internal/harness/coverage"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,6 +166,7 @@ func TestTranscriptCases(t *testing.T) {
 // TestTranscriptRealRecords maps scrubbed lines copied from real Claude
 // Code 2.1.3xx transcripts: every tool call completes and nothing panics.
 func TestTranscriptRealRecords(t *testing.T) {
+	coverage.Covers(t, "unit", "claude/capability/chat", "claude/capability/agents", "claude/capability/background", "claude/capability/plan")
 	m := newTranscript(env())
 	r := mapAll(m, append(records(t, "transcript-real.jsonl"), records(t, "subagent-real.jsonl")...))
 	kinds := map[string]int{}
