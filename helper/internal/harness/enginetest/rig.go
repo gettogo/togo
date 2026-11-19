@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/harness"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/amp"
 	_ "github.com/gettogo/togo/helper/internal/harness/adapters/claude"
@@ -23,9 +24,10 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/engine"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
-// SessionID is the Togo session every rig serves.
+// SessionID is the Togo session a rig serves unless Options.ID names another.
 const SessionID = "s_enginetest"
 
 // TTY is the pane's terminal, for agents (omp) that record their session
@@ -61,6 +63,13 @@ type Options struct {
 	// tests, and it is four fifths of the time a restore of a large file
 	// takes (eight times that under the race detector).
 	NoRedact bool
+	// ID is the Togo session's id; empty means SessionID. Rigs that run
+	// at the same time need ids of their own: the hook bus and the typing
+	// locks are keyed by it. NewID makes one.
+	ID string
+	// ApprovalTTL is how long an approval stays answerable; 0 keeps the
+	// store's default.
+	ApprovalTTL time.Duration
 }
 
 // asIs is a redactor that changes nothing.
@@ -73,9 +82,14 @@ func (asIs) String(s string) string                   { return s }
 type Rig struct {
 	T        testing.TB
 	Opt      Options
+	ID       string
 	TogoHome string
 	Engine   *engine.Engine
 	Sub      *Sub
+	// Term is the session's pane.
+	Term *Terminal
+	phoneState
+	lifeState
 
 	bin    string
 	mu     sync.Mutex
@@ -90,7 +104,10 @@ func New(t testing.TB, opt Options) *Rig {
 	t.Helper()
 	// Set once, before any engine runs: the tails read it.
 	pollOnce.Do(func() { source.PollEvery = 20 * time.Millisecond })
-	r := &Rig{T: t, Opt: opt, TogoHome: t.TempDir(), bin: filepath.Join(t.TempDir(), "bin")}
+	if opt.ID == "" {
+		opt.ID = SessionID
+	}
+	r := &Rig{T: t, Opt: opt, ID: opt.ID, TogoHome: t.TempDir(), bin: filepath.Join(t.TempDir(), "bin"), Term: newTerminal(opt.Agent)}
 	if err := os.MkdirAll(r.bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -125,11 +142,20 @@ func (r *Rig) start() {
 	if r.Opt.NoRedact {
 		red = asIs{}
 	}
-	r.Engine = engine.New(engine.Config{
+	eng := engine.New(engine.Config{
 		Redactor: red,
-		Sessions: sessions{r}, Typist: typist{}, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
-		Screen:    func(context.Context, string) (string, error) { return "", nil },
-		Cursor:    func(context.Context, string) (int, int, bool, error) { return 0, 0, false, nil },
+		Sessions: sessions{r}, Typist: r.Term, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
+		Approvals:    approvals{r},
+		Screen:       func(context.Context, string) (string, error) { return r.Term.Text(), nil },
+		StyledScreen: func(context.Context, string) (string, error) { return r.Term.Styled(), nil },
+		Cursor:       func(context.Context, string) (int, int, bool, error) { return r.Term.cursor() },
+		NeedsYou: func(id, title, body string) {
+			r.note(Event{Kind: wire.EventNotify, Payload: wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelNeedsYou}})
+		},
+		Done: func(id, title, body string) {
+			r.note(Event{Kind: wire.EventNotify, Payload: wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelDone}})
+		},
+		Relaunch:  r.relaunch,
 		PaneTTY:   func(context.Context, string) (string, error) { return TTY, nil },
 		LoginPath: func(context.Context) string { return path },
 		LoginEnv:  func(context.Context) []string { return []string{"HOME=" + r.Opt.Home, "PATH=" + path} },
@@ -142,15 +168,46 @@ func (r *Rig) start() {
 		// The engine's log goes to the test's, shown when a test fails.
 		Logf: func(format string, args ...any) { r.T.Logf("engine: "+format, args...) },
 	})
-	r.T.Cleanup(func() { r.Engine.Forget(SessionID) })
+	r.mu.Lock()
+	r.Engine = eng
+	r.mu.Unlock()
+	r.startPhone()
+	r.T.Cleanup(func() { eng.Forget(r.ID) })
 	r.Sub = newSub()
-	res, err := r.Engine.Open(context.Background(), r.Sub, SessionID, 0, 1)
+	res, err := r.Engine.Open(context.Background(), r.Sub, r.ID, 0, 1)
 	if err != nil {
 		r.T.Fatalf("open: %v", err)
 	}
-	r.Engine.Release(r.Sub, SessionID)
+	r.Engine.Release(r.Sub, r.ID)
 	_ = res
 }
+
+// approvals is the engine's view of the store; it follows the store a
+// restart builds.
+type approvals struct{ r *Rig }
+
+func (a approvals) store() *approval.Store {
+	a.r.mu.Lock()
+	defer a.r.mu.Unlock()
+	return a.r.Approvals
+}
+
+func (a approvals) Pending(id string) []wire.Approval {
+	if s := a.store(); s != nil {
+		return s.Pending(id)
+	}
+	return nil
+}
+
+func (a approvals) Answer(ctx context.Context, requestID, raw, by string) error {
+	return a.store().Answer(ctx, requestID, raw, by)
+}
+
+func (a approvals) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <-chan string) {
+	return a.store().OpenAsk(ctx, p)
+}
+
+func (a approvals) CloseDesk(requestID string) { a.store().CloseDesk(requestID) }
 
 // Restart stops this engine and starts another over the same TOGO_HOME
 // and files, as `togo update` restarts the helper while the agent runs.
@@ -170,31 +227,29 @@ func (r *Rig) Restart() {
 // Stop stops the engine, as the helper being down; Start builds a new
 // one. Files written between the two are found by the new engine's
 // restore, as after an update that took a while.
-func (r *Rig) Stop() { r.Engine.Forget(SessionID) }
+func (r *Rig) Stop() { r.Engine.Forget(r.ID) }
 
 // Start builds a new engine over the same TOGO_HOME and files.
 func (r *Rig) Start() { r.start() }
 
 // Deliver sends a hook payload as the agent's hook command would.
 func (r *Rig) Deliver(event string, payload []byte) {
-	source.Hooks.Deliver(SessionID, source.Payload{Kind: source.BusHook, Event: event, Data: payload})
+	source.Hooks.Deliver(r.ID, source.Payload{Kind: source.BusHook, Event: event, Data: payload})
 }
 
 type sessions struct{ r *Rig }
 
 func (s sessions) Resolve(_ context.Context, id string) (session.Session, error) {
-	if id != SessionID {
+	s.r.mu.Lock()
+	removed := s.r.removed
+	s.r.mu.Unlock()
+	if id != s.r.ID || removed {
 		return session.Session{}, session.ErrNotFound
 	}
 	o := s.r.Opt
 	return session.Session{ID: id, Name: "test", Agent: o.Agent, Cwd: o.Cwd, CreatedAt: o.Created, Status: "running",
 		Managed: true, Command: []string{o.Agent}}, nil
 }
-
-type typist struct{}
-
-func (typist) Type(context.Context, string, string, bool, bool) error { return nil }
-func (typist) Keys(context.Context, string, ...string) error          { return nil }
 
 // Sub collects the notifications the engine sends.
 type Sub struct {

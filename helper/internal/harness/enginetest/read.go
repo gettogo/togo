@@ -38,11 +38,11 @@ func (r *Rig) ReadPages(limit int) State {
 	ctx := context.Background()
 	sub := newSub()
 	defer close(sub.done)
-	res, err := r.Engine.Open(ctx, sub, SessionID, 0, limit)
+	res, err := r.Engine.Open(ctx, sub, r.ID, 0, limit)
 	if err != nil {
 		r.T.Fatalf("open: %v", err)
 	}
-	_ = r.Engine.Close(ctx, sub, SessionID)
+	_ = r.Engine.Close(ctx, sub, r.ID)
 	st := State{Limit: limit, Mission: res.Mission, Epoch: res.Epoch}
 	if res.DiscardedThrough != nil {
 		st.Discarded = *res.DiscardedThrough
@@ -52,7 +52,7 @@ func (r *Rig) ReadPages(limit int) State {
 	items := res.Items
 	more := res.More
 	for i := 0; more && len(items) > 0 && i < 10000; i++ {
-		p, err := r.Engine.History(ctx, SessionID, items[0].Seq, limit)
+		p, err := r.Engine.History(ctx, r.ID, items[0].Seq, limit)
 		if err != nil {
 			r.T.Fatalf("history: %v", err)
 		}

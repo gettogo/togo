@@ -12,7 +12,7 @@ import (
 // DeliverAt is Deliver with the time the hook fired, so the chat's times
 // follow a generated session's clock and not the test's.
 func (r *Rig) DeliverAt(event string, payload []byte, at time.Time) {
-	source.Hooks.Deliver(SessionID, source.Payload{Kind: source.BusHook, Event: event, At: at, Data: payload})
+	source.Hooks.Deliver(r.ID, source.Payload{Kind: source.BusHook, Event: event, At: at, Data: payload})
 }
 
 // Cursor is the Seq of the newest item the engine holds for the session.
@@ -22,11 +22,11 @@ func (r *Rig) Cursor() int64 {
 	r.T.Helper()
 	sub := newSub()
 	defer close(sub.done)
-	res, err := r.Engine.Open(context.Background(), sub, SessionID, 1<<60, 1)
+	res, err := r.Engine.Open(context.Background(), sub, r.ID, 1<<60, 1)
 	if err != nil {
 		r.T.Fatalf("open: %v", err)
 	}
-	_ = r.Engine.Close(context.Background(), sub, SessionID)
+	_ = r.Engine.Close(context.Background(), sub, r.ID)
 	return res.Cursor
 }
 
@@ -54,7 +54,7 @@ func (r *Rig) SetEnded(ended bool) {
 		status = wire.StatusEnded
 	}
 	r.SetStatus(status)
-	id := SessionID
+	id := r.ID
 	r.Engine.Observe(wire.Event{Kind: wire.EventSession, SessionID: &id, Payload: wire.SessionEvent{
 		Session: session.Session{ID: id, Agent: r.Opt.Agent, Managed: true, Status: status}}})
 }
