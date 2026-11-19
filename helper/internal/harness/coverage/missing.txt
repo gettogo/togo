@@ -1,10 +1,7 @@
 aider/capability/commands
-aider/capability/interrupt
 aider/capability/mode
 aider/capability/model
 aider/capability/ports
-aider/capability/send.queue
-aider/lifecycle/interrupt
 amp/capability/chat.anchors
 auggie/lifecycle/agent_exits
 auggie/lifecycle/connection_drop
@@ -34,12 +31,8 @@ claude/scale/at_limit
 claude/scale/long_session
 cline/capability/changes
 cline/capability/commands
-cline/capability/interrupt
-cline/capability/needs.approvals
 cline/capability/ports
 cline/capability/resume
-cline/capability/send.queue
-cline/lifecycle/interrupt
 cline/lifecycle/new_conversation
 cline/lifecycle/resume
 codex/capability/agents
@@ -179,10 +172,7 @@ kimi/capability/agents
 kimi/capability/changes
 kimi/capability/chat.anchors
 kimi/capability/commands
-kimi/capability/interrupt
 kimi/capability/resume
-kimi/capability/send.queue
-kimi/lifecycle/interrupt
 kimi/lifecycle/resume
 kiro/lifecycle/agent_exits
 kiro/lifecycle/connection_drop
@@ -247,9 +237,7 @@ openhands/lifecycle/relaunch
 openhands/lifecycle/session_removed
 pi/capability/chat.anchors
 pi/capability/commands
-pi/capability/interrupt
 pi/capability/resume
-pi/capability/send.queue
 pi/lifecycle/fork
 shell/capability/chat.anchors
 shell/capability/interrupt

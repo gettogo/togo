@@ -70,8 +70,8 @@ func agentExits(t *testing.T, lv *live) {
 // relaunch: the agent exits mid-turn and is started again in the same
 // pane. What the old run left open ends: its turn, tools and subagents,
 // its permission prompt, the prompt queued behind it. The new run is not
-// given that prompt. (That the new run is still taken as working is
-// TestKnownFault_RelaunchKeepsDeadTurnWorking.)
+// given that prompt, and takes a new one, except where the new run is
+// still taken as working: TestKnownFault_RelaunchKeepsDeadTurnWorking.
 func relaunch(t *testing.T, lv *live) {
 	r := lv.r
 	r.Exit()
@@ -91,6 +91,15 @@ func relaunch(t *testing.T, lv *live) {
 	}
 	if slices.Contains(r.Term.Submitted(), lv.queuedText) {
 		t.Error("the prompt queued for the run that exited was typed into the new one")
+	}
+	if relaunchFault[lv.agent] {
+		return
+	}
+	if _, err := r.Send("After the relaunch", harness.SendNow); err != nil {
+		t.Fatalf("send after the relaunch: %v", err)
+	}
+	if !slices.Contains(r.Term.Submitted(), "After the relaunch") {
+		t.Errorf("the relaunched agent was given %q", r.Term.Submitted())
 	}
 }
 

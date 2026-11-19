@@ -19,10 +19,26 @@ import (
 //
 // Correct: the exit ends the turn for the mappers as well, so the new run
 // is idle and takes a prompt at once.
+//
+// Agents whose own records say nothing of a turn's state (Cline, Aider:
+// the hub alone says when they work) do not have the fault; for them the
+// test checks it stays absent, and the relaunch scenario claims the cell.
 func TestKnownFault_RelaunchKeepsDeadTurnWorking(t *testing.T) {
 	for _, agent := range profiles(t) {
 		t.Run(agent, func(t *testing.T) {
 			t.Parallel()
+			if !relaunchFault[agent] {
+				lv := start(t, agent)
+				r := lv.r
+				r.Exit()
+				r.Settle(3 * time.Second)
+				r.Relaunch()
+				r.SetHubStatus("idle")
+				if st := r.Settle(3 * time.Second); st.Mission.Summary.Working {
+					t.Fatalf("%s now has the fault too: add it to relaunchFault and remove its relaunch cell", agent)
+				}
+				return
+			}
 			lv := start(t, agent)
 			r := lv.r
 			r.Exit()
@@ -39,3 +55,8 @@ func TestKnownFault_RelaunchKeepsDeadTurnWorking(t *testing.T) {
 		})
 	}
 }
+
+// relaunchFault lists the agents with the fault: those whose own records
+// say a turn is running.
+var relaunchFault = map[string]bool{"amp": true, "claude": true, "copilot": true, "cursor": true,
+	"droid": true, "kimi": true, "omp": true, "pi": true}

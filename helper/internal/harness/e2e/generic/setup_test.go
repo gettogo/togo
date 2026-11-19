@@ -22,15 +22,7 @@ import (
 
 // optOut names profiles a scenario does not run for, with the reason.
 // A profile is never skipped silently: an entry needs a reason.
-var optOut = map[string]string{
-	// Cline rewrites its whole messages document on every change and Aider
-	// appends to a markdown history with no record of a turn in progress.
-	// The generic scenarios drive a live turn by appending records, which
-	// neither file takes yet. Their own scenarios in harness/e2e cover long
-	// sessions, restart, exit and new conversations meanwhile.
-	"cline": "the live-turn driver does not yet rewrite Cline's whole document",
-	"aider": "the live-turn driver does not yet model Aider's history, which has no turn-in-progress record",
-}
+var optOut = map[string]string{}
 
 // idleScreens are real captures of an agent's idle screen with its input
 // line. Agents without one show an empty pane: no capture is invented.
@@ -166,6 +158,10 @@ func start(t *testing.T, agent string) *live {
 		r.Term.Show(r.Term.MustCapture(rel))
 	}
 	lv.deliver(l.Hooks[:lv.heldFrom]...)
+	// The pane changes while the agent works: the hub says working. An
+	// agent whose file says the turn runs agrees; one whose file has no
+	// turn state (Cline, Aider) is working by this alone.
+	r.SetHubStatus("working")
 	r.SettleUntil(20*time.Second, func(st enginetest.State) bool { return st.Mission.Summary.Working })
 	lv.phone = r.Phone()
 	return lv
@@ -201,8 +197,14 @@ func (lv *live) holdTurn() {
 		return
 	}
 	after, err := os.ReadFile(l.Main())
-	if err != nil || l.Main() != main || !bytes.HasPrefix(after, before) {
-		lv.t.Fatalf("%s: the live turn did not append to its file", lv.agent)
+	if err != nil {
+		lv.t.Fatal(err)
+	}
+	if l.Main() != main || !bytes.HasPrefix(after, before) {
+		// The agent rewrites its whole file (Cline's messages document):
+		// there is no record to hold back. Such a file has no turn state;
+		// the hub says the agent is at work until endTurn's idle.
+		return
 	}
 	tail := after[len(before):]
 	cut := bytes.IndexByte(tail, '\n') + 1

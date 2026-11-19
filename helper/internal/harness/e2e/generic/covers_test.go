@@ -41,8 +41,8 @@ func declare(t *testing.T, agent, cell string) bool {
 }
 
 // declared holds, per cell, the literal declaration the coverage scan
-// reads (coverage.ScanEvidence takes only string literals). The relaunch
-// cells are not claimed: TestKnownFault_RelaunchKeepsDeadTurnWorking.
+// reads (coverage.ScanEvidence takes only string literals). Relaunch is
+// claimed only for agents without TestKnownFault_RelaunchKeepsDeadTurnWorking.
 // Sending while idle proves part of chat, not the cell.
 var declared = map[string]func(t *testing.T){
 	"amp/lifecycle/agent_exits":          func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/agent_exits") },
@@ -98,4 +98,40 @@ var declared = map[string]func(t *testing.T){
 	"omp/capability/send.queue":          func(t *testing.T) { coverage.Covers(t, "generated", "omp/capability/send.queue") },
 	"omp/capability/interrupt":           func(t *testing.T) { coverage.Covers(t, "generated", "omp/capability/interrupt") },
 	"omp/scale/concurrent_requests":      func(t *testing.T) { coverage.Covers(t, "generated", "omp/scale/concurrent_requests") },
+	"cline/lifecycle/agent_exits":        func(t *testing.T) { coverage.Covers(t, "generated", "cline/lifecycle/agent_exits") },
+	"cline/lifecycle/relaunch":           func(t *testing.T) { coverage.Covers(t, "generated", "cline/lifecycle/relaunch") },
+	"cline/lifecycle/session_removed":    func(t *testing.T) { coverage.Covers(t, "generated", "cline/lifecycle/session_removed") },
+	"cline/lifecycle/turn_end":           func(t *testing.T) { coverage.Covers(t, "generated", "cline/lifecycle/turn_end") },
+	"cline/lifecycle/connection_drop":    func(t *testing.T) { coverage.Covers(t, "generated", "cline/lifecycle/connection_drop") },
+	"cline/lifecycle/interrupt":          func(t *testing.T) { coverage.Covers(t, "generated", "cline/lifecycle/interrupt") },
+	"cline/capability/send.queue":        func(t *testing.T) { coverage.Covers(t, "generated", "cline/capability/send.queue") },
+	"cline/capability/interrupt":         func(t *testing.T) { coverage.Covers(t, "generated", "cline/capability/interrupt") },
+	"cline/capability/needs.approvals":   func(t *testing.T) { coverage.Covers(t, "generated", "cline/capability/needs.approvals") },
+	"cline/scale/concurrent_requests":    func(t *testing.T) { coverage.Covers(t, "generated", "cline/scale/concurrent_requests") },
+	"aider/lifecycle/agent_exits":        func(t *testing.T) { coverage.Covers(t, "generated", "aider/lifecycle/agent_exits") },
+	"aider/lifecycle/relaunch":           func(t *testing.T) { coverage.Covers(t, "generated", "aider/lifecycle/relaunch") },
+	"aider/lifecycle/session_removed":    func(t *testing.T) { coverage.Covers(t, "generated", "aider/lifecycle/session_removed") },
+	"aider/lifecycle/turn_end":           func(t *testing.T) { coverage.Covers(t, "generated", "aider/lifecycle/turn_end") },
+	"aider/lifecycle/connection_drop":    func(t *testing.T) { coverage.Covers(t, "generated", "aider/lifecycle/connection_drop") },
+	"aider/lifecycle/interrupt":          func(t *testing.T) { coverage.Covers(t, "generated", "aider/lifecycle/interrupt") },
+	"aider/capability/send.queue":        func(t *testing.T) { coverage.Covers(t, "generated", "aider/capability/send.queue") },
+	"aider/capability/interrupt":         func(t *testing.T) { coverage.Covers(t, "generated", "aider/capability/interrupt") },
+	"aider/scale/concurrent_requests":    func(t *testing.T) { coverage.Covers(t, "generated", "aider/scale/concurrent_requests") },
+	"pi/lifecycle/agent_exits":           func(t *testing.T) { coverage.Covers(t, "generated", "pi/lifecycle/agent_exits") },
+	"pi/lifecycle/session_removed":       func(t *testing.T) { coverage.Covers(t, "generated", "pi/lifecycle/session_removed") },
+	"pi/lifecycle/turn_end":              func(t *testing.T) { coverage.Covers(t, "generated", "pi/lifecycle/turn_end") },
+	"pi/lifecycle/connection_drop":       func(t *testing.T) { coverage.Covers(t, "generated", "pi/lifecycle/connection_drop") },
+	"pi/lifecycle/interrupt":             func(t *testing.T) { coverage.Covers(t, "generated", "pi/lifecycle/interrupt") },
+	"pi/capability/send.queue":           func(t *testing.T) { coverage.Covers(t, "generated", "pi/capability/send.queue") },
+	"pi/capability/interrupt":            func(t *testing.T) { coverage.Covers(t, "generated", "pi/capability/interrupt") },
+	"pi/scale/concurrent_requests":       func(t *testing.T) { coverage.Covers(t, "generated", "pi/scale/concurrent_requests") },
+	"kimi/lifecycle/agent_exits":         func(t *testing.T) { coverage.Covers(t, "generated", "kimi/lifecycle/agent_exits") },
+	"kimi/lifecycle/session_removed":     func(t *testing.T) { coverage.Covers(t, "generated", "kimi/lifecycle/session_removed") },
+	"kimi/lifecycle/turn_end":            func(t *testing.T) { coverage.Covers(t, "generated", "kimi/lifecycle/turn_end") },
+	"kimi/lifecycle/connection_drop":     func(t *testing.T) { coverage.Covers(t, "generated", "kimi/lifecycle/connection_drop") },
+	"kimi/lifecycle/interrupt":           func(t *testing.T) { coverage.Covers(t, "generated", "kimi/lifecycle/interrupt") },
+	"kimi/capability/send.queue":         func(t *testing.T) { coverage.Covers(t, "generated", "kimi/capability/send.queue") },
+	"kimi/capability/interrupt":          func(t *testing.T) { coverage.Covers(t, "generated", "kimi/capability/interrupt") },
+	"kimi/capability/needs.approvals":    func(t *testing.T) { coverage.Covers(t, "generated", "kimi/capability/needs.approvals") },
+	"kimi/scale/concurrent_requests":     func(t *testing.T) { coverage.Covers(t, "generated", "kimi/scale/concurrent_requests") },
 }
