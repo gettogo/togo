@@ -49,6 +49,7 @@ func quietState(t *testing.T, r *enginetest.Rig, where string) enginetest.State 
 }
 
 func TestTerminalHelperRestart(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "terminal/lifecycle/helper_restart")
 	terminalEach(t, func(t *testing.T, r *enginetest.Rig) {
 		before := quietState(t, r, "start")
@@ -61,6 +62,7 @@ func TestTerminalHelperRestart(t *testing.T) {
 }
 
 func TestTerminalExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "terminal/lifecycle/agent_exits", "terminal/lifecycle/relaunch")
 	terminalEach(t, func(t *testing.T, r *enginetest.Rig) {
 		r.SetStatus("working")
@@ -86,6 +88,7 @@ func TestTerminalExitAndRelaunch(t *testing.T) {
 }
 
 func TestTerminalConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "terminal/lifecycle/connection_drop")
 	terminalEach(t, func(t *testing.T, r *enginetest.Rig) {
 		ctx := context.Background()
@@ -118,6 +121,7 @@ func TestTerminalConnectionDrop(t *testing.T) {
 }
 
 func TestTerminalSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "terminal/lifecycle/session_removed")
 	terminalEach(t, func(t *testing.T, r *enginetest.Rig) {
 		r.SetStatus("working")
@@ -147,6 +151,7 @@ func TestTerminalSessionRemoved(t *testing.T) {
 // the prompt leaves, and the question closes as the phone's. A second
 // answer is refused.
 func TestTerminalScreenPrompts(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "terminal/capability/screen_prompt")
 	for _, c := range []struct{ name, screen, decision string }{
 		{"menu_approve", "detect/testdata/auggie/real-perm-80.txt", wire.DecisionApprove},

@@ -112,3 +112,20 @@ func (r *Rig) SetEnded(ended bool) {
 	r.Engine.Observe(wire.Event{Kind: wire.EventSession, SessionID: &id, Payload: wire.SessionEvent{
 		Session: session.Session{ID: id, Agent: r.Opt.Agent, Managed: true, Status: status}}})
 }
+
+// WaitHooksIdle waits until no hook reader is working on a payload, so
+// the hooks delivered so far are mapped and the files they name have been
+// read as far as the hooks read them. It says whether that came within
+// limit. Readers of other sessions count, which only makes it wait a
+// little longer when scenarios run side by side.
+func (r *Rig) WaitHooksIdle(limit time.Duration) bool {
+	r.T.Helper()
+	deadline := time.Now().Add(limit)
+	for !hooksIdle() {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return true
+}

@@ -19,6 +19,7 @@ var crushAgent = fileAgent{name: "crush", profile: func() sessiongen.Profile { r
 // restores it, restarts, and shows the same chat.
 func TestCrushLongSession(t *testing.T) {
 	needSQLite(t)
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "crush/scale/long_session", "crush/capability/chat", "crush/capability/chat.history", "crush/scale/at_limit")
 	n := 130
 	if support.LongMode() {

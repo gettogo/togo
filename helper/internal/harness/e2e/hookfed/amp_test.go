@@ -30,6 +30,8 @@ var ampAgent = hookAgent{
 }
 
 func TestAmpLongSession(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "amp/scale/long_session", "amp/capability/chat")
 	n := ampAgent.long
 	if support.LongMode() {
@@ -49,46 +51,56 @@ func TestAmpRestartsAtSeededPoints(t *testing.T) {
 // update`): Amp keeps its threads on its own servers and writes nothing
 // locally, so the hooks the helper kept are the only copy.
 func TestAmp_RestartKeepsTheChat(t *testing.T) {
+	t.Parallel()
 	restartKeepsChat(t, ampAgent)
 }
 
 // A new thread (the agent's new conversation) in the same session.
 func TestAmpNewConversation(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "amp/lifecycle/new_conversation")
 	newConversation(t, ampAgent, false)
 }
 
 func TestAmpExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "amp/lifecycle/agent_exits", "amp/lifecycle/relaunch")
 	exitAndRelaunch(t, ampAgent)
 }
 
 // The plugin's agent.end says cancelled.
 func TestAmpInterruptMidTurn(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "amp/lifecycle/interrupt", "amp/lifecycle/turn_end")
 	interrupted(t, ampAgent)
 }
 
 func TestAmpHooksOutOfOrderDuplicatedAndMissing(t *testing.T) {
+	t.Parallel()
 	hookOrder(t, ampAgent)
 }
 
 func TestAmpConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "amp/lifecycle/connection_drop")
 	connectionDrop(t, ampAgent)
 }
 
 func TestAmpSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "amp/lifecycle/session_removed")
 	sessionRemoved(t, ampAgent)
 }
 
 func TestAmpAtLimit(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "amp/scale/at_limit")
 	atLimit(t, ampAgent)
 }
 
 func TestAmpConcurrentRequests(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "amp/scale/concurrent_requests")
 	concurrent(t, ampAgent)
 }

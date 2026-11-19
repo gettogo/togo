@@ -41,6 +41,8 @@ func aiderScript(n, say int) ([]sessiongen.Turn, map[int]sessiongen.AiderTurn) {
 // is restarted at five seeded points; every rule holds before and after
 // each. The default size crosses the engine's log of 2000 items.
 func TestAiderLongSessionWithRestarts(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "aider/scale/long_session", "aider/scale/at_limit", "aider/lifecycle/helper_restart", "aider/capability/chat")
 	e := support.NewEnv(t, 48*time.Hour)
 	n := 450

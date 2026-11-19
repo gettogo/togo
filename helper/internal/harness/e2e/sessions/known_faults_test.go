@@ -19,6 +19,7 @@ import (
 // whose they are. Each file goes to the task it is named after
 // (<session>/<task>.jsonl), and every agent shows its own file's steps.
 func TestSubagentFilesMatchedByName(t *testing.T) {
+	t.Parallel()
 	e := support.NewEnv(t, 10*time.Minute)
 	// Seed 4 writes the six files in an order other than the call's.
 	l, err := sessiongen.Write(e.Home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 4, Start: e.Start, Cwd: e.Cwd,
@@ -46,6 +47,7 @@ func TestSubagentFilesMatchedByName(t *testing.T) {
 // recorded its exit leaves the agent's row as it ended, and the subagent
 // is not shown a second time as a background job.
 func TestReportAfterExitKeepsTheAgentRow(t *testing.T) {
+	t.Parallel()
 	e := support.NewEnv(t, 10*time.Minute)
 	l, err := sessiongen.Write(e.Home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 5, Start: e.Start, Cwd: e.Cwd,
 		Turns: []sessiongen.Turn{{Say: 20, Agents: &sessiongen.Batch{Size: 2, Steps: 1, Background: true, ReportLater: true}}}})
@@ -111,6 +113,7 @@ func holdFiles(t *testing.T, paths []string) func() {
 // is read shows nothing until its call is read. "large" is a batch whose
 // files add up to more than one 8 MiB read.
 func TestSubagentFileBeforeItsCall(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		name       string
 		age        time.Duration
@@ -123,6 +126,10 @@ func TestSubagentFileBeforeItsCall(t *testing.T) {
 		{"large old", 10 * time.Minute, 6, 2 << 20, 0},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			if c.pad > 0 {
+				support.Heavy(t)
+			}
 			e := support.NewEnv(t, c.age)
 			l, err := sessiongen.Write(e.Home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 6, Start: e.Start, Cwd: e.Cwd,
 				Turns: []sessiongen.Turn{{Say: 20, Agents: &sessiongen.Batch{Size: c.size, Steps: 1, Background: true}}}})
@@ -170,10 +177,14 @@ func TestSubagentFileBeforeItsCall(t *testing.T) {
 }
 
 // padFiles puts a record of n bytes (a note omp does not show) after each
-// file's header, so the files of a batch are large.
+// file's header, so the files of a batch are large. The note is a run of
+// three-byte characters: the helper redacts every record with regular
+// expressions that take a step for each character, so the same number of
+// bytes costs a third of the time, and the race detector's share of a
+// 12 MiB batch no longer runs the scenario past its waits.
 func padFiles(t *testing.T, paths []string, n int) {
 	t.Helper()
-	pad := []byte(`{"type":"custom","customType":"note","data":"` + strings.Repeat("x", n) + "\"}\n")
+	pad := []byte(`{"type":"custom","customType":"note","data":"` + strings.Repeat("字", n/3) + "\"}\n")
 	for _, p := range paths {
 		b, err := os.ReadFile(p)
 		if err != nil {

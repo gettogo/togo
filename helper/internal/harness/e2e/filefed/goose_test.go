@@ -30,6 +30,7 @@ func needSQLite(t *testing.T) {
 // it, restarts, and shows the same chat.
 func TestGooseLongSession(t *testing.T) {
 	needSQLite(t)
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "goose/scale/long_session", "goose/capability/chat", "goose/capability/chat.history", "goose/scale/at_limit")
 	n := 46
 	if support.LongMode() {

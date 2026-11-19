@@ -22,6 +22,8 @@ import (
 // either limit starts the chat over, as below and at the limits
 // (TestOMPRecordLimit, TestOMPSizeLimit).
 func TestHeaderKeptAboveRestoreLimit(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	t.Run("records", func(t *testing.T) {
 		e := support.NewEnv(t, time.Hour)
 		l, err := sessiongen.Write(e.Home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 41, Start: e.Start, Cwd: e.Cwd, Turns: byRecords(maxRecords + 1)})
@@ -45,6 +47,7 @@ func TestHeaderKeptAboveRestoreLimit(t *testing.T) {
 // record, a file at the record limit and one record past it both show
 // their subagents' steps.
 func TestSubagentsAfterLongRestoreWithoutTerminalRecord(t *testing.T) {
+	t.Parallel()
 	owners := func(n int) int {
 		e := support.NewEnv(t, time.Hour)
 		turns := byRecords(n - 6) // the batch adds six records

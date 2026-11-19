@@ -28,6 +28,8 @@ var cursorAgent = hookAgent{
 }
 
 func TestCursorLongSession(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "cursor/scale/long_session", "cursor/capability/chat")
 	n := cursorAgent.long
 	if support.LongMode() {
@@ -37,6 +39,7 @@ func TestCursorLongSession(t *testing.T) {
 }
 
 func TestCursorSubagentRows(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/capability/agents")
 	agentRows(t, cursorAgent)
 }
@@ -44,6 +47,7 @@ func TestCursorSubagentRows(t *testing.T) {
 // The model each prompt's payload names is the one the model picker shows
 // as selected.
 func TestCursorModelIsTheOneTheHooksName(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/capability/model")
 	e := support.NewEnv(t, time.Hour)
 	l := write(t, e, cursorAgent, []sessiongen.Turn{
@@ -86,45 +90,55 @@ func TestCursorRestartsAtSeededPoints(t *testing.T) {
 // The chat read so far is still there after a helper restart (`togo
 // update`): Cursor CLI's hooks are the only copy Togo reads.
 func TestCursor_RestartKeepsTheChat(t *testing.T) {
+	t.Parallel()
 	restartKeepsChat(t, cursorAgent)
 }
 
 func TestCursorNewConversation(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/lifecycle/new_conversation")
 	newConversation(t, cursorAgent, false)
 }
 
 func TestCursorExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/lifecycle/agent_exits", "cursor/lifecycle/relaunch")
 	exitAndRelaunch(t, cursorAgent)
 }
 
 // The stop hook says aborted.
 func TestCursorInterruptMidTurn(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/lifecycle/interrupt", "cursor/lifecycle/turn_end")
 	interrupted(t, cursorAgent)
 }
 
 func TestCursorHooksOutOfOrderDuplicatedAndMissing(t *testing.T) {
+	t.Parallel()
 	hookOrder(t, cursorAgent)
 }
 
 func TestCursorConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/lifecycle/connection_drop")
 	connectionDrop(t, cursorAgent)
 }
 
 func TestCursorSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/lifecycle/session_removed")
 	sessionRemoved(t, cursorAgent)
 }
 
 func TestCursorAtLimit(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "cursor/scale/at_limit")
 	atLimit(t, cursorAgent)
 }
 
 func TestCursorConcurrentRequests(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "cursor/scale/concurrent_requests")
 	concurrent(t, cursorAgent)
 }

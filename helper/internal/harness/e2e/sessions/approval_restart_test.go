@@ -50,6 +50,7 @@ func approvalAcrossRestart(t *testing.T) (*enginetest.Rig, wire.Approval, []wire
 // prompt read again opens nothing new, and the answer from the
 // notification sent before the restart is typed into the pane.
 func TestApprovalSurvivesRestart(t *testing.T) {
+	t.Parallel()
 	r, before, after, err := approvalAcrossRestart(t)
 	if len(after) != 1 || after[0].RequestID != before.RequestID {
 		t.Fatalf("open after the restart: %+v, before: %s", after, before.RequestID)

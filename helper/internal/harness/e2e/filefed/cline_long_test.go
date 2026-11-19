@@ -44,6 +44,8 @@ func clineScript(n, tools, output int) ([]sessiongen.Turn, map[int]sessiongen.Cl
 // TOGO_E2E_LONG=1 grows the document to just under its 8 MiB read limit
 // (above it is TestKnownFault_ClineDocumentOver8MiB).
 func TestClineLongSessionWithRestarts(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "cline/scale/long_session", "cline/scale/at_limit", "cline/lifecycle/helper_restart", "cline/capability/chat")
 	e := support.NewEnv(t, 48*time.Hour)
 	n := 300

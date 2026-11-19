@@ -2,6 +2,7 @@ package support
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,33 +29,61 @@ func Deliver(t testing.TB, r *enginetest.Rig, agent string, calls ...sessiongen.
 	if !ok {
 		t.Fatalf("no hook dialect for %s", agent)
 	}
+	// pending: an earlier call went in without a wait, so its hook may not
+	// have been read yet.
+	pending := true
 	for _, c := range calls {
-		if err := c.Apply(); err != nil {
+		if err := hookStep(t, r, d, agent, c, &pending); err != nil {
 			t.Fatal(err)
 		}
-		f, err := hookstyle.Reduce(d, c.Event, c.JSON(), HookEnv(r))
-		if err != nil {
-			t.Fatalf("%s %s: %v", agent, c.Event, err)
-		}
-		if len(f.Payload) == 0 {
-			t.Fatalf("%s %s: the hook forwarded no payload", agent, c.Event)
-		}
-		// A call that follows lines the agent wrote to its log is read
-		// with the log as it was then: wait until the engine has read it
-		// before the next lines are written. The wait ends when the call
-		// has drawn an item, or, for a call that draws nothing (a
-		// duplicate, a stop after a restart), when the hook readers have
-		// finished it: a long fixed wait here costs that long on every
-		// such call, and ten times that under the race detector. The
-		// limit is for a machine too loaded for either to happen.
-		if len(c.Writes) == 0 {
-			r.DeliverAt(f.Hook, f.Payload, c.At)
-			continue
-		}
-		before := r.Cursor()
-		r.DeliverAt(f.Hook, f.Payload, c.At)
-		r.WaitHook(before, 15*time.Second)
 	}
+}
+
+func hookStep(t testing.TB, r *enginetest.Rig, d hookstyle.Dialect, agent string, c sessiongen.HookCall, pending *bool) error {
+	t.Helper()
+	if len(c.Writes) > 0 && *pending {
+		// A hook reads the agent's log as it is when the hook is read, and
+		// a session's first hook starts reading at the log's end: the
+		// lines this call writes must not be there before the hooks that
+		// came earlier have been read. Calls that draw nothing, or have
+		// no lines of their own, are not waited for below, so wait here.
+		if !r.WaitHooksIdle(15 * time.Second) {
+			return fmt.Errorf("%s: the hook readers did not finish the earlier calls", agent)
+		}
+		*pending = false
+	}
+	if err := c.Apply(); err != nil {
+		return err
+	}
+	f, err := hookstyle.Reduce(d, c.Event, c.JSON(), HookEnv(r))
+	if err != nil {
+		return fmt.Errorf("%s %s: %v", agent, c.Event, err)
+	}
+	if len(f.Payload) == 0 {
+		return fmt.Errorf("%s %s: the hook forwarded no payload", agent, c.Event)
+	}
+	// A call that follows lines the agent wrote to its log is read with
+	// the log as it was then: wait until the engine has read it before the
+	// next lines are written. The wait ends when the call has drawn an
+	// item, or, for a call that draws nothing (a duplicate, a stop after a
+	// restart), when the hook readers have finished it: a long fixed wait
+	// here costs that long on every such call, and ten times that under
+	// the race detector. The limit is for a machine too loaded for either
+	// to happen.
+	if len(c.Writes) == 0 {
+		r.DeliverAt(f.Hook, f.Payload, c.At)
+		// Only the events that open or close a session matter to the next
+		// call's lines: a tool's result changes no log offset, and asking
+		// whether the readers are idle costs a dump of every goroutine.
+		if strings.Contains(strings.ToLower(c.Event), "session") {
+			*pending = true
+		}
+		return nil
+	}
+	before := r.Cursor()
+	r.DeliverAt(f.Hook, f.Payload, c.At)
+	r.WaitHook(before, 15*time.Second)
+	return nil
 }
 
 // turnOf finds the item of the turn that began at call c (a prompt call).

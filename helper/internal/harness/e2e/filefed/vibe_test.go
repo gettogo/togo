@@ -23,6 +23,7 @@ var vibeAgent = fileAgent{name: "vibe", profile: func() sessiongen.Profile { ret
 // open turn is whole, and two restores agree.
 func TestVibeLongSession(t *testing.T) {
 	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "vibe/scale/long_session", "vibe/capability/chat", "vibe/capability/chat.history", "vibe/scale/at_limit")
 	n := 330
 	if support.LongMode() {
@@ -62,6 +63,7 @@ func TestVibeLongSession(t *testing.T) {
 // but the rest, and the end of the turn, are followed.
 func TestVibeTurnPastTheRecordLimit(t *testing.T) {
 	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "vibe/scale/at_limit")
 	e := support.NewEnv(t, time.Hour)
 	l, r := vibeAgent.start(t, e, sessiongen.Script{Seed: 12})

@@ -93,6 +93,8 @@ func restoreThenNew(t *testing.T, e support.Env, l *sessiongen.Layout) bool {
 }
 
 func TestOMPRecordLimit(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "omp/scale/at_limit")
 	for _, c := range []struct {
 		name string
@@ -115,6 +117,8 @@ func TestOMPRecordLimit(t *testing.T) {
 }
 
 func TestOMPSizeLimit(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "omp/scale/at_limit")
 	for _, c := range []struct {
 		name string
@@ -132,6 +136,7 @@ func TestOMPSizeLimit(t *testing.T) {
 
 // One background batch of n subagents, each file with one step.
 func TestOMPSubagentFolderLimit(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "omp/scale/at_limit")
 	for _, c := range []struct {
 		name string

@@ -31,6 +31,8 @@ var droidAgent = hookAgent{
 }
 
 func TestDroidLongSession(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "droid/scale/long_session", "droid/capability/chat")
 	n := droidAgent.long
 	if support.LongMode() {
@@ -49,6 +51,7 @@ func TestDroidRestartsAtSeededPoints(t *testing.T) {
 // The chat read so far is still there after a helper restart (`togo
 // update`): Droid's hooks are the only copy Togo reads.
 func TestDroid_RestartKeepsTheChat(t *testing.T) {
+	t.Parallel()
 	restartKeepsChat(t, droidAgent)
 }
 
@@ -62,6 +65,7 @@ func TestDroid_RestartKeepsTheChat(t *testing.T) {
 // payload has last_assistant_message. This passes while the fault is
 // present.
 func TestKnownFault_Droid_RepliesNotShown(t *testing.T) {
+	t.Parallel()
 	e := support.NewEnv(t, time.Hour)
 	l := write(t, e, droidAgent, []sessiongen.Turn{{Say: 40, Tools: 2, Output: 20}, {Say: 40, Tools: 1, Output: 20}})
 	r := e.Rig(t, "droid")
@@ -85,6 +89,7 @@ func TestKnownFault_Droid_RepliesNotShown(t *testing.T) {
 }
 
 func TestDroidNewConversationAndResume(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/lifecycle/new_conversation", "droid/lifecycle/resume")
 	st := newConversation(t, droidAgent, true)
 	notes := 0
@@ -99,36 +104,44 @@ func TestDroidNewConversationAndResume(t *testing.T) {
 }
 
 func TestDroidExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/lifecycle/agent_exits", "droid/lifecycle/relaunch")
 	exitAndRelaunch(t, droidAgent)
 }
 
 // Droid fires no Stop on an abort: a Notification says it stopped.
 func TestDroidInterruptMidTurn(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/lifecycle/interrupt", "droid/lifecycle/turn_end")
 	interrupted(t, droidAgent)
 }
 
 func TestDroidHooksOutOfOrderDuplicatedAndMissing(t *testing.T) {
+	t.Parallel()
 	hookOrder(t, droidAgent)
 }
 
 func TestDroidConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/lifecycle/connection_drop")
 	connectionDrop(t, droidAgent)
 }
 
 func TestDroidSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/lifecycle/session_removed")
 	sessionRemoved(t, droidAgent)
 }
 
 func TestDroidAtLimit(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "droid/scale/at_limit")
 	atLimit(t, droidAgent)
 }
 
 func TestDroidConcurrentRequests(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/scale/concurrent_requests")
 	concurrent(t, droidAgent)
 }
@@ -136,6 +149,7 @@ func TestDroidConcurrentRequests(t *testing.T) {
 // Droid's AskUser questionnaire and its spec approval (ExitSpecMode, with
 // the plan drawn before the question).
 func TestDroidQuestions(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "droid/capability/needs.questions")
 	t.Run("AskUser", func(t *testing.T) { questions(t, droidAgent, false) })
 	t.Run("ExitSpecMode", func(t *testing.T) { questions(t, droidAgent, true) })

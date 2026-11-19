@@ -51,6 +51,8 @@ func piScript(n, tools, output int) ([]sessiongen.Turn, map[int]sessiongen.PiTur
 // each. The default size crosses the engine's 2000-record replay limit;
 // TOGO_E2E_LONG=1 also crosses its 8 MiB read limit.
 func TestPiLongSessionWithRestarts(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "pi/scale/long_session", "pi/scale/at_limit", "pi/lifecycle/helper_restart", "pi/capability/chat")
 	e := support.NewEnv(t, 48*time.Hour)
 	n := 230

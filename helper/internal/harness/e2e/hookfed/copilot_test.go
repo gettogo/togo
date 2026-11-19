@@ -11,14 +11,12 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
-// The scenarios of the hook-driven agents (Copilot CLI, Droid, Cursor
-// CLI, Amp) run one at a time, before the parallel ones: under load,
-// TestCopilotNewConversationAndResume and TestCopilotRestartsAtSeededPoints
-// have seen a turn with one reply where two were written, in under a
-// second (no wait ran out), and TestAmpRestartsAtSeededPoints a restart
-// with nothing drawn before it. The cause is not found: five runs of the
-// whole package with these scenarios in parallel, without the race
-// detector, showed neither. They stay serial, which costs about a minute.
+// The scenarios of the hook-driven agents (Copilot CLI, Droid, Cursor CLI,
+// Amp) run side by side, except the four restart scenarios
+// (TestXRestartsAtSeededPoints): run among the others they lose an
+// approval or a tool's result across the restart in about one run of
+// three, and they do not when they run alone. The cause is not found.
+// They take about a minute together.
 var copilotAgent = hookAgent{
 	name:    "copilot",
 	profile: func() sessiongen.Profile { return &sessiongen.Copilot{} },
@@ -53,6 +51,8 @@ var copilotAgent = hookAgent{
 
 // A session of hundreds of turns, as long as the chat can keep.
 func TestCopilotLongSession(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "copilot/scale/long_session", "copilot/capability/chat")
 	n := copilotAgent.long
 	if support.LongMode() {
@@ -63,6 +63,7 @@ func TestCopilotLongSession(t *testing.T) {
 
 // Subagents show as rows until a stop hook or the turn's end closes them.
 func TestCopilotSubagentRows(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/capability/agents")
 	agentRows(t, copilotAgent)
 }
@@ -83,11 +84,13 @@ func TestCopilotRestartsAtSeededPoints(t *testing.T) {
 // read again from Copilot's events.jsonl as far as each hook first read
 // them.
 func TestCopilot_RestartKeepsTheChat(t *testing.T) {
+	t.Parallel()
 	restartKeepsChat(t, copilotAgent)
 }
 
 // A second conversation (the agent's /new) and a resume of the first.
 func TestCopilotNewConversationAndResume(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/lifecycle/new_conversation", "copilot/lifecycle/resume")
 	st := newConversation(t, copilotAgent, true)
 	notes := 0
@@ -103,12 +106,14 @@ func TestCopilotNewConversationAndResume(t *testing.T) {
 
 // The agent exits with subagents running, then is started again.
 func TestCopilotExitAndRelaunch(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/lifecycle/agent_exits", "copilot/lifecycle/relaunch")
 	exitAndRelaunch(t, copilotAgent)
 }
 
 // The user interrupts a turn that has tools and subagents running.
 func TestCopilotInterruptMidTurn(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/lifecycle/interrupt", "copilot/lifecycle/turn_end")
 	interrupted(t, copilotAgent)
 }
@@ -116,20 +121,25 @@ func TestCopilotInterruptMidTurn(t *testing.T) {
 // Hooks run as separate processes: one can arrive twice, two can swap,
 // one can be lost.
 func TestCopilotHooksOutOfOrderDuplicatedAndMissing(t *testing.T) {
+	t.Parallel()
 	hookOrder(t, copilotAgent)
 }
 
 func TestCopilotConnectionDrop(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/lifecycle/connection_drop")
 	connectionDrop(t, copilotAgent)
 }
 
 func TestCopilotSessionRemoved(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/lifecycle/session_removed")
 	sessionRemoved(t, copilotAgent)
 }
 
 func TestCopilotAtLimit(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "copilot/scale/at_limit")
 	atLimit(t, copilotAgent)
 }
@@ -137,6 +147,7 @@ func TestCopilotAtLimit(t *testing.T) {
 // Copilot's ask_user: open while the agent waits, closed by an answer, a
 // cancel or the next prompt.
 func TestCopilotQuestions(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/capability/needs.questions")
 	questions(t, copilotAgent, false)
 }
@@ -145,6 +156,7 @@ func TestCopilotQuestions(t *testing.T) {
 // waiting while the agent waits, then runs and ends. A restart while it
 // waits (TestCopilotRestartsAtSeededPoints) leaves nothing waiting.
 func TestCopilotPermissionWaits(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/capability/needs.approvals")
 	e := support.NewEnv(t, time.Hour)
 	l := write(t, e, copilotAgent, []sessiongen.Turn{{Say: 20, Tools: 2, Hook: &sessiongen.HookTurn{Approve: 1}}})
@@ -178,6 +190,7 @@ func TestCopilotPermissionWaits(t *testing.T) {
 }
 
 func TestCopilotConcurrentRequests(t *testing.T) {
+	t.Parallel()
 	coverage.Covers(t, "generated", "copilot/scale/concurrent_requests")
 	concurrent(t, copilotAgent)
 }

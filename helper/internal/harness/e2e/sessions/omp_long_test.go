@@ -49,6 +49,8 @@ func longPoints() int {
 // chat; then it is down while the agent works on, and the next engine
 // restores what was written meanwhile. Every rule holds throughout.
 func TestOMPLongSessionWithRestarts(t *testing.T) {
+	t.Parallel()
+	support.Heavy(t)
 	coverage.Covers(t, "generated", "omp/scale/long_session", "omp/lifecycle/helper_restart",
 		"omp/capability/agents", "omp/capability/background")
 	e := support.NewEnv(t, 48*time.Hour)

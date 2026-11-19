@@ -1,6 +1,7 @@
 package support
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -61,4 +62,18 @@ func CountKind(st enginetest.State, kind string) int {
 		}
 	}
 	return n
+}
+
+// heavy bounds how many of the large scenarios run at once: each reads
+// thousands of records and, under the race detector, uses a core for
+// minutes, so on a small machine more than a few at a time only make the
+// waits in every test of the package run out.
+var heavy = make(chan struct{}, max(1, min(4, runtime.GOMAXPROCS(0)/2)))
+
+// Heavy takes a place among the large scenarios, after t.Parallel, and
+// gives it back when the test ends.
+func Heavy(t testing.TB) {
+	t.Helper()
+	heavy <- struct{}{}
+	t.Cleanup(func() { <-heavy })
 }
