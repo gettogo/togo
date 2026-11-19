@@ -143,7 +143,7 @@ func restartScenario(t *testing.T, a hookAgent) []string {
 		if len(before.Items) == 0 {
 			t.Fatalf("restart %s at %d: nothing was drawn before it", c.kind, c.at)
 		}
-		fail(t, "restart "+c.kind, enginetest.Without(enginetest.Check(after, enginetest.Facts{Truth: l.Truth}), "prompt-unanswered"))
+		fail(t, "restart "+c.kind, enginetest.Without(enginetest.Check(after, enginetest.Facts{Truth: l.Truth}), "prompt-unanswered"), l)
 		if sum := after.Mission.Summary; sum.NeedsYou != 0 {
 			t.Errorf("restart %s: %d things need you from a chat that is empty", c.kind, sum.NeedsYou)
 		}
