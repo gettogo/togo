@@ -39,6 +39,11 @@ var versions = map[string]string{"omp": "omp/18.21.0", "claude": "2.1.319 (Claud
 // differ from the agent's id.
 var programs = map[string]string{"cursor": "cursor-agent"}
 
+// subcommands are what a fake binary prints for a subcommand an adapter
+// lists models with; `cursor-agent models` lists them as the adapter's
+// jq reads (cursor/testdata, cursor_test.go).
+var subcommands = map[string]string{"cursor": "models) printf 'Available models\\n\\ngpt-5 - GPT-5\\ncomposer-2.5 - Composer 2.5 (current)\\n';;\n"}
+
 // Options picks the agent and folders a rig serves.
 type Options struct {
 	Agent string // "omp", "claude", "copilot", "droid", "cursor" or "amp"
@@ -79,7 +84,7 @@ func New(t testing.TB, opt Options) *Rig {
 		t.Fatal(err)
 	}
 	// The gate runs `<agent> --version`; any other call fails at once.
-	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo '" + versions[opt.Agent] + "';;\n*) exit 1;;\nesac\n"
+	script := "#!/bin/sh\ncase \"$1\" in\n--version) echo '" + versions[opt.Agent] + "';;\n" + subcommands[opt.Agent] + "*) exit 1;;\nesac\n"
 	prog := opt.Agent
 	if p, ok := programs[prog]; ok {
 		prog = p
