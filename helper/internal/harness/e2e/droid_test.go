@@ -45,20 +45,10 @@ func TestDroidRestartsAtSeededPoints(t *testing.T) {
 	}
 }
 
-// TestKnownFault_Droid_RestartDropsTheChat documents a fault: a restart
-// of the helper empties the chat of a hook-driven session. Correct: the
-// chat read so far is still there (Droid's session file holds it, but no
-// mapper reads it: droid/droid.go says so). The cause is
-// source/hook.go:104-111 with engine/engine.go:202. This passes while the
-// fault is present.
-func TestKnownFault_Droid_RestartDropsTheChat(t *testing.T) {
-	before, after := restartDropsChat(t, droidAgent)
-	if before == 0 {
-		t.Fatal("nothing was drawn before the restart")
-	}
-	if after != 0 {
-		t.Fatalf("the chat survived the restart (%d of %d items): the fault is fixed", after, before)
-	}
+// The chat read so far is still there after a helper restart (`togo
+// update`): Droid's hooks are the only copy Togo reads.
+func TestDroid_RestartKeepsTheChat(t *testing.T) {
+	restartKeepsChat(t, droidAgent)
 }
 
 // TestKnownFault_Droid_RepliesNotShown documents a fault: the chat of a

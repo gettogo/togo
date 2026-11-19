@@ -83,21 +83,10 @@ func TestCursorRestartsAtSeededPoints(t *testing.T) {
 	}
 }
 
-// TestKnownFault_Cursor_RestartDropsTheChat documents a fault: a restart
-// of the helper empties the chat of a hook-driven session. Correct: the
-// chat read so far is still there. The cause is source/hook.go:104-111
-// (the hook bus keeps a session's last 64 payloads in memory) with
-// engine/engine.go:202; Cursor's chat store is SQLite protobuf that no
-// mapper reads (cursor/cursor.yaml header). This passes while the fault
-// is present.
-func TestKnownFault_Cursor_RestartDropsTheChat(t *testing.T) {
-	before, after := restartDropsChat(t, cursorAgent)
-	if before == 0 {
-		t.Fatal("nothing was drawn before the restart")
-	}
-	if after != 0 {
-		t.Fatalf("the chat survived the restart (%d of %d items): the fault is fixed", after, before)
-	}
+// The chat read so far is still there after a helper restart (`togo
+// update`): Cursor CLI's hooks are the only copy Togo reads.
+func TestCursor_RestartKeepsTheChat(t *testing.T) {
+	restartKeepsChat(t, cursorAgent)
 }
 
 func TestCursorNewConversation(t *testing.T) {

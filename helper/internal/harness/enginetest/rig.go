@@ -227,11 +227,11 @@ func (a approvals) CloseDesk(requestID string) { a.store().CloseDesk(requestID) 
 //
 // That is a whole restart: the engine keeps nothing for a session outside
 // TOGO_HOME/run (the followed file, run/follow-<id>.json, source/
-// follow.go:24-68; an OpenCode conversation id and endpoint records,
-// engine/history.go:333-370 and engine/recovery.go:23-52), and Forget
-// removes only the conversation id and endpoint records
-// (engine/engine.go:188-210, engine/history.go:374, engine/recovery.go:
-// 315), which the omp and Claude Code adapters do not write.
+// follow.go; an OpenCode conversation id and endpoint records,
+// engine/history.go and engine/recovery.go; a hook-only session's hook
+// records, engine/hookstore.go), and Unload drops the engine's memory of
+// the session and the hook bus's, as the helper's exit does, and keeps
+// those files.
 func (r *Rig) Restart() {
 	r.Stop()
 	r.Start()
@@ -240,7 +240,7 @@ func (r *Rig) Restart() {
 // Stop stops the engine, as the helper being down; Start builds a new
 // one. Files written between the two are found by the new engine's
 // restore, as after an update that took a while.
-func (r *Rig) Stop() { r.Engine.Forget(r.ID) }
+func (r *Rig) Stop() { r.Engine.Unload(r.ID) }
 
 // Start builds a new engine over the same TOGO_HOME and files.
 func (r *Rig) Start() { r.start() }
