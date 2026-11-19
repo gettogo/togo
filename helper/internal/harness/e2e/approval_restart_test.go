@@ -28,7 +28,17 @@ func approvalAcrossRestart(t *testing.T) (*enginetest.Rig, wire.Approval, []wire
 	r.Term.Open(&enginetest.Dialog{Screen: r.Term.MustCapture("detect/testdata/generic/yn.txt")})
 	r.Look()
 	before := r.WaitPending(1, 3*time.Second)[0]
+	alerts := len(r.Notified(wire.LevelNeedsYou))
 	r.Restart()
+	// Before the watcher looks again: the chat shows the restored request,
+	// and nothing alerts for it a second time.
+	st := r.SettleUntil(3*time.Second, func(st enginetest.State) bool { return hasApproval(st, before.RequestID) })
+	if !hasApproval(st, before.RequestID) {
+		t.Errorf("the chat does not show the request after the restart")
+	}
+	if n := len(r.Notified(wire.LevelNeedsYou)); n != alerts {
+		t.Errorf("%d needs-you alerts after the restart, %d before", n, alerts)
+	}
 	r.Look()
 	after := r.WaitPending(1, 3*time.Second)
 	return r, before, after, r.Answer(before.RequestID, wire.DecisionApprove)
@@ -55,4 +65,13 @@ func TestApprovalSurvivesRestart(t *testing.T) {
 	if got := r.Closed()[before.RequestID]; got != wire.ByPhone {
 		t.Errorf("closed as %q, want %q", got, wire.ByPhone)
 	}
+}
+
+func hasApproval(st enginetest.State, requestID string) bool {
+	for _, it := range st.Items {
+		if it.Approval != nil && it.Approval.RequestID == requestID {
+			return true
+		}
+	}
+	return false
 }

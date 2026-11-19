@@ -240,7 +240,11 @@ func (r *Rig) Restart() {
 // Stop stops the engine, as the helper being down; Start builds a new
 // one. Files written between the two are found by the new engine's
 // restore, as after an update that took a while.
-func (r *Rig) Stop() { r.Engine.Unload(r.ID) }
+func (r *Rig) Stop() {
+	r.Engine.Unload(r.ID)
+	// As the daemon does on its way out: the open approvals reach disk.
+	r.Approvals.Flush()
+}
 
 // Start builds a new engine over the same TOGO_HOME and files.
 func (r *Rig) Start() { r.start() }
