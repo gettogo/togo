@@ -124,7 +124,7 @@ func (a *AppServer) Carry(next harness.Mapper) {
 	a.mu.Lock()
 	var top []string
 	for id, t := range a.threads {
-		if t.top {
+		if t.top && t.parent == "" {
 			top = append(top, id)
 		}
 	}
