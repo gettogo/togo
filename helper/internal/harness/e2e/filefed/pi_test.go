@@ -32,6 +32,8 @@ func piStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *eng
 // /new in Pi starts a new file in the folder. The session moves to it,
 // keeps the old conversation's items, follows the new file after a helper
 // restart, and holds no item twice.
+// Keeping both conversations is this agent's current convention; the
+// question whether every agent should start over instead is open.
 func TestPiNewConversation(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/new_conversation", "pi/lifecycle/helper_restart")
@@ -89,32 +91,14 @@ func TestPiResumeOlderConversation(t *testing.T) {
 	support.Fail(t, "paging", enginetest.Paging(st))
 }
 
-// TestKnownFault_PiResumeToDroppedFile documents a fault: a conversation
-// file the session left (a /new) is never followed again unless a process
-// of the session holds it open (source/exclusive.go, the `dropped` checks
-// in the unheld-file case). Pi appends and closes per entry, so after
-// /new and then a resume of the first conversation its prompts and
-// replies never reach the chat.
-//
-// Correct: a dropped file that grows while no other Pi runs in the folder
-// is followed again. This test passes while the fault is present; when it
-// fails the fault is fixed: delete it.
-func TestKnownFault_PiResumeToDroppedFile(t *testing.T) {
+// Pi appends and closes its file per entry. After a /new, a resume of
+// the first conversation appends to the file the session left: the
+// session follows it back (resumeToLeft).
+func TestPiResumeToLeftConversation(t *testing.T) {
 	t.Parallel()
+	coverage.Covers(t, "generated", "pi/lifecycle/resume")
 	_, l, r := piStart(t, map[int]sessiongen.PiTurn{3: {Resume: 1}}, sessiongen.Turn{Say: 20})
-	support.SettleUntil(r, 1)
-	support.Now(l)
-	if err := l.Append(sessiongen.Turn{New: true, Say: 20}); err != nil {
-		t.Fatal(err)
-	}
-	support.SettleUntil(r, 2)
-	support.Now(l)
-	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil { // resumed: the first file again
-		t.Fatal(err)
-	}
-	if !support.Never(r, 4500*time.Millisecond, support.HasPrompt(3)) {
-		t.Fatal("the resumed conversation is followed: the fault is fixed")
-	}
+	resumeToLeft(t, l, r)
 }
 
 // Pi killed mid-turn leaves a prompt and a tool call with no end. When

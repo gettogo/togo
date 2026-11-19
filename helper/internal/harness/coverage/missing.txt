@@ -7,7 +7,6 @@ claude/lifecycle/relaunch
 claude/lifecycle/resume
 cline/capability/changes
 cline/capability/ports
-cline/lifecycle/new_conversation
 cline/lifecycle/resume
 codex/capability/chat.anchors
 codex/capability/ports
@@ -15,7 +14,6 @@ copilot/capability/changes
 copilot/capability/chat.anchors
 copilot/capability/ports
 crush/capability/chat.anchors
-crush/lifecycle/new_conversation
 cursor/capability/chat.anchors
 cursor/lifecycle/fork
 droid/capability/agents
@@ -25,7 +23,6 @@ droid/capability/ports
 goose/capability/changes
 goose/capability/chat.anchors
 goose/capability/ports
-goose/lifecycle/new_conversation
 kilo/capability/chat.anchors
 kilo/capability/mcp
 kilo/capability/ports
@@ -34,7 +31,6 @@ kilo/lifecycle/helper_restart
 kimi/capability/agents
 kimi/capability/changes
 kimi/capability/chat.anchors
-kimi/lifecycle/resume
 omp/capability/settings
 omp/lifecycle/relaunch
 opencode/capability/chat.anchors
@@ -50,4 +46,3 @@ pi/lifecycle/fork
 vibe/capability/changes
 vibe/capability/chat.anchors
 vibe/capability/ports
-vibe/lifecycle/new_conversation

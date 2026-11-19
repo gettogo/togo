@@ -132,3 +132,31 @@ func TestTreeGivesUpOnHungPS(t *testing.T) {
 		t.Fatalf("took %v", d)
 	}
 }
+
+// An interpreter is matched without case and without a version suffix, as
+// installers name them (uv's Python, Homebrew's python3.13, node22).
+func TestMatchCommandsInterpreterVariants(t *testing.T) {
+	out := "  31 /usr/bin/Python /u/bin/vibe\n  32 /opt/homebrew/bin/python3.13 /u/bin/vibe-acp\n  33 node22 /u/bin/cline\n  34 /usr/bin/Crush\n  35 pythonista /u/bin/vibe\n"
+	got := MatchCommands(out, []string{"vibe", "vibe-acp", "cline", "crush"})
+	if !slices.Equal(got, []int{31, 32, 33, 34}) {
+		t.Fatalf("got %v", got)
+	}
+}
+
+// A process counts as alive when it exists, even when it is not ours to
+// signal; a pid that is gone does not.
+func TestAlive(t *testing.T) {
+	if !alive(os.Getpid()) {
+		t.Fatal("this process is not alive")
+	}
+	if !alive(1) {
+		t.Fatal("init is not alive")
+	}
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if alive(cmd.Process.Pid) {
+		t.Fatal("an exited, reaped process is alive")
+	}
+}

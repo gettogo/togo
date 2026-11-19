@@ -67,6 +67,64 @@ func loadFollow(env harness.Env) string {
 	return v.Path
 }
 
+// SaveFollowed remembers, under the name of the thing followed, which
+// conversation a session's mapper follows (a database row, not a file), so
+// a helper restart goes back to it: run/follow-<session>.<name>.json, 0600.
+// An empty value forgets it. Best effort.
+func SaveFollowed(env harness.Env, name, value string) {
+	p := followFile(env)
+	if p == "" || name == "" || name != filepath.Base(name) {
+		return
+	}
+	p = strings.TrimSuffix(p, ".json") + "." + name + ".json"
+	if value == "" {
+		_ = os.Remove(p)
+		return
+	}
+	b, _ := json.Marshal(struct {
+		ID string `json:"id"`
+	}{value})
+	if os.MkdirAll(filepath.Dir(p), 0o700) != nil {
+		return
+	}
+	tmp := p + ".tmp"
+	if os.WriteFile(tmp, b, 0o600) == nil {
+		_ = os.Rename(tmp, p)
+	}
+}
+
+// LoadFollowed returns what SaveFollowed remembered, "" when nothing.
+func LoadFollowed(env harness.Env, name string) string {
+	p := followFile(env)
+	if p == "" || name == "" || name != filepath.Base(name) {
+		return ""
+	}
+	b, err := os.ReadFile(strings.TrimSuffix(p, ".json") + "." + name + ".json")
+	if err != nil {
+		return ""
+	}
+	var v struct {
+		ID string `json:"id"`
+	}
+	if json.Unmarshal(b, &v) != nil {
+		return ""
+	}
+	return v.ID
+}
+
+// RemoveFollows forgets everything a removed session followed.
+func RemoveFollows(togoHome, id string) {
+	p := followFile(harness.Env{SessionID: id, Vars: map[string]string{VarTogoHome: togoHome}})
+	if p == "" {
+		return
+	}
+	_ = os.Remove(p)
+	more, _ := filepath.Glob(strings.TrimSuffix(p, ".json") + ".*.json")
+	for _, m := range more {
+		_ = os.Remove(m)
+	}
+}
+
 // nameStamp matches the creation time in the file names of OMP and Pi:
 // 2026-11-12T15-57-52-145Z_<id>.jsonl.
 var nameStamp = regexp.MustCompile(`^(\d{4}-\d\d-\d\d)T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z_`)

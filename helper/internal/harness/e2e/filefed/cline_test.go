@@ -29,31 +29,63 @@ func clineStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *
 	return clineStart(t, nil, turns...)
 }
 
-// TestKnownFault_ClineNewConversationIsNeverFollowed documents a fault:
-// after a /new Cline writes a new session folder, and the mapper follows
-// it only when the new session's manifest names a pid that is in this
-// session's process tree (adapters/cline/messages.go owner, Map); with no
-// pid it keeps the old session. The recorded manifests
-// (adapters/cline/testdata/session.json, ask.json) hold no pid, so the
-// chat stays on the first conversation and never shows the second.
-//
-// Correct: a new session of the folder, started since the old one and
-// written while no other Cline runs there, is followed. This test passes
-// while the fault is present; when it fails the fault is fixed: delete it.
-func TestKnownFault_ClineNewConversationIsNeverFollowed(t *testing.T) {
+// After a /new Cline writes a new session folder. Its manifest names no
+// pid (the recorded 3.0.74 manifests have none), and no other Cline runs
+// in the folder, so it is this pane's: the session follows it, keeping
+// the first conversation's items, shows each prompt once, types a prompt
+// from the phone once, and after a helper restart stays on it. Keeping
+// both conversations is this agent's current convention; the question
+// whether every agent should start over instead is open.
+func TestClineFollowsNewConversation(t *testing.T) {
 	t.Parallel()
-	l, r := clineStart(t, nil, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Say: 20})
+	coverage.Covers(t, "generated", "cline/lifecycle/new_conversation")
+	e := support.NewEnv(t, 10*time.Minute)
+	l, err := sessiongen.Write(e.Home, &sessiongen.Cline{}, sessiongen.Script{Seed: 51, Start: e.Start, Cwd: e.Cwd,
+		Turns: []sessiongen.Turn{{Say: 20, Tools: 1, Output: 20}, {Say: 20}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := e.RigMod(t, "cline", func(o *enginetest.Options) { o.PanePIDs = support.ProcsOf(t) })
 	support.SettleUntil(r, 2)
 	support.Now(l)
-	if err := l.Append(sessiongen.Turn{New: true, Say: 20}, sessiongen.Turn{Say: 20}); err != nil {
+	if err := l.Append(sessiongen.Turn{New: true, Say: 20}); err != nil {
 		t.Fatal(err)
 	}
 	if len(l.Mains) != 2 {
 		t.Fatalf("%d sessions", len(l.Mains))
 	}
-	if !support.Never(r, 4500*time.Millisecond, support.HasPrompt(3)) {
-		t.Fatal("the new conversation is followed: the fault is fixed")
+	st := support.SettleUntil(r, 3)
+	support.Fail(t, "after /new", enginetest.Paging(st))
+	const text = "Step 4: from the phone, in the new conversation"
+	if _, err := r.Send(text, harness.SendNow); err != nil {
+		t.Fatalf("send: %v", err)
 	}
+	if got := r.Term.Submitted(); len(got) != 1 || got[0] != text {
+		t.Fatalf("the agent was given %q", got)
+	}
+	support.Now(l)
+	if err := l.Append(sessiongen.Turn{Prompt: text, Say: 20}); err != nil {
+		t.Fatal(err)
+	}
+	st = support.SettleUntil(r, 4)
+	if n := countPrompt(st, text); n != 1 {
+		t.Fatalf("the phone's prompt is shown %d times, want 1", n)
+	}
+	support.Fail(t, "phone prompt", enginetest.Paging(st))
+	r.Restart()
+	after := support.SettleUntil(r, 4)
+	if !support.HasPrompt(3)(after) || countPrompt(after, text) != 1 {
+		t.Fatal("the restart did not restore the new conversation")
+	}
+	support.Now(l)
+	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil {
+		t.Fatal(err)
+	}
+	more := support.SettleUntil(r, 5)
+	if !support.HasPrompt(5)(more) {
+		t.Fatal("the new conversation is not followed after the restart")
+	}
+	support.Fail(t, "after restart", enginetest.Paging(more))
 }
 
 // TestKnownFault_ClineDocumentOver8MiB documents a fault: Cline rewrites its

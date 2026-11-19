@@ -6,20 +6,31 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 )
 
 // fakeProcs is a fixed process tree; Cline needs no open-file lookup.
-type fakeProcs struct{ tree []int }
+// others says whether another Cline runs in the folder; it can change.
+type fakeProcs struct {
+	tree   []int
+	others bool
+	flip   *atomic.Bool
+}
 
 func (f fakeProcs) Tree(context.Context) []int { return f.tree }
 func (fakeProcs) Holders(context.Context, []string) (map[string][]int, error) {
 	return nil, nil
 }
 
-func (fakeProcs) Others(context.Context, []string, string) (bool, error) { return false, nil }
+func (f fakeProcs) Others(context.Context, []string, string) (bool, error) {
+	if f.flip != nil {
+		return f.flip.Load(), nil
+	}
+	return f.others, nil
+}
 
 var _ harness.Procs = fakeProcs{}
 
@@ -61,13 +72,13 @@ func TestMessagesFollowsOnlyItsOwnProcess(t *testing.T) {
 	}
 }
 
-// Once a session is followed, a newer session with no process evidence
-// does not take over.
+// Once a session is followed, a newer session with no pid does not take
+// over while another Cline runs in the folder: it may be that one's.
 func TestMessagesKeepsSessionWithoutEvidence(t *testing.T) {
 	h, doc := home(t)
 	other := addSession(t, h, "1794200000002_nopid", 0, doc)
 	e := env(h, "2026-11-08T03:37:52Z")
-	e.Procs = fakeProcs{tree: []int{100}}
+	e.Procs = fakeProcs{tree: []int{100}, others: true}
 	m := newMessages(e)
 	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
 		t.Fatal("first session not followed")

@@ -236,6 +236,7 @@ func (e *Engine) restart(id string) {
 	for sub := range s.subs {
 		subs = append(subs, sub)
 	}
+	e.convCarry.put(id, s.conv)
 	s.mu.Unlock()
 	s.stop()
 	if len(subs) == 0 {

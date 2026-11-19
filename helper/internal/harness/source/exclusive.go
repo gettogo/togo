@@ -102,7 +102,13 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 	claims.watchers[pattern][id] = me
 	claims.Unlock()
 	tails := map[string]*tail{}
-	dropped := map[string]bool{} // files left for a newer one; not taken back without evidence
+	// dropped holds the files left for a newer one: one is taken back on
+	// evidence, or when it grew by a whole record (resumed).
+	dropped := map[string]*leftFile{}
+	// held says the followed file was taken because the session's own
+	// process held it: an agent that keeps its file open would hold a
+	// resumed one too, so an unheld file growing is not its resume.
+	held := false
 	type asked struct {
 		at    time.Time
 		mtime time.Time
@@ -152,7 +158,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 				// With no file yet, an agent that was already writing before
 				// the watch began (a helper restart) is found by who holds it.
 				known := env.Procs != nil && len(tails) == 0 && i < maxHeldCandidates
-				if dropped[m.path] && !rem {
+				if _, left := dropped[m.path]; left && !rem {
 					// A file left behind stays newer than the watch for ever;
 					// ask about it again only when it changed or after a while.
 					if a, ok := askedDropped[m.path]; ok && !m.mtime.After(a.mtime) && time.Since(a.at) < droppedAskEvery() {
@@ -166,11 +172,16 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 				}
 			}
 			verdicts := Attribute(ctx, env, paths)
-			take := func(m match) {
+			take := func(m match, byHold bool) {
+				held = byHold
 				for p := range tails {
 					releaseClaim(id, p)
 					delete(tails, p)
-					dropped[p] = true
+					var size int64
+					if fi, err := os.Stat(p); err == nil {
+						size = fi.Size()
+					}
+					dropped[p] = &leftFile{size: size, at: time.Now()}
 				}
 				delete(dropped, m.path)
 				tails[m.path] = &tail{path: m.path, name: name, header: header, replay: true}
@@ -211,7 +222,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 					if !claimOwn(pattern, id, m.path) {
 						continue
 					}
-					take(m)
+					take(m, true)
 					switched = true
 				default:
 					switch {
@@ -219,18 +230,22 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 						continue
 					case c.remembr && len(tails) == 0:
 						if claimOwn(pattern, id, m.path) {
-							take(m)
+							take(m, false)
 							switched = true
 						}
 					case len(tails) > 0:
 						// Nobody holds the new file (an agent that appends
 						// and closes per entry, like Pi): it is this
 						// session's /new only if no other agent of the kind
-						// runs in the folder to have made it.
-						if dropped[m.path] || !m.mtime.After(started) || ambiguous() || !claimOwn(pattern, id, m.path) {
+						// runs in the folder to have made it. A file the
+						// session left that grew by a whole record since is
+						// its resume, on the same condition, unless the
+						// session's process held the file it is on.
+						left, wasLeft := dropped[m.path]
+						if (wasLeft && (held || !resumed(left, m))) || !m.mtime.After(started) || ambiguous() || !claimOwn(pattern, id, m.path) {
 							continue
 						}
-						take(m)
+						take(m, false)
 						switched = true
 					case env.Procs == nil:
 						if c.pick && claim(pattern, id, m.path, true) {
@@ -246,7 +261,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 						if !c.pick || !(inWindow || (m.mtime.After(started) && !ambiguous())) || !latestFileless(pattern, id, m.born, created) || !claimOwn(pattern, id, m.path) {
 							continue
 						}
-						take(m)
+						take(m, false)
 						switched = true
 					}
 				}
@@ -259,6 +274,41 @@ func watchGlobExclusive(ctx context.Context, name, pattern, header string, env h
 		}
 		return nil
 	})
+}
+
+// leftFile is a file the session left: its size then and when.
+type leftFile struct {
+	size int64
+	at   time.Time
+}
+
+// droppedGrace is how long after leaving a file its growth is not taken
+// for a resume: the agent may still finish writing the conversation it
+// just left. What it writes then becomes part of the size to grow past.
+func droppedGrace() time.Duration { return 3 * globEvery }
+
+// resumed reports whether a file the session left grew past its size
+// then by at least one whole record (it ends in a newline): a touch, or a
+// sync tool rewriting the file as it was, is not a resume.
+func resumed(left *leftFile, m match) bool {
+	if m.mtime.Before(left.at.Add(droppedGrace())) {
+		// Written within the grace after leaving, whenever seen.
+		left.size = max(left.size, m.size)
+		return false
+	}
+	return m.size > left.size && endsLine(m.path, m.size)
+}
+
+// endsLine reports whether the file of the given size ends in a newline.
+func endsLine(path string, size int64) bool {
+	f, err := os.Open(path)
+	if err != nil || size <= 0 {
+		return false
+	}
+	defer f.Close()
+	b := make([]byte, 1)
+	_, err = f.ReadAt(b, size-1)
+	return err == nil && b[0] == '\n'
 }
 
 // unregisterWatch removes a finished watcher's entry and claims. The entry

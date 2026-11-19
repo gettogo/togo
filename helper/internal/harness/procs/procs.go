@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -88,12 +89,27 @@ func (s Session) Others(ctx context.Context, commands []string, cwd string) (boo
 		return false, err
 	}
 	want := resolveDir(cwd)
-	for _, d := range dirs {
+	for _, p := range pids {
+		d, ok := dirs[p]
+		if !ok {
+			// A process of the kind whose folder cannot be read may be
+			// working in this one: it is not evidence of being alone.
+			if alive(p) {
+				return true, nil
+			}
+			continue
+		}
 		if resolveDir(d) == want {
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+// alive reports whether pid is a process (one of another user counts).
+func alive(pid int) bool {
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 func resolveDir(p string) string {
@@ -104,8 +120,14 @@ func resolveDir(p string) string {
 }
 
 // interpreters are programs an agent written in a scripting language runs
-// under: `node /path/bin/pi` is the pi agent.
-var interpreters = map[string]bool{"node": true, "bun": true, "deno": true, "python": true, "python3": true, "sh": true, "bash": true}
+// under: `node /path/bin/pi` is the pi agent. A name is matched without
+// case and without a version suffix (Python, python3.13, node22).
+var interpreters = map[string]bool{"node": true, "bun": true, "deno": true, "python": true, "sh": true, "bash": true}
+
+// interpreter reports whether prog is one of interpreters.
+func interpreter(prog string) bool {
+	return interpreters[strings.TrimRight(strings.ToLower(prog), "0123456789.")]
+}
 
 // MatchCommands reads `ps -o pid=,command=` output and returns the pids
 // whose program (or, behind an interpreter, whose script) has one of the
@@ -114,7 +136,7 @@ func MatchCommands(out string, commands []string) []int {
 	want := map[string]bool{}
 	for _, c := range commands {
 		if c != "" {
-			want[c] = true
+			want[strings.ToLower(c)] = true
 		}
 	}
 	var pids []int
@@ -128,9 +150,9 @@ func MatchCommands(out string, commands []string) []int {
 			continue
 		}
 		prog := filepath.Base(f[1])
-		if want[prog] {
+		if want[strings.ToLower(prog)] {
 			pids = append(pids, pid)
-		} else if interpreters[prog] && scriptIs(f[2:], want) {
+		} else if interpreter(prog) && scriptIs(f[2:], want) {
 			pids = append(pids, pid)
 		}
 	}
@@ -146,7 +168,7 @@ func scriptIs(args []string, want map[string]bool) bool {
 		if strings.HasPrefix(a, "-") {
 			continue
 		}
-		if want[filepath.Base(a)] {
+		if want[strings.ToLower(filepath.Base(a))] {
 			return true
 		}
 		if seen++; seen == 2 {
@@ -177,13 +199,13 @@ func unescapeLsof(s []byte) string {
 }
 
 // workingDirs returns the current directories of pids: /proc/<pid>/cwd on
-// Linux, lsof elsewhere. A process that is gone is skipped.
-func workingDirs(ctx context.Context, pids []int) ([]string, error) {
-	var dirs []string
+// Linux, lsof elsewhere. A pid whose folder cannot be read is absent.
+func workingDirs(ctx context.Context, pids []int) (map[int]string, error) {
+	dirs := map[int]string{}
 	if _, err := os.Stat("/proc/self/cwd"); err == nil {
 		for _, p := range pids {
 			if d, err := os.Readlink("/proc/" + strconv.Itoa(p) + "/cwd"); err == nil {
-				dirs = append(dirs, d)
+				dirs[p] = d
 			}
 		}
 		return dirs, nil
@@ -197,9 +219,13 @@ func workingDirs(ctx context.Context, pids []int) ([]string, error) {
 	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
 		return nil, err
 	}
+	pid := 0
 	for _, line := range strings.Split(string(out), "\n") {
-		if len(line) > 1 && line[0] == 'n' {
-			dirs = append(dirs, unescapeLsof([]byte(line[1:])))
+		switch {
+		case len(line) > 1 && line[0] == 'p':
+			pid, _ = strconv.Atoi(line[1:])
+		case len(line) > 1 && line[0] == 'n' && pid > 0:
+			dirs[pid] = unescapeLsof([]byte(line[1:]))
 		}
 	}
 	return dirs, nil

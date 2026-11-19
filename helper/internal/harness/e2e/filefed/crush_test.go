@@ -198,24 +198,12 @@ func TestCrushExitAndRelaunch(t *testing.T) {
 	}
 }
 
-// TestKnownFault_Crush_NewConversationNotFollowed documents a limit the
-// adapter names itself (crush.yaml, Attribution): a session Crush starts
-// inside its own UI (ctrl+n) is not followed once the chat has content.
-// Correct: the chat starts over on the new conversation. The cause is
-// crush/session.go:131-133, where a session that has shown messages is kept.
-// This passes while that holds.
-func TestKnownFault_Crush_NewConversationNotFollowed(t *testing.T) {
+// Crush writes a new session for ctrl+n in its own UI, and touches an earlier one on a resume: with no other Crush in the folder the session follows each
+// (session.go movedTo), keeping the earlier conversation's items.
+// Keeping both conversations is this agent's current convention; the
+// question whether every agent should start over instead is open.
+func TestCrushFollowsNewConversationAndResume(t *testing.T) {
 	needSQLite(t)
-	e := support.NewEnv(t, time.Hour)
-	l, r := crushAgent.start(t, e, sessiongen.Script{Seed: 36})
-	crushAgent.add(t, l, sessiongen.Turn{Say: 30, Tools: 1, Output: 50})
-	before := crushAgent.seen(t, r, "first", l, false)
-	crushAgent.add(t, l, sessiongen.Turn{New: true, Say: 30, Tools: 1, Output: 50})
-	time.Sleep(3 * time.Second)
-	if enginetest.Has(l.Truth.Last)(r.Read()) {
-		t.Fatal("the new conversation is shown: the fault is fixed; cover crush/lifecycle/new_conversation")
-	}
-	if r.Read().Epoch != before.Epoch {
-		t.Errorf("the epoch changed")
-	}
+	coverage.Covers(t, "generated", "crush/lifecycle/new_conversation")
+	followsConversations(t, crushAgent, 36)
 }

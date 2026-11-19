@@ -23,6 +23,7 @@ type session struct {
 	mu     sync.Mutex
 	state  map[string]string
 	loaded bool
+	sid    string // the Vibe session the records are of
 	turns  map[string]*turn
 	order  []string                // turn ids, oldest first
 	tools  map[string]harness.Item // running effects by entry id
@@ -161,10 +162,19 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var items []harness.Item
+	id := sessionOf(r.Payload.Delta)
+	if id != "" && s.sid != "" && id != s.sid {
+		// The feed moved to another conversation (vibe/vibe.go journalFor):
+		// nothing of the one left goes on, and the new one's history is read.
+		items = s.leave(rec.At)
+	}
+	if id != "" {
+		s.sid = id
+	}
 	if !s.loaded {
 		s.loaded = true
-		if id := sessionOf(r.Payload.Delta); id != "" {
-			items = s.history(id)
+		if id != "" {
+			items = append(items, s.history(id)...)
 		}
 	}
 	for _, o := range r.Payload.Delta {
@@ -448,6 +458,27 @@ func (s *session) end(id, state string, at time.Time) []harness.Item {
 	return append(items, s.turnItem(id))
 }
 
+// leave ends the turns still open in the conversation the feed left, as
+// interrupted, and forgets its turns, effects and prompts (rule: a mapper
+// resets when the agent's conversation changes).
+func (s *session) leave(at time.Time) []harness.Item {
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	var items []harness.Item
+	for _, id := range s.order {
+		if t := s.turns[id]; t.ended == nil {
+			items = append(items, s.end(id, harness.StateInterrupted, at)...)
+		}
+	}
+	s.turns, s.order = map[string]*turn{}, nil
+	s.tools, s.failed = map[string]harness.Item{}, map[string]bool{}
+	s.asks, s.gates = map[string]harness.Item{}, map[string]string{}
+	s.loaded = false
+	harness.Moved(s.state)
+	return items
+}
+
 func (s *session) working(on bool, at time.Time) {
 	s.state["working"], s.state["idle"] = strconv.FormatBool(on), strconv.FormatBool(!on)
 	s.state[harness.StateWorkingAt] = harness.StampWorking(at)
@@ -457,28 +488,4 @@ func (s *session) turnItem(id string) harness.Item {
 	t := s.turns[id]
 	return harness.Item{ID: id, TurnID: id, Kind: harness.KindTurn, At: t.started,
 		Turn: &harness.TurnBody{State: t.state, Started: t.started, Ended: t.ended, Steps: len(t.steps)}}
-}
-
-// text reads content given as a string or as a list of {type, text} parts.
-func text(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var str string
-	if json.Unmarshal(raw, &str) == nil {
-		return str
-	}
-	var parts []struct {
-		Text string `json:"text"`
-	}
-	if json.Unmarshal(raw, &parts) != nil {
-		return ""
-	}
-	var out []string
-	for _, p := range parts {
-		if p.Text != "" {
-			out = append(out, p.Text)
-		}
-	}
-	return strings.Join(out, "\n")
 }

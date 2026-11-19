@@ -170,10 +170,16 @@ func (v *Vibe) Flushed(g *Gen) error {
 			segs = segs[1:]
 		}
 		// The agent writes its segments as the helper watches: dated now,
-		// in order, so that the newest is the one written last.
+		// in order, so that the newest is the one written last. Only the
+		// session written to: Vibe never touches a session it left.
 		now := time.Now()
 		for i, p := range segs {
-			at := now.Add(-time.Duration(len(segs)-1-i) * time.Second)
+			if s != v.cur {
+				break
+			}
+			// A millisecond apart: a segment dated a second back would
+			// look written before a feed that began to watch since.
+			at := now.Add(-time.Duration(len(segs)-1-i) * time.Millisecond)
 			if err := os.Chtimes(p, at, at); err != nil {
 				return err
 			}

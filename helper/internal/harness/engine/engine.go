@@ -51,7 +51,10 @@ type Engine struct {
 	// carried holds a restarted session's subscribers until it is served
 	// again (carry), so open chats keep receiving across the restart.
 	carried map[string][]harness.Subscriber
-	idSeq   int64
+	// convCarry holds the conversation a restarted session's chat showed
+	// (conversation.go).
+	convCarry convCarry
+	idSeq     int64
 	// act runs an action for a permission answered from a notification;
 	// nil means Act. Tests replace it.
 	act func(context.Context, harness.ActionRequest) (harness.ActionResult, error)
@@ -467,5 +470,10 @@ func itoa(n int64) string {
 // mapperFor builds a fresh mapper of the registered name for a session.
 func (e *Engine) mapperFor(name string, env harness.Env) harness.Mapper {
 	f, _ := harness.LookupMapper(name)
-	return f(env)
+	m := f(env)
+	if w, ok := m.(harness.Waker); ok {
+		id := env.SessionID
+		w.Wake(func() { go e.woken(id) })
+	}
+	return m
 }

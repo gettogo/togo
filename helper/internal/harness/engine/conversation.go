@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -62,17 +63,71 @@ func (s *sess) filesDir(ctx context.Context) string {
 
 // movedLocked reports whether the mappers now name a conversation other
 // than the one the chat shows. The first one named is the one the session
-// started on.
+// started on, unless the session was started again under a running chat
+// (a relaunch on a new endpoint, Engine.restart) that showed another: the
+// item log is kept across that restart, so it is a move.
 func (s *sess) movedLocked() bool {
 	id := s.stateLocked()[StateConversation]
 	if id == "" || id == s.conv {
 		return false
 	}
 	if s.conv == "" {
+		left := s.e.convCarry.take(s.id)
+		if left != "" && left != id {
+			return true
+		}
 		s.conv = id
 		return false
 	}
 	return true
+}
+
+// followedLocked ends what belonged to the conversation a mapper left
+// when it followed the agent to another one and the chat keeps both
+// (harness.StateMoves): the running turn and its tools end interrupted,
+// queued prompts are withdrawn (they were written for the conversation
+// left), and open questions close, so no answer is typed into a pane
+// that shows another conversation. The chat is not started over.
+func (s *sess) followedLocked(moves string) {
+	if moves == s.moves {
+		return
+	}
+	s.moves = moves
+	if moves == "" || moves == "0" {
+		return
+	}
+	s.agentExitedLocked()
+	s.turn, s.awaitReply, s.awaitText = "", false, ""
+}
+
+// convCarry keeps, per session, the conversation the chat showed when the
+// session's adapter was started again on a new endpoint, until the new
+// run's mappers name theirs. It is taken once, and dropped with the
+// session (Forget).
+type convCarry struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+func (c *convCarry) put(id, conv string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if conv == "" {
+		delete(c.m, id)
+		return
+	}
+	if c.m == nil {
+		c.m = map[string]string{}
+	}
+	c.m[id] = conv
+}
+
+func (c *convCarry) take(id string) string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	conv := c.m[id]
+	delete(c.m, id)
+	return conv
 }
 
 // startOverLocked empties the chat for the conversation the agent moved to
