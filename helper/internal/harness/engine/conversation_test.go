@@ -212,6 +212,15 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		}
 		return users, notices
 	}
+	// moveTo reports that the agent moved to conv and waits for the chat to
+	// start over: a new log epoch. The epoch is read first so the log
+	// exists; a move before anything made the log would name its first
+	// epoch, the same name a counter gives the log before a move.
+	moveTo := func(conv string) {
+		before := e.log.Epoch(id)
+		deliver(id, map[string]any{"state": map[string]string{"conversation": conv}})
+		waitFor(t, func() bool { return e.log.Epoch(id) != before })
+	}
 	deliver(id, map[string]any{"state": map[string]string{"conversation": "A"}})
 	waitFor(t, func() bool { s, _ := e.served(ctx, id); s.mu.Lock(); defer s.mu.Unlock(); return s.conv == "A" })
 
@@ -222,8 +231,7 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		done <- err
 	}()
 	waitFor(t, func() bool { return strings.Contains(sentLog(), "direct") })
-	deliver(id, map[string]any{"state": map[string]string{"conversation": "B"}})
-	waitFor(t, func() bool { return e.log.Epoch(id) == "e2" })
+	moveTo("B")
 	if err := os.WriteFile(filepath.Join(home, "release"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -245,8 +253,7 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 		done <- err
 	}()
 	waitSendBlockedOnTypingLock(t)
-	deliver(id, map[string]any{"state": map[string]string{"conversation": "B2"}})
-	waitFor(t, func() bool { return e.log.Epoch(id) == "e3" })
+	moveTo("B2")
 	l.Unlock()
 	if err := <-done; !errors.As(err, &moved) || !strings.Contains(moved.Detail, "was not sent") {
 		t.Fatalf("send that waited across the move = %v, want the not-sent error", err)
@@ -261,8 +268,7 @@ func TestSendInFlightAcrossAConversationMove(t *testing.T) {
 	queue(t, e, id, "queued")
 	status.Store("idle")
 	waitFor(t, func() bool { return strings.Contains(sentLog(), "queued") })
-	deliver(id, map[string]any{"state": map[string]string{"conversation": "C"}})
-	waitFor(t, func() bool { return e.log.Epoch(id) == "e4" })
+	moveTo("C")
 	if err := os.WriteFile(filepath.Join(home, "release"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
