@@ -22,11 +22,6 @@ amp/capability/chat.anchors
 amp/capability/interrupt
 amp/capability/needs.approvals
 amp/capability/send.queue
-auggie/lifecycle/agent_exits
-auggie/lifecycle/connection_drop
-auggie/lifecycle/helper_restart
-auggie/lifecycle/relaunch
-auggie/lifecycle/session_removed
 claude/capability/changes
 claude/capability/chat
 claude/capability/chat.anchors
