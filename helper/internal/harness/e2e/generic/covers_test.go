@@ -45,7 +45,11 @@ func declare(t *testing.T, agent, cell string) bool {
 // claimed only for agents without TestKnownFault_RelaunchKeepsDeadTurnWorking.
 // Sending while idle proves part of chat, not the cell. OpenCode and Kilo
 // claim relaunch here: they do not have that fault (their exit ends the
-// stream, and the relaunched agent's stream starts idle).
+// stream, and the relaunched agent's stream starts idle). Codex claims it
+// too: its relaunch is a new app-server, whose feed starts with the
+// thread the terminal resumes or a new idle one. Its approvals here are
+// the terminal's captured dialog; the app-server's approval requests are
+// proven in e2e (codex_approvals_test.go).
 var declared = map[string]func(t *testing.T){
 	"amp/lifecycle/agent_exits":          func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/agent_exits") },
 	"amp/lifecycle/session_removed":      func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/session_removed") },
@@ -232,4 +236,15 @@ var declared = map[string]func(t *testing.T){
 	"kilo/capability/interrupt":          func(t *testing.T) { coverage.Covers(t, "generated", "kilo/capability/interrupt") },
 	"kilo/scale/concurrent_requests":     func(t *testing.T) { coverage.Covers(t, "generated", "kilo/scale/concurrent_requests") },
 	"kilo/capability/files":              func(t *testing.T) { coverage.Covers(t, "generated", "kilo/capability/files") },
+	"codex/lifecycle/agent_exits":        func(t *testing.T) { coverage.Covers(t, "generated", "codex/lifecycle/agent_exits") },
+	"codex/lifecycle/relaunch":           func(t *testing.T) { coverage.Covers(t, "generated", "codex/lifecycle/relaunch") },
+	"codex/lifecycle/session_removed":    func(t *testing.T) { coverage.Covers(t, "generated", "codex/lifecycle/session_removed") },
+	"codex/lifecycle/turn_end":           func(t *testing.T) { coverage.Covers(t, "generated", "codex/lifecycle/turn_end") },
+	"codex/lifecycle/connection_drop":    func(t *testing.T) { coverage.Covers(t, "generated", "codex/lifecycle/connection_drop") },
+	"codex/lifecycle/interrupt":          func(t *testing.T) { coverage.Covers(t, "generated", "codex/lifecycle/interrupt") },
+	"codex/capability/send.queue":        func(t *testing.T) { coverage.Covers(t, "generated", "codex/capability/send.queue") },
+	"codex/capability/interrupt":         func(t *testing.T) { coverage.Covers(t, "generated", "codex/capability/interrupt") },
+	"codex/scale/concurrent_requests":    func(t *testing.T) { coverage.Covers(t, "generated", "codex/scale/concurrent_requests") },
+	"codex/capability/commands":          func(t *testing.T) { coverage.Covers(t, "generated", "codex/capability/commands") },
+	"codex/capability/files":             func(t *testing.T) { coverage.Covers(t, "generated", "codex/capability/files") },
 }

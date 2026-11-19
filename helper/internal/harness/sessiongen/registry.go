@@ -11,6 +11,7 @@ var registry = map[string]func() Profile{
 	"amp":     func() Profile { return &Amp{} },
 	"claude":  func() Profile { return &Claude{} },
 	"cline":   func() Profile { return &Cline{} },
+	"codex":   func() Profile { return &Codex{} },
 	"copilot": func() Profile { return &Copilot{} },
 	"crush":   func() Profile { return &Crush{} },
 	"cursor":  func() Profile { return &Cursor{} },

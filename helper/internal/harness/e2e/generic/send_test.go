@@ -128,6 +128,11 @@ func interruptKeys(t *testing.T, lv *live) {
 	}
 	st := r.Settle(3 * time.Second)
 	for _, it := range st.Items {
+		// A subagent's own turn (Codex draws one in the subagent's chat)
+		// is the subagent at work: it runs on, as the subagent does.
+		if it.Parent != "" && it.Turn != nil {
+			continue
+		}
 		if latest, _ := item(st, it.ID); latest.Seq == it.Seq && (it.Tool != nil && running(it.Tool.State) || it.Turn != nil && running(it.Turn.State)) {
 			t.Errorf("%s is still running after the interrupt", it.ID)
 		}

@@ -65,11 +65,17 @@ func act(t *testing.T, r *enginetest.Rig, name, value string) effect {
 	if api := r.API(); api != nil {
 		calls = len(api.Posts())
 	}
+	if c := r.Codex(); c != nil {
+		calls = len(c.Calls())
+	}
 	res, err := r.Act(name, "", map[string]any{"id": value, "value": value, "focus": "the parser"})
 	e := effect{result: res, typed: r.Term.Submitted()[typed:], keys: r.Term.KeysSent()[keys:],
 		relaunch: r.Relaunches()[rel:], cli: r.CLICalls()[min(cli, len(r.CLICalls())):]}
 	if api := r.API(); api != nil {
 		e.api = api.Posts()[calls:]
+	}
+	if c := r.Codex(); c != nil {
+		e.api = codexActions(c.Calls()[calls:])
 	}
 	if err != nil {
 		e.errorText = err.Error()

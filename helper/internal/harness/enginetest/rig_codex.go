@@ -56,8 +56,9 @@ func (r *Rig) setupCodex() {
 	r.T.Cleanup(func() { _ = os.Remove(link) })
 	r.TogoHome = link
 	s := newCodexServer(r.Opt.Home, r.Opt.Cwd)
-	// An interrupt reaches the agent as an API agent's does.
-	s.OnInterrupt = func(string, string) { r.Term.interrupted("rpc") }
+	// An interrupt reaches the agent as an API agent's does: the turn
+	// ends, and the approval it waited on leaves the terminal with it.
+	s.OnInterrupt = func(string, string) { r.Term.CloseDialog(); r.Term.interrupted("rpc") }
 	r.codex = s
 	r.T.Cleanup(func() {
 		s.Stop()

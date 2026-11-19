@@ -340,9 +340,12 @@ func (lv *live) makeLive() {
 
 // interruptSent reports whether an interrupt reached the agent: the
 // adapter's interrupt key in the pane or, for an agent driven through its
-// own API (OpenCode 1.x, Kilo), the API's interrupt call. It returns what
+// own API (OpenCode 1.x, Kilo) or app-server (Codex), its interrupt call. It returns what
 // was sent, for the failure message.
 func interruptSent(r *enginetest.Rig) ([]string, bool) {
+	if c := r.Codex(); c != nil {
+		return codexInterrupted(c)
+	}
 	if api := r.API(); api != nil {
 		var paths []string
 		for _, c := range api.Posts() {
