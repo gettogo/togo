@@ -139,4 +139,3 @@ func TestCursorConcurrentRequests(t *testing.T) {
 	coverage.Covers(t, "generated", "cursor/scale/concurrent_requests")
 	concurrent(t, cursorAgent)
 }
-

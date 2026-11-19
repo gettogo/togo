@@ -43,11 +43,13 @@ func deliver(t testing.TB, r *enginetest.Rig, agent string, calls ...sessiongen.
 		}
 		// A call that follows lines the agent wrote to its log is read
 		// with the log as it was then: wait until the engine has read it
-		// before the next lines are written.
+		// before the next lines are written. A call that draws nothing
+		// (a stop after a restart) runs out the wait; a loaded machine
+		// needs it long.
 		before := r.Cursor()
 		r.DeliverAt(f.Hook, f.Payload, c.At)
 		if len(c.Writes) > 0 {
-			r.WaitCursor(before, 400*time.Millisecond)
+			r.WaitCursor(before, 3*time.Second)
 		}
 	}
 }
