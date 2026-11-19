@@ -71,3 +71,76 @@ func TestSubagentTurnBeforeItsSpawnKeepsTheConversation(t *testing.T) {
 		}
 	}
 }
+
+// chat stands in for the engine: when the mapper names another
+// conversation, the chat starts over with a fresh mapper, which is handed
+// what the old one carries and maps the announcing record again.
+type chat struct {
+	m     *AppServer
+	conv  string
+	overs int
+}
+
+func (c *chat) feed(r harness.Record) {
+	c.m.Map(r)
+	got := c.m.State()[harness.StateConversation]
+	if got == "" || got == c.conv {
+		return
+	}
+	if c.conv == "" {
+		c.conv = got
+		return
+	}
+	fresh := NewAppServer(c.m.env)
+	if carrier, ok := any(c.m).(harness.Carrier); ok {
+		carrier.Carry(fresh)
+	}
+	c.m, c.overs = fresh, c.overs+1
+	c.m.Map(r)
+	c.conv = c.m.State()[harness.StateConversation]
+}
+
+// Found by the end-to-end suite: /new at the desk, then /resume at the
+// desk of the thread the helper had joined before /new. The feed joins
+// each thread once per connection, so the earlier thread is not described
+// again; its turn still moves the chat back to it, and the chat starts
+// over on it. A subagent's turn after the start-over still moves nothing.
+func TestDeskResumeOfAnEarlierThreadMovesTheChat(t *testing.T) {
+	recs := records(t, "appserver-turn.jsonl")
+	const main = "019a0000-0000-7000-8000-000000000001"
+	const child = "019a0000-0000-7000-8000-000000000002"
+	const other = "019a0000-0000-7000-8000-0000000000ff"
+	c := &chat{m: NewAppServer(harness.Env{SessionID: "s_conv_resume"})}
+	for _, r := range recs {
+		c.feed(r)
+	}
+	if c.conv != main || c.overs != 0 {
+		t.Fatalf("after the recorded session: conversation %q, %d start-overs", c.conv, c.overs)
+	}
+	at := time.Unix(1794009000, 0)
+	turn := func(thread, id string) harness.Record {
+		return harness.Record{At: at, Data: json.RawMessage(`{"method": "turn/started", "params": {"threadId": "` + thread +
+			`", "turn": {"id": "` + id + `", "items": [], "status": "inProgress", "startedAt": 1794009000}}}`)}
+	}
+	// /new: the server lists the new top-level thread, then its turn starts.
+	listed := strings.Replace(strings.Replace(string(recs[0].Data), main, other, 1), `"status": {"type": "idle"}`, `"status": {"type": "active"}`, 1)
+	c.feed(harness.Record{At: at, Data: json.RawMessage(listed)})
+	c.feed(turn(other, "019a0000-0000-7000-8000-0000000000f1"))
+	if c.conv != other || c.overs != 1 {
+		t.Fatalf("after /new: conversation %q, %d start-overs", c.conv, c.overs)
+	}
+	// /resume of the first thread: no resume result, only its next turn.
+	c.feed(turn(main, "019a0000-0000-7000-8000-0000000000f2"))
+	if c.conv != main || c.overs != 2 {
+		t.Fatalf("after /resume of the earlier thread: conversation %q, %d start-overs, want %q after 2", c.conv, c.overs, main)
+	}
+	if got := c.m.State()["harness_session"]; got != main {
+		t.Fatalf("helper calls would name %q, want %q", got, main)
+	}
+	// The subagent of the first thread was described to the mapper left
+	// behind, not to this one: its turn is not taken as the main thread's.
+	c.feed(turn(child, "019a0000-0000-7000-8000-0000000000f3"))
+	if c.conv != main || c.overs != 2 {
+		t.Fatalf("a subagent's turn moved the chat: conversation %q, %d start-overs", c.conv, c.overs)
+	}
+}

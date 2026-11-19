@@ -134,8 +134,9 @@ func (c *convCarry) take(id string) string {
 }
 
 // startOverLocked empties the chat for the conversation the agent moved to
-// and returns a fresh mapper in place of the one that reported the move;
-// the caller maps the announcing record again with it. With no mapper
+// and returns a fresh mapper in place of the one that reported the move,
+// given what the old one carries (harness.Carrier); the caller maps the
+// announcing record again with it. With no mapper
 // named, the mappers stay (followedLocked) and it returns nil. Feeds keep running,
 // so no record is missed, and open chats are told to reset and read the
 // new epoch. Mappers of other feeds (settings, the status line) describe
@@ -163,6 +164,9 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 	var fresh harness.Mapper
 	if mapper != "" {
 		fresh = s.e.mapperFor(mapper, s.env)
+		if c, ok := s.mappers[mapper].(harness.Carrier); ok {
+			c.Carry(fresh)
+		}
 		s.mappers[mapper] = fresh
 	}
 	s.conv = ""

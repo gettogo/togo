@@ -18,9 +18,8 @@ func (s *sess) restore(ctx context.Context, mapper string, rec harness.Record) {
 	s.wantHistoryLocked(mapper, rec.Source)
 }
 
-//
-// It returns where in the snapshot the conversation the chat now shows
-// begins: 0, or the record at which the snapshot moved to another one.
+// restoreLocked replays a snapshot into the mapper. It returns where in the
+// snapshot the conversation the chat now shows begins: 0, or the record at which the snapshot moved to another one.
 func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Record) int {
 	from := 0
 	m := s.mappers[mapper]
