@@ -62,7 +62,7 @@ func TestRepliesDoNotWaitForWhatCannotArrive(t *testing.T) {
 	defer func() { replyWaitTool, replyWaitStop = oldTool, oldPoll }()
 	reads := 0
 	m := New(harness.Env{SessionID: "s-wait"}, Options{Name: "copilot.hooks",
-		Replies: func(_ harness.Env, _ string, off int64) ([]Reply, int64) {
+		Replies: func(_ harness.Env, _ string, off, _ int64) ([]Reply, int64) {
 			if off < 0 {
 				return nil, 5
 			}
@@ -96,7 +96,7 @@ func TestRepliesDoNotWaitForWhatCannotArrive(t *testing.T) {
 // the log's earlier messages are not this turn's.
 func TestRepliesFromTheEndWhenTheSessionIsNew(t *testing.T) {
 	m := New(harness.Env{SessionID: "s-restart"}, Options{Name: "copilot.hooks",
-		Replies: func(_ harness.Env, _ string, off int64) ([]Reply, int64) {
+		Replies: func(_ harness.Env, _ string, off, _ int64) ([]Reply, int64) {
 			if off < 0 {
 				return nil, 900
 			}

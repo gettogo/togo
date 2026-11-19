@@ -32,8 +32,15 @@ func eventsPath(env harness.Env, session string) string {
 }
 
 // replies reads the agent messages written to session's log after
-// offset. It suits hookstyle.Options.Replies.
+// offset.
 func replies(env harness.Env, session string, offset int64) ([]hookstyle.Reply, int64) {
+	return repliesUpTo(env, session, offset, -1)
+}
+
+// repliesUpTo is replies that treats the log as ending at limit when limit
+// is zero or more: a replayed hook reads only what the log held when the
+// hook first arrived. It suits hookstyle.Options.Replies.
+func repliesUpTo(env harness.Env, session string, offset, limit int64) ([]hookstyle.Reply, int64) {
 	if !sessionID.MatchString(session) {
 		return nil, 0
 	}
@@ -46,16 +53,20 @@ func replies(env harness.Env, session string, offset int64) ([]hookstyle.Reply, 
 	if err != nil {
 		return nil, max(offset, 0)
 	}
-	if offset < 0 || offset > st.Size() {
+	end := st.Size()
+	if limit >= 0 && limit < end {
+		end = limit
+	}
+	if offset < 0 || offset > end {
 		// From the end, or the log was replaced: only what comes next.
-		return nil, st.Size()
+		return nil, end
 	}
 	if _, err := f.Seek(offset, io.SeekStart); err != nil {
 		return nil, offset
 	}
 	var out []hookstyle.Reply
 	start := offset
-	r := bufio.NewReader(io.LimitReader(f, maxRead))
+	r := bufio.NewReader(io.LimitReader(f, min(maxRead, end-offset)))
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
