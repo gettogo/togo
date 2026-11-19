@@ -458,27 +458,3 @@ func (s *session) turnItem(id string) harness.Item {
 	return harness.Item{ID: id, TurnID: id, Kind: harness.KindTurn, At: t.started,
 		Turn: &harness.TurnBody{State: t.state, Started: t.started, Ended: t.ended, Steps: len(t.steps)}}
 }
-
-// text reads content given as a string or as a list of {type, text} parts.
-func text(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var str string
-	if json.Unmarshal(raw, &str) == nil {
-		return str
-	}
-	var parts []struct {
-		Text string `json:"text"`
-	}
-	if json.Unmarshal(raw, &parts) != nil {
-		return ""
-	}
-	var out []string
-	for _, p := range parts {
-		if p.Text != "" {
-			out = append(out, p.Text)
-		}
-	}
-	return strings.Join(out, "\n")
-}
