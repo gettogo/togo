@@ -12,14 +12,18 @@ import (
 )
 
 // fakeProcs is a fixed process tree; Cline needs no open-file lookup.
-type fakeProcs struct{ tree []int }
+// others says whether another Cline runs in the folder.
+type fakeProcs struct {
+	tree   []int
+	others bool
+}
 
 func (f fakeProcs) Tree(context.Context) []int { return f.tree }
 func (fakeProcs) Holders(context.Context, []string) (map[string][]int, error) {
 	return nil, nil
 }
 
-func (fakeProcs) Others(context.Context, []string, string) (bool, error) { return false, nil }
+func (f fakeProcs) Others(context.Context, []string, string) (bool, error) { return f.others, nil }
 
 var _ harness.Procs = fakeProcs{}
 
@@ -61,18 +65,41 @@ func TestMessagesFollowsOnlyItsOwnProcess(t *testing.T) {
 	}
 }
 
-// Once a session is followed, a newer session with no process evidence
-// does not take over.
+// Once a session is followed, a newer session with no pid does not take
+// over while another Cline runs in the folder: it may be that one's.
 func TestMessagesKeepsSessionWithoutEvidence(t *testing.T) {
 	h, doc := home(t)
 	other := addSession(t, h, "1794200000002_nopid", 0, doc)
 	e := env(h, "2026-11-08T03:37:52Z")
-	e.Procs = fakeProcs{tree: []int{100}}
+	e.Procs = fakeProcs{tree: []int{100}, others: true}
 	m := newMessages(e)
 	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
 		t.Fatal("first session not followed")
 	}
 	if items, _ := m.Map(harness.Record{Data: other}); len(items) != 0 || m.State()["harness_session"] != fixtureID {
 		t.Fatalf("switched without evidence: %v", m.State())
+	}
+}
+
+// The recorded manifests carry no pid. A /new writes a newer session of
+// the folder: with no other Cline there it is this pane's, and the chat
+// moves to it; a resume of the first (its document rewritten later) moves
+// it back.
+func TestMessagesFollowsANewSessionWithoutPidWhenAlone(t *testing.T) {
+	h, doc := home(t)
+	other := addSession(t, h, "1794200000003_nopid", 0, doc)
+	e := env(h, "2026-11-08T03:37:52Z")
+	e.Agent = "cline"
+	e.Procs = fakeProcs{tree: []int{100}}
+	m := newMessages(e)
+	if items, _ := m.Map(harness.Record{Data: doc}); len(items) == 0 {
+		t.Fatal("first session not followed")
+	}
+	if items, _ := m.Map(harness.Record{Data: other}); len(items) == 0 || m.State()["harness_session"] != "1794200000003_nopid" {
+		t.Fatalf("the new session is not followed: %v", m.State())
+	}
+	resumed := strings.Replace(string(doc), "2026-11-08T03:38:03.002Z", "2026-11-08T05:02:00.000Z", 1)
+	if items, _ := m.Map(harness.Record{Data: []byte(resumed)}); len(items) == 0 || m.State()["harness_session"] != fixtureID {
+		t.Fatalf("the resume is not followed: %v", m.State())
 	}
 }
