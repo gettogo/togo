@@ -63,6 +63,7 @@ type messages struct {
 	solo       source.Solo
 	seen       map[string]time.Time // when each session the chat may move to was first seen
 	pend       string               // the session a move waits on a lookup for
+	pendDoc    document             // its last document
 	wake       func()
 }
 
@@ -83,13 +84,6 @@ func (m *messages) Name() string { return MapperMessages }
 func (m *messages) State() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.pend != "" && m.mayMove(m.pend) {
-		// The lookup the last document waited for ended: the chat moves,
-		// and the messages feed reads the session's document from its
-		// path.
-		m.moveTo(m.pend)
-		m.updated = ""
-	}
 	out := make(map[string]string, len(m.state))
 	for k, v := range m.state {
 		out[k] = v
@@ -202,6 +196,9 @@ func (m *messages) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			return nil, nil
 		case source.Unknown:
 			if m.session != "" && !m.mayMove(d.SessionID) {
+				if m.pend == d.SessionID {
+					m.pendDoc = d // mapped when the lookup ends (Woken)
+				}
 				return nil, nil
 			}
 		}
@@ -241,7 +238,7 @@ func (m *messages) moveTo(id string) {
 		harness.Moved(m.state)
 	}
 	m.lock(id)
-	m.pend = ""
+	m.pend, m.pendDoc = "", document{}
 	m.lastMsgs, m.lastTurn, m.lastOpen = nil, "", false
 	m.sent, m.idleAt = map[string]string{}, map[string]time.Time{}
 }
@@ -252,6 +249,20 @@ func (m *messages) Wake(f func()) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.wake = f
+}
+
+// Woken moves the chat to the session the last document waited on, when
+// the lookup that ended allows it, and maps that document.
+func (m *messages) Woken() ([]harness.Item, []harness.Op) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pend == "" || m.pendDoc.SessionID != m.pend || !m.mayMove(m.pend) {
+		return nil, nil
+	}
+	d := m.pendDoc
+	m.moveTo(d.SessionID)
+	m.updated, m.lastMsgs = d.UpdatedAt, d.Messages
+	return m.changed(m.render(d.Messages)), nil
 }
 
 // Relaunched follows the session a resume relaunch (`--id <id>`) opens:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
@@ -31,6 +32,9 @@ func (m *Mapper) Wake(f func()) {
 	defer m.mu.Unlock()
 	m.guess.wake = f
 }
+
+// Woken has nothing to publish: State applies the path found.
+func (m *Mapper) Woken() ([]harness.Item, []harness.Op) { return nil, nil }
 
 // guessLocked applies the last answer and, at most every guessEvery,
 // starts another look. The caller holds m.mu.
