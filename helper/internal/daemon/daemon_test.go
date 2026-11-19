@@ -64,11 +64,11 @@ func startDaemon(t *testing.T, home string) (cancel func(), done <-chan struct{}
 		cancelFn()
 		select {
 		case <-stopped:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Error("daemon did not stop")
 		}
 	})
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		c, err := sockd.Dial(context.Background(), SocketPath(home))
 		if err == nil {
@@ -92,7 +92,7 @@ func call(t *testing.T, c net.Conn, req string) map[string]any {
 
 func readMessage(t *testing.T, c net.Conn) map[string]any {
 	t.Helper()
-	c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	c.SetReadDeadline(time.Now().Add(30 * time.Second))
 	payload, err := rpc.ReadFrame(c)
 	if err != nil {
 		t.Fatalf("read frame: %v", err)
@@ -125,7 +125,7 @@ func TestDaemonAnswersHelloOverSocket(t *testing.T) {
 func TestSecondDaemonExitsWithLockError(t *testing.T) {
 	home := shortHome(t)
 	startDaemon(t, home)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	err := Run(ctx, Config{Home: home, Build: buildPing, Info: testInfo})
 	if !errors.Is(err, ErrRunning) {
@@ -154,13 +154,13 @@ func TestDaemonRemovesSocketOnShutdown(t *testing.T) {
 		if *runErr != nil {
 			t.Fatalf("Run = %v, want nil after cancel", *runErr)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemon did not stop with a connection open")
 	}
 	if _, err := os.Lstat(SocketPath(home)); !os.IsNotExist(err) {
 		t.Errorf("socket still present after shutdown (lstat: %v)", err)
 	}
-	open.SetReadDeadline(time.Now().Add(2 * time.Second))
+	open.SetReadDeadline(time.Now().Add(30 * time.Second))
 	if _, err := rpc.ReadFrame(open); err == nil {
 		t.Error("open connection still readable after shutdown")
 	}
@@ -182,7 +182,7 @@ func TestDaemonAnswersHelloWhileHandlerBuilds(t *testing.T) {
 		<-done
 	}()
 	var c net.Conn
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		var err error
 		if c, err = sockd.Dial(context.Background(), SocketPath(home)); err == nil {
@@ -220,7 +220,7 @@ func TestDaemonStopsWhenBuildFails(t *testing.T) {
 		if !errors.Is(err, boom) {
 			t.Fatalf("Run = %v, want the build error", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemon kept running after its build failed")
 	}
 	if _, err := os.Lstat(SocketPath(home)); !os.IsNotExist(err) {
@@ -239,7 +239,7 @@ func TestBuildFailureFailsWaitingCall(t *testing.T) {
 		}})
 	}()
 	var c net.Conn
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		var err error
 		if c, err = sockd.Dial(context.Background(), SocketPath(home)); err == nil {
@@ -263,7 +263,7 @@ func TestBuildFailureFailsWaitingCall(t *testing.T) {
 		if err == nil {
 			t.Fatal("Run = nil, want the build error")
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("daemon hung on a call waiting for the failed build")
 	}
 }

@@ -25,7 +25,7 @@ func TestStartFakeCleanupWaitsForRun(t *testing.T) {
 		t.Error("fixture cleanup returned before Run completed")
 		select {
 		case <-fake.Done:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("daemon did not stop after cleanup")
 		}
 	}

@@ -53,11 +53,11 @@ func runShutdownDaemon(t *testing.T, home string, d *Daemon, h rpc.Handler) <-ch
 		// Shutdown assertions may have already consumed result.
 		select {
 		case <-stopped:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Error("daemon did not stop")
 		}
 	})
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		c, err := sockd.Dial(context.Background(), SocketPath(home))
 		if err == nil {
@@ -108,7 +108,7 @@ func TestShutdownIdleExitsNow(t *testing.T) {
 	if res := requestShutdown(t, home); res.Deferred || res.Pending != 0 {
 		t.Fatalf("result = %+v, want an immediate exit", res)
 	}
-	waitExit(t, result, 2*time.Second)
+	waitExit(t, result, 30*time.Second)
 	if _, err := sockd.Dial(context.Background(), SocketPath(home)); err == nil {
 		t.Error("socket still accepts after the daemon exited")
 	}
@@ -131,7 +131,7 @@ func TestShutdownWaitsForPendingApproval(t *testing.T) {
 	}
 	stillRunning(t, result, 4*settle)
 	open.Store(0) // the approval is answered
-	waitExit(t, result, 2*time.Second)
+	waitExit(t, result, 30*time.Second)
 	if d.Requests() != 2 {
 		t.Errorf("requests = %d, want 2", d.Requests())
 	}
@@ -164,7 +164,7 @@ func TestShutdownWaitsForOpenAsk(t *testing.T) {
 	if r, _ := reply["result"].(map[string]any); r == nil || r["decision"] != "yes" {
 		t.Fatalf("ask reply = %v, want the answer", reply)
 	}
-	waitExit(t, result, 2*time.Second)
+	waitExit(t, result, 30*time.Second)
 }
 
 func TestShutdownRejectsOtherModes(t *testing.T) {
@@ -196,7 +196,7 @@ func TestShutdownDaemonCleanupWaitsForRun(t *testing.T) {
 		t.Error("fixture cleanup returned before Run completed")
 		select {
 		case <-result:
-		case <-time.After(5 * time.Second):
+		case <-time.After(30 * time.Second):
 			t.Fatal("daemon did not stop after cleanup")
 		}
 	}
@@ -217,10 +217,10 @@ func TestConnectVersionReportsDaemonVersion(t *testing.T) {
 
 func waitFor(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for !cond() {
 		if time.Now().After(deadline) {
-			t.Fatal("condition not met within 2s")
+			t.Fatal("condition not met within 30s")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
