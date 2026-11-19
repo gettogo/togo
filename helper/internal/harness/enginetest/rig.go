@@ -7,6 +7,7 @@ package enginetest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -240,6 +241,12 @@ func (r *Rig) start() {
 	r.T.Cleanup(stop)
 	r.Sub = newSub()
 	res, err := r.Engine.Open(context.Background(), r.Sub, r.ID, 0, 1)
+	var fallback *harness.FallbackError
+	if err != nil && r.Opt.Version != "" && errors.As(err, &fallback) {
+		// A version the adapter does not serve: the session is its
+		// terminal, which the test checks.
+		return
+	}
 	if err != nil {
 		r.T.Fatalf("open: %v", err)
 	}

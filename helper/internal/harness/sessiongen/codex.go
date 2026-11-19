@@ -382,3 +382,7 @@ func (p *Codex) spawn(g *Gen, th, turn string, b *Batch) error {
 	}
 	return nil
 }
+
+// Resume is /resume at the desk, or a terminal started on a thread: the
+// next turns run on thread id.
+func (p *Codex) Resume(id string) { p.main = id }

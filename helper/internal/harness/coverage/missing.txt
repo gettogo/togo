@@ -21,14 +21,7 @@ cline/capability/ports
 cline/lifecycle/new_conversation
 cline/lifecycle/resume
 codex/capability/chat.anchors
-codex/capability/compact
-codex/capability/effort
-codex/capability/mode
-codex/capability/model
 codex/capability/ports
-codex/capability/resume
-codex/lifecycle/new_conversation
-codex/lifecycle/resume
 copilot/capability/changes
 copilot/capability/chat.anchors
 copilot/capability/ports

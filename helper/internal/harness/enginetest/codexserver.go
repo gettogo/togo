@@ -399,3 +399,11 @@ func (c *codexConn) close() {
 		_ = c.c.CloseNow()
 	})
 }
+
+// Join is the terminal client joining a thread on this server (/resume at
+// the desk): the thread is loaded.
+func (s *CodexServer) Join(thread string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fold.load(thread)
+}
