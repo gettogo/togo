@@ -34,22 +34,19 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		if name, args, ok := slashCommand(req.Text); ok && !s.ad.TypedCommand(name) {
 			// The harness API takes a / line as a command, not as prompt
 			// text the model would read (OpenCode's /init).
+			id := s.pendPhone(req.Text, nil)
 			err := e.runCommand(ctx, s, act, name, args)
 			// A line the API will not run is typed like any other: a
 			// command before the first prompt, one only the terminal
 			// has, or a prompt that merely starts with a slash word.
 			var refused *harness.FallbackError
+			s.mu.Lock()
 			if !errors.As(err, &refused) {
-				s.mu.Lock()
 				defer s.mu.Unlock()
-				if s.convGen != gen {
-					return harness.SendResult{}, errMoved
-				}
-				if err != nil {
-					return harness.SendResult{}, err
-				}
-				return s.userItemLocked(req.Text, nil, false), nil
+				return s.sentLocked(gen, id, req.Text, nil, err)
 			}
+			s.settlePhoneLocked(id, false)
+			s.mu.Unlock()
 		}
 	}
 	api, viaAPI := e.sendAction(s)
@@ -93,6 +90,10 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 		s.mu.Unlock()
 		return harness.SendResult{Item: stored}, nil
 	}
+	// Noted before it is sent: the agent's record of it may be read
+	// before sending returns (see phoneText).
+	id := e.newID()
+	s.pendPhoneLocked(id, req.Text, images)
 	s.mu.Unlock()
 	if viaAPI {
 		err = e.sendAPI(ctx, s, api, req.Text, req.Images)
@@ -101,15 +102,41 @@ func (e *Engine) Send(ctx context.Context, req harness.SendRequest) (harness.Sen
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.sentLocked(gen, id, req.Text, images, err)
+}
+
+// pendPhone notes a prompt about to be sent and returns its item id.
+func (s *sess) pendPhone(text string, images []harness.ImageRef) string {
+	id := s.e.newID()
+	s.mu.Lock()
+	s.pendPhoneLocked(id, text, images)
+	s.mu.Unlock()
+	return id
+}
+
+// sentLocked settles the pending prompt id once sending returned with err,
+// and publishes it as sent when it went.
+func (s *sess) sentLocked(gen uint64, id, text string, images []harness.ImageRef, err error) (harness.SendResult, error) {
 	if s.convGen != gen {
 		// The chat started over while the prompt travelled: it is not
-		// shown as sent in a conversation it may not be part of.
+		// shown as sent in a conversation it may not be part of. A note
+		// made after the start-over cleared the old ones goes too.
+		s.settlePhoneLocked(id, false)
 		return harness.SendResult{}, errMoved
+	}
+	if s.settlePhoneLocked(id, err == nil) {
+		// The agent recorded it while sending was still waiting: it is in
+		// the chat already, and it was sent.
+		if err != nil {
+			s.e.cfg.Logf("harness: %s: sending reported %v, but the agent recorded the prompt", s.ad.Adapter.Adapter, err)
+		}
+		stored, _ := s.e.log.Get(s.id, id)
+		return harness.SendResult{Item: stored}, nil
 	}
 	if err != nil {
 		return harness.SendResult{}, err
 	}
-	return s.userItemLocked(req.Text, images, false), nil
+	return s.publishSentLocked(id, text, images), nil
 }
 
 // sendAction is the adapter's API send action, when prompts go that way
@@ -255,24 +282,15 @@ func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []
 // insertGap is the pause between two pastes of one prompt.
 var insertGap = 150 * time.Millisecond
 
-// userItem publishes a sent prompt and remembers it, so the agent's own
-// record of it takes this item's place.
-func (e *Engine) userItem(s *sess, text string, images []harness.ImageRef, queuedNow bool) harness.SendResult {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.userItemLocked(text, images, queuedNow)
-}
-
-func (s *sess) userItemLocked(text string, images []harness.ImageRef, queuedNow bool) harness.SendResult {
-	e := s.e
-	it := s.newUserItemLocked(text, images, queuedNow)
-	s.notePhoneLocked(it.ID, text, images)
-	if !queuedNow {
-		s.awaitReply, s.awaitText = true, text
-		s.failedHold = false // a new prompt starts a new turn
-	}
+// publishSentLocked publishes a sent prompt as id. Its note stays, so the
+// agent's own record of it takes this item's place.
+func (s *sess) publishSentLocked(id, text string, images []harness.ImageRef) harness.SendResult {
+	it := s.newUserItemLocked(text, images, false)
+	it.ID = id
+	s.awaitReply, s.awaitText = true, text
+	s.failedHold = false // a new prompt starts a new turn
 	s.publishLocked([]harness.Item{it}, nil)
-	stored, _ := e.log.Get(s.id, it.ID)
+	stored, _ := s.e.log.Get(s.id, it.ID)
 	return harness.SendResult{Item: stored}
 }
 
