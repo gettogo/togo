@@ -64,6 +64,15 @@ func (m *db) Wake(f func()) {
 	m.wake = f
 }
 
+// Woken moves the chat if the lookup that ended allows it; the chat feed
+// then reads the new session's messages.
+func (m *db) Woken() ([]harness.Item, []harness.Op) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.choose()
+	return nil, nil
+}
+
 func (m *db) Name() string { return MapperDB }
 
 func (m *db) State() map[string]string {
