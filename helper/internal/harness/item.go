@@ -400,4 +400,16 @@ type Record struct {
 	// restores it atomically instead of publishing historical transitions.
 	// Nil means an ordinary live record; Data keeps its usual mapper shape.
 	Replay []json.RawMessage
+	// ReplayAt, when it holds one time per Replay record, is when each
+	// record was first received: a hook payload has no time of its own.
+	ReplayAt []time.Time
+	// ReplayMarks, when it holds one mark per Replay record, is where a
+	// ReplayMarker mapper stood before and after it first mapped each record.
+	ReplayMarks []ReplayMark
+}
+
+// ReplayMark is where a ReplayMarker mapper stood before and after it mapped a
+// record.
+type ReplayMark struct {
+	Pre, Post json.RawMessage
 }
