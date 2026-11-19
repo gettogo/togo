@@ -12,20 +12,12 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
-// TestKnownFault_SubagentFilesMatchedByArrival documents a fault: omp's
-// mapper gives a subagent file to the task call's first unclaimed task
-// (adapters/omp/session.go:256-258, pending[0]), in the order the files
-// are read, not by the task the file is for. omp writes the files of a
-// batch in the order its agents start, and the engine reads the files
-// found in one look in map order (source/file.go:295), so an
-// agent's row shows another agent's steps, and which one changes from
-// one restore to the next.
-//
-// Correct: each file goes to its own task (the file is named after it,
-// <session>/<task>.jsonl), so Matched finds nothing. This test passes
-// while the fault is present; when it fails, the fault is fixed: delete
-// the test and the rules it names from known in setup_test.go.
-func TestKnownFault_SubagentFilesMatchedByArrival(t *testing.T) {
+// TestSubagentFilesMatchedByName: omp writes the files of a batch in the
+// order its agents start, and the engine reads the files found in one
+// look in no fixed order, so the order files arrive in says nothing of
+// whose they are. Each file goes to the task it is named after
+// (<session>/<task>.jsonl), and every agent shows its own file's steps.
+func TestSubagentFilesMatchedByName(t *testing.T) {
 	e := newEnv(t, 10*time.Minute)
 	// Seed 4 writes the six files in an order other than the call's.
 	l, err := sessiongen.Write(e.home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 4, Start: e.start, Cwd: e.cwd,
@@ -45,13 +37,7 @@ func TestKnownFault_SubagentFilesMatchedByArrival(t *testing.T) {
 	r.SettleUntil(10*time.Second, enginetest.Has(l.Truth.Last))
 	back()
 	st := r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return stepOwners(st) == 6 })
-	vs := enginetest.Matched(st, enginetest.Facts{Truth: l.Truth})
-	if len(vs) == 0 {
-		t.Fatal("every agent shows its own file's steps: the fault is fixed")
-	}
-	for _, v := range vs {
-		t.Logf("still present: %s", v)
-	}
+	enginetest.Fail(t, "after the files", enginetest.Matched(st, enginetest.Facts{Truth: l.Truth}))
 }
 
 // TestKnownFault_ReportAfterExitMakesAJob documents a fault: when omp's
@@ -130,44 +116,44 @@ func holdFiles(t *testing.T, paths []string) func() {
 	}
 }
 
-// TestKnownFault_SubagentFileBeforeItsCall documents a fault: a subagent
-// file read before the main conversation's task call (the subagents feed
-// and the session feed run apart, and after a restart either can come
-// first) finds no task waiting. A fresh file becomes a row of its own
-// (adapters/omp/session.go:259-264), and the task call later adds the
-// task's row as well, which only omp's report ends; a file older than
-// five minutes is dropped for good (session.go:248-253), so its agent
-// shows no steps.
-//
-// Correct: one row per task, whichever feed is read first. This test
-// passes while the fault is present.
-func TestKnownFault_SubagentFileBeforeItsCall(t *testing.T) {
-	e := newEnv(t, time.Minute)
-	l, err := sessiongen.Write(e.home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 6, Start: e.start, Cwd: e.cwd,
-		Turns: []sessiongen.Turn{{Say: 20, Agents: &sessiongen.Batch{Size: 2, Steps: 1, Background: true}}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	main, err := os.ReadFile(l.Main())
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The conversation as it was before the task call: its first three
-	// records (title, header, model).
-	head := main[:nthLine(main, 3)]
-	if err := os.WriteFile(l.Main(), head, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	r := e.rig(t, "omp")
-	r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return countKind(st, harness.KindAgent) == 2 })
-	if err := os.WriteFile(l.Main(), main, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	st := r.SettleUntil(10*time.Second, enginetest.Has(l.Truth.Last))
-	if n := countKind(st, harness.KindAgent); n == 2 {
-		t.Fatal("two agent rows for two tasks: the fault is fixed")
-	} else {
-		t.Logf("still present: %d agent rows for 2 tasks", n)
+// TestSubagentFileBeforeItsCall: the subagents feed and the session feed
+// run apart, and after a restart either can come first. A subagent file
+// read before the main conversation's task call waits for the call, then
+// goes to its task: one row per task, each with its own file's steps, for
+// a file written a minute ago and for one written long before it is read.
+func TestSubagentFileBeforeItsCall(t *testing.T) {
+	for _, age := range []time.Duration{time.Minute, 10 * time.Minute} {
+		t.Run(age.String(), func(t *testing.T) {
+			e := newEnv(t, age)
+			l, err := sessiongen.Write(e.home, &sessiongen.OMP{TTY: "ttys042"}, sessiongen.Script{Seed: 6, Start: e.start, Cwd: e.cwd,
+				Turns: []sessiongen.Turn{{Say: 20, Agents: &sessiongen.Batch{Size: 2, Steps: 1, Background: true}}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			main, err := os.ReadFile(l.Main())
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The conversation as it was before the task call: its first
+			// three records (title, header, model).
+			if err := os.WriteFile(l.Main(), main[:nthLine(main, 3)], 0o644); err != nil {
+				t.Fatal(err)
+			}
+			r := e.rig(t, "omp")
+			if st := r.Settle(5 * time.Second); countKind(st, harness.KindAgent) != 0 {
+				t.Fatalf("%d agent rows before any task call", countKind(st, harness.KindAgent))
+			}
+			if err := os.WriteFile(l.Main(), main, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			st := r.SettleUntil(10*time.Second, func(st enginetest.State) bool {
+				return enginetest.Has(l.Truth.Last)(st) && stepOwners(st) == 2
+			})
+			if n := countKind(st, harness.KindAgent); n != 2 {
+				t.Fatalf("%d agent rows for 2 tasks", n)
+			}
+			enginetest.Fail(t, "after the call", enginetest.Matched(st, enginetest.Facts{Truth: l.Truth}))
+		})
 	}
 }
 

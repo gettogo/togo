@@ -84,16 +84,11 @@ func agentItems(st enginetest.State) map[string]harness.Item {
 
 // known are the rules a scenario may break today, each through a fault
 // that a TestKnownFault test documents:
-//   - agent-file-mismatch, restart-moved-agent-step, restart-new-agent-step
-//     and reread-count: TestKnownFault_SubagentFilesMatchedByArrival.
 //   - agent-shown-as-job, and a restart losing such a row:
 //     TestKnownFault_ReportAfterExitMakesAJob.
-//   - agent-row-without-task, and a restart adding or losing such a row:
-//     TestKnownFault_SubagentFileBeforeItsCall.
 //   - agent-turn-moved, a restart changing only an agent row's turn
 //     from or to none: TestKnownFault_ClaudeAgentReadBeforeItsCall.
-var known = []string{"agent-file-mismatch", "restart-moved-agent-step", "restart-new-agent-step", "reread-count",
-	"agent-shown-as-job", "agent-turn-moved", "agent-row-without-task"}
+var known = []string{"agent-shown-as-job", "agent-turn-moved"}
 
 func check(t *testing.T, where string, st enginetest.State, l *sessiongen.Layout) {
 	t.Helper()
