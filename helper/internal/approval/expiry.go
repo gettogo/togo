@@ -41,7 +41,7 @@ func (s *Store) extend(requestID string) bool {
 		s.mu.Unlock()
 		return false
 	}
-	sessionID, fingerprint := *e.a.SessionID, e.fingerprint
+	sessionID, fingerprint, hook, agent := *e.a.SessionID, e.fingerprint, e.hookSubject, e.a.Agent
 	s.mu.Unlock()
 
 	mu := s.lockFor(sessionID)
@@ -54,8 +54,9 @@ func (s *Store) extend(requestID string) bool {
 		return false
 	}
 	// An approval a hook opened has no fingerprint until its prompt is
-	// read: any prompt showing may be its own.
-	if p, shown := detect.Detect(screen); !shown || (fingerprint != "" && fingerprint != p.Fingerprint) {
+	// read: a prompt showing may be its own if it asks about the same thing.
+	if p, shown := detect.Detect(screen); !shown || (fingerprint != "" && fingerprint != p.Fingerprint) ||
+		(fingerprint == "" && !hookOwns(hook, agent, p.Subject)) {
 		return false
 	}
 	s.mu.Lock()
