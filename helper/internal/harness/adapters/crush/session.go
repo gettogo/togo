@@ -8,6 +8,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/turns"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
 // db maps rows of the project's .crush/crush.db, from two feeds: top-level
@@ -29,6 +30,10 @@ type db struct {
 	// the followed session's messages were mapped.
 	pin   string
 	shown bool
+	// moved is set when the chat followed the agent to another session
+	// (see movedTo): kept, like one with content, until its messages come.
+	moved bool
+	solo  source.Solo
 }
 
 func newDB(env harness.Env) *db {
@@ -118,18 +123,25 @@ func (m *db) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 // database names no process, so a session another Crush creates in the
 // same project cannot be told from this one's: once the chat has content
 // it stays on its session, and only this Togo session's own relaunch
-// (--session, see Relaunched) moves it.
+// (--session, see Relaunched) moves it, or a session written after it
+// while no other Crush runs in the project (ctrl+n or a resume in Crush's
+// own UI, see movedTo).
 func (m *db) session(s sessionRow) {
 	m.sessions[s.ID] = s
 	best := m.pick()
+	moved := false
 	if m.pin != "" {
 		p, ok := m.sessions[m.pin]
 		if !ok {
 			return
 		}
 		best = p
-	} else if m.shown && m.state["harness_session"] != "" {
+	} else if (m.shown || m.moved) && m.state["harness_session"] != "" {
 		best = m.sessions[m.state["harness_session"]]
+		if mv := m.movedTo(); mv.ID != "" {
+			best = mv
+			moved = true
+		}
 	}
 	if best.ID == "" {
 		return
@@ -141,9 +153,32 @@ func (m *db) session(s sessionRow) {
 		m.state["harness_session"] = best.ID
 		m.shown = false
 	}
+	if moved {
+		m.moved = true
+	}
 	if m.pin != "" && best.ID == m.pin {
 		m.pin = ""
 	}
+}
+
+// movedTo is the session written last, when it was written after the
+// followed one and no other Crush runs in the project to have written it
+// (source.Solo): the agent moved to it. Otherwise none.
+func (m *db) movedTo() sessionRow {
+	cur := m.sessions[m.state["harness_session"]]
+	var top sessionRow
+	for _, c := range m.sessions {
+		if c.ID == cur.ID || c.Updated <= cur.Updated {
+			continue
+		}
+		if top.ID == "" || c.Updated > top.Updated || (c.Updated == top.Updated && c.ID > top.ID) {
+			top = c
+		}
+	}
+	if top.ID == "" || !m.solo.Alone(m.env) {
+		return sessionRow{}
+	}
+	return top
 }
 
 // pick chooses the session this Togo session's agent created. A row made
