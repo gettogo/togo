@@ -88,10 +88,11 @@ func (s *Session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 			return nil, nil
 		}
 		items, ops := s.endTurn(harness.StateInterrupted, at)
-		if prev := s.state["harness_session"]; prev != "" && prev != e.ID {
-			harness.Moved(s.state) // a /new or a resume: another conversation
-		}
 		s.state["harness_session"] = e.ID
+		// Another id is a /new or a resume: the engine starts the chat over
+		// on it with a fresh mapper. The same header read again (a replay
+		// after a helper restart) changes nothing.
+		s.state[harness.StateConversation] = e.ID
 		return items, ops
 	case "message":
 		return s.message(e.ID, e.Message, at)
