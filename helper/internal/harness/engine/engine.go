@@ -470,5 +470,10 @@ func itoa(n int64) string {
 // mapperFor builds a fresh mapper of the registered name for a session.
 func (e *Engine) mapperFor(name string, env harness.Env) harness.Mapper {
 	f, _ := harness.LookupMapper(name)
-	return f(env)
+	m := f(env)
+	if w, ok := m.(harness.Waker); ok {
+		id := env.SessionID
+		w.Wake(func() { go e.woken(id) })
+	}
+	return m
 }

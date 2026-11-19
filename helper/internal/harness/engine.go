@@ -154,6 +154,14 @@ type IdleCloser interface {
 	CloseIdle(at time.Time) []Item
 }
 
+// Waker is a mapper that learns something off a record: a lookup it runs
+// away from the session's lock. The engine gives it wake, which reads the
+// mapper's state again (feeds, working) as after a record; it never
+// blocks and may be called from any goroutine.
+type Waker interface {
+	Wake(wake func())
+}
+
 // Relauncher is a mapper that learns state from the flags an action
 // restarted the agent with, for a harness that records none of them: Pi
 // writes nothing for a --thinking level given on a resume. Its ops (a
