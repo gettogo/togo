@@ -98,8 +98,11 @@ func (e *Engine) typeNext(s *sess) bool {
 	s.queue = s.queue[1:]
 	s.markSentLocked(next.item.ID)
 	gen := s.convGen
-	s.mu.Unlock()
 	u := next.item.User
+	// Noted before it is typed: the agent's record of it may be read
+	// before typing returns (see phoneText).
+	s.pendPhoneLocked(next.item.ID, u.Text, u.Images)
+	s.mu.Unlock()
 	var err error
 	if viaAPI {
 		err = e.sendAPI(s.ctx, s, api, u.Text, harness.ImagePaths(u.Images))
@@ -113,6 +116,14 @@ func (e *Engine) typeNext(s *sess) bool {
 		// put back, shown as sent, or sent again; the new chat says so.
 		s.uncertainNoticeLocked(u.Text)
 		return false
+	}
+	if s.settlePhoneLocked(next.item.ID, err == nil) {
+		// The agent recorded it while typing was still waiting: its
+		// record took the queued item's place, and it was sent.
+		if err != nil {
+			e.cfg.Logf("harness: sending a queued prompt reported %v, but the agent recorded it", err)
+		}
+		return true
 	}
 	if err != nil {
 		e.cfg.Logf("harness: sending a queued prompt failed: %v", err)
@@ -131,7 +142,6 @@ func (e *Engine) typeNext(s *sess) bool {
 	body := *u
 	body.Queued = false
 	it.User = &body
-	s.notePhoneLocked(it.ID, u.Text, u.Images)
 	s.awaitReply, s.awaitText = true, u.Text
 	s.failedHold = false // a new prompt starts a new turn
 	s.publishLocked([]harness.Item{it}, nil)
