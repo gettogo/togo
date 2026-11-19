@@ -33,6 +33,7 @@ type Events struct {
 	closed    map[string]bool         // the last turns closed, so a late update of their prompt opens none
 	closedIDs []string
 	planFirst map[string]time.Time
+	kids      childSet // every session reported with a parent (children.go)
 }
 
 type session struct {
@@ -219,6 +220,7 @@ func (e *Events) sessionInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 		}
 		return nil, nil
 	}
+	e.kids.add(in.ID)
 	if !e.follows(in.ParentID) {
 		return nil, nil
 	}
@@ -291,7 +293,7 @@ func (e *Events) messageInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 		return nil, nil
 	}
 	in := p.Info
-	if in.Role == "user" && in.SessionID != e.main && e.parentOf(in.SessionID) == "" {
+	if in.Role == "user" && in.SessionID != e.main && e.parentOf(in.SessionID) == "" && !e.kids.has(in.SessionID) {
 		// A prompt in another top-level session: the TUI switched to it.
 		e.setMain(in.SessionID)
 	}
