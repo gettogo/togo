@@ -97,6 +97,9 @@ func (r *Rig) Spec() *spec.Adapter {
 	r.T.Helper()
 	paths, _ := filepath.Glob(filepath.Join(sourceDir(), "harness", "adapters", r.Opt.Agent, "*.yaml"))
 	sort.Strings(paths)
+	if r.Opt.Adapter != "" {
+		paths = []string{filepath.Join(sourceDir(), "harness", "adapters", r.Opt.Agent, r.Opt.Adapter+".yaml")}
+	}
 	if len(paths) == 0 {
 		r.T.Fatalf("no adapter file for %s", r.Opt.Agent)
 	}
@@ -112,7 +115,12 @@ func (r *Rig) Spec() *spec.Adapter {
 }
 
 // ActionNames lists the actions the adapter declares, sorted.
-func (r *Rig) ActionNames() []string { return ActionNames(r.Opt.Agent) }
+func (r *Rig) ActionNames() []string {
+	if r.Opt.Adapter != "" {
+		return ActionNames(r.Opt.Adapter)
+	}
+	return ActionNames(r.Opt.Agent)
+}
 
 // ActionNames lists the actions an agent's adapter file declares, sorted;
 // nil when it has none or no file.
@@ -121,6 +129,9 @@ func ActionNames(agent string) []string {
 	sort.Strings(paths)
 	if f, ok := adapterFiles[agent]; ok {
 		paths = []string{filepath.Join(sourceDir(), "harness", "adapters", agent, f)}
+	}
+	if v, ok := variants[agent]; ok {
+		paths = []string{filepath.Join(sourceDir(), "harness", "adapters", v.agent, agent+".yaml")}
 	}
 	if len(paths) == 0 {
 		return nil

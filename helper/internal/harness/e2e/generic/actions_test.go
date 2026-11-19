@@ -142,7 +142,9 @@ func checkEffect(t *testing.T, lv *live, name, value string, e effect) {
 			t.Errorf("%s typed %q, not a command", name, s)
 		}
 	}
-	if len(e.relaunch) > 0 && !slices.Contains(e.relaunch[0], value) && !strings.Contains(strings.Join(e.relaunch[0], " "), value) {
+	// show_session takes no value: it restarts the agent on the session
+	// the helper started (opencode2.yaml show_session).
+	if len(e.relaunch) > 0 && name != "show_session" && !slices.Contains(e.relaunch[0], value) && !strings.Contains(strings.Join(e.relaunch[0], " "), value) {
 		t.Errorf("%s restarted the agent with %q, without the chosen %q", name, e.relaunch[0], value)
 	}
 	if len(e.cli) > 0 && !strings.Contains(strings.Join(e.cli, "\n"), value) {

@@ -59,12 +59,14 @@ omp/capability/settings
 omp/capability/status
 omp/lifecycle/fork
 omp/lifecycle/relaunch
-opencode/capability/background
 opencode/capability/chat.anchors
 opencode/capability/mcp
 opencode/capability/ports
 opencode/capability/status.context
 opencode/lifecycle/helper_restart
+opencode2/capability/changes
+opencode2/capability/chat.anchors
+opencode2/capability/ports
 pi/capability/chat.anchors
 pi/lifecycle/fork
 vibe/capability/changes

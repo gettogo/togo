@@ -23,8 +23,11 @@ var registry = map[string]func() Profile{
 	// pane has this terminal (enginetest.TTY).
 	"omp":      func() Profile { return &OMP{TTY: "ttys042"} },
 	"opencode": func() Profile { return &OpenCode{} },
-	"pi":       func() Profile { return &Pi{} },
-	"vibe":     func() Profile { return &Vibe{} },
+	// OpenCode 2.x: the agent "opencode" at a 2.x version, which the
+	// engine serves with opencode2.yaml.
+	"opencode2": func() Profile { return &OpenCode2{} },
+	"pi":        func() Profile { return &Pi{} },
+	"vibe":      func() Profile { return &Vibe{} },
 }
 
 // Names lists the registered profiles, sorted.

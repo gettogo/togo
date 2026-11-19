@@ -31,6 +31,12 @@ var idleScreens = map[string]string{
 	"claude": "harness/engine/testdata/input/claude-suggested-prompt.ansi",
 }
 
+// keepLive is how many records of the live turn are written before the
+// rest is held back, where one is not enough to show the turn running:
+// OpenCode 2.x's prompt (session.inbox.enqueued) is followed by the
+// execution's start, which opens the turn (events2.go started).
+var keepLive = map[string]int{"opencode2": 2}
+
 // configs are an agent's real settings files from its adapter's
 // testdata (path under harness/), put where the agent keeps them (path
 // under home): actions that read them (omp's model roles) have what a
@@ -251,7 +257,14 @@ func (lv *live) holdTurn() {
 		return
 	}
 	tail := after[len(before):]
-	cut := bytes.IndexByte(tail, '\n') + 1
+	cut := 0
+	for i := 0; i < max(keepLive[lv.agent], 1); i++ {
+		j := bytes.IndexByte(tail[cut:], '\n')
+		if j < 0 {
+			break
+		}
+		cut += j + 1
+	}
 	if cut <= 0 || cut == len(tail) {
 		lv.t.Fatalf("%s: the live turn wrote one record", lv.agent)
 	}
@@ -340,7 +353,8 @@ func (lv *live) makeLive() {
 
 // interruptSent reports whether an interrupt reached the agent: the
 // adapter's interrupt key in the pane or, for an agent driven through its
-// own API (OpenCode 1.x, Kilo) or app-server (Codex), its interrupt call. It returns what
+// own API (OpenCode 1.x and Kilo: /abort; 2.x: /interrupt) or app-server
+// (Codex), its interrupt call. It returns what
 // was sent, for the failure message.
 func interruptSent(r *enginetest.Rig) ([]string, bool) {
 	if c := r.Codex(); c != nil {
@@ -350,7 +364,7 @@ func interruptSent(r *enginetest.Rig) ([]string, bool) {
 		var paths []string
 		for _, c := range api.Posts() {
 			paths = append(paths, c.Method+" "+c.Path)
-			if strings.HasSuffix(c.Path, "/abort") && c.Status/100 == 2 {
+			if (strings.HasSuffix(c.Path, "/abort") || strings.HasSuffix(c.Path, "/interrupt")) && c.Status/100 == 2 {
 				return paths, true
 			}
 		}
