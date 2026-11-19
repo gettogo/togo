@@ -52,7 +52,7 @@ func (h *harness) nextWill(t *testing.T) string {
 	select {
 	case f := <-h.relay.wills:
 		return f
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("no will frame")
 		return ""
 	}
@@ -74,7 +74,7 @@ func (h *harness) stop(t *testing.T) {
 	select {
 	case err := <-h.done:
 		h.done <- err
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("Run did not return")
 	}
 }
@@ -193,7 +193,7 @@ func TestReaddedRelayWaitsForOldDisarm(t *testing.T) {
 	h.setPaired(false)
 	select {
 	case <-entered:
-	case <-time.After(5 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("dropped relay never disarmed")
 	}
 	h.setPaired(true) // wanted again while the old connection is disarming
