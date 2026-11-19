@@ -25,7 +25,7 @@ import (
 //     then starts the terminal with `--server http://127.0.0.1:N`
 //     (endpoint.go:188-197). The port, password and the server's process
 //     identity are written to $TOGO_HOME/run/harness/<session>.json
-//     (engine/recovery.go:182-210). A restarted helper finds the same
+//     (engine/recovery.go:190-210). A restarted helper finds the same
 //     server there: the process must still lead its group and answer its
 //     health check (recovery.go:212-300), and it is adopted, not started
 //     again. A relaunch (resume, show_session) calls EndpointArgs again:

@@ -103,15 +103,9 @@ opencode2/capability/compact
 opencode2/capability/mcp
 opencode2/capability/mode
 opencode2/capability/model
-opencode2/capability/needs.approvals
-opencode2/capability/needs.questions
 opencode2/capability/ports
-opencode2/capability/resume
-opencode2/capability/send.api
 opencode2/capability/settings
 opencode2/capability/status
-opencode2/lifecycle/new_conversation
-opencode2/lifecycle/resume
 pi/capability/chat.anchors
 pi/lifecycle/fork
 vibe/capability/changes
