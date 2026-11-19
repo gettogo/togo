@@ -84,9 +84,9 @@ func Attribute(ctx context.Context, env harness.Env, paths []string) map[string]
 //     keeps it, unless a new file appears and no other process of the same
 //     agent runs in the folder outside the session's tree (a /new by an
 //     agent that does not keep its file open); then it moves there.
-func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
+func watchGlobExclusive(ctx context.Context, name, pattern, header string, env harness.Env, emit func(harness.Record)) error {
 	if !strings.ContainsAny(pattern, "*?[") {
-		return followNamed(ctx, name, pattern, env, emit)
+		return followNamed(ctx, name, pattern, header, env, emit)
 	}
 	started := time.Now()
 	created, err := time.Parse(time.RFC3339, env.Vars["created"])
@@ -173,7 +173,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 					dropped[p] = true
 				}
 				delete(dropped, m.path)
-				tails[m.path] = &tail{path: m.path, name: name, replay: true}
+				tails[m.path] = &tail{path: m.path, name: name, header: header, replay: true}
 				saveFollow(env, m.path)
 			}
 			switched := false
@@ -234,7 +234,7 @@ func watchGlobExclusive(ctx context.Context, name, pattern string, env harness.E
 						switched = true
 					case env.Procs == nil:
 						if c.pick && claim(pattern, id, m.path, true) {
-							tails[m.path] = &tail{path: m.path, name: name, replay: true}
+							tails[m.path] = &tail{path: m.path, name: name, header: header, replay: true}
 							saveFollow(env, m.path)
 						}
 					default:
@@ -380,13 +380,13 @@ func rank(path string, remembered bool, v map[string]Verdict) int {
 // agent itself says which file the session uses (omp's terminal record):
 // no guessing among the folder's files. A file not written yet is waited
 // for.
-func followNamed(ctx context.Context, name, pattern string, env harness.Env, emit func(harness.Record)) error {
+func followNamed(ctx context.Context, name, pattern, header string, env harness.Env, emit func(harness.Record)) error {
 	p, err := Confine(pattern, env)
 	if err != nil {
 		return err
 	}
 	saveFollow(env, p)
-	t := &tail{path: p, name: name, replay: true}
+	t := &tail{path: p, name: name, header: header, replay: true}
 	return pollLoop(ctx, func() error {
 		if err := t.poll(emit); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
