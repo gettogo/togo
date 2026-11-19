@@ -2,6 +2,7 @@ package source
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ func TestExclusiveUnheldResumeToDroppedFile(t *testing.T) {
 	time.Sleep(60 * time.Millisecond)
 	writeLine(t, second, `{"f":"b1"}`) // the /new
 	c.wait(t, 2)
-	time.Sleep(60 * time.Millisecond)
+	time.Sleep(2 * droppedGrace())
 	writeLine(t, first, `{"f":"a2"}`) // the resume
 	// The file is taken from its start again: a1 a2 after a1 b1.
 	got := c.wait(t, 4)
@@ -39,7 +40,7 @@ func TestExclusiveUnheldResumeToDroppedFile(t *testing.T) {
 	if loadFollow(env) != first {
 		t.Fatalf("remembered %q, want the resumed file", loadFollow(env))
 	}
-	time.Sleep(60 * time.Millisecond)
+	time.Sleep(2 * droppedGrace())
 	writeLine(t, second, `{"f":"b2"}`) // resumed back to the second
 	got = c.wait(t, 6)
 	if got[4] != `{"f":"b1"}` || got[5] != `{"f":"b2"}` {
@@ -76,5 +77,45 @@ func TestExclusiveUnheldDroppedFileWithForeignAgentStays(t *testing.T) {
 	defer c.mu.Unlock()
 	if len(c.recs) != 2 {
 		t.Fatalf("took back a file another agent may write: %v", c.recs)
+	}
+}
+
+// Right after a /new the agent may still write to the conversation it
+// left, and a sync tool may touch it: neither takes the chat back. A
+// late write within the grace, seen at any time, is absorbed; a touch
+// that adds no whole record is not a resume.
+func TestExclusiveLateWriteToTheLeftFileStays(t *testing.T) {
+	env, h := testEnv(t)
+	env.SessionID, env.Agent = "s_resume0003", "pi"
+	env.Vars["created"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)
+	env.Procs = &fakeProcs{tree: []int{100}}
+	first, second := filepath.Join(h, stamped(time.Now().Add(-55*time.Second), "first")), filepath.Join(h, "second.jsonl")
+	writeLine(t, first, `{"f":"a1"}`)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &collector{}
+	go func() { _ = File{kind: "jsonl"}.Watch(ctx, exclusiveSpec(), env, c.emit) }()
+	c.wait(t, 1)
+	time.Sleep(60 * time.Millisecond)
+	writeLine(t, second, `{"f":"b1"}`) // the /new
+	c.wait(t, 2)
+	writeLine(t, first, `{"f":"a-late"}`) // the agent's last write to the left file
+	time.Sleep(4 * droppedGrace())
+	touch(t, first, time.Now()) // a sync tool
+	time.Sleep(4 * globEvery)
+	f, err := os.OpenFile(first, os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`{"f":"half`) // a record not yet whole
+	f.Close()
+	time.Sleep(4 * globEvery)
+	writeLine(t, second, `{"f":"b2"}`)
+	got := c.wait(t, 3)
+	time.Sleep(100 * time.Millisecond)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.recs) != 3 || got[2] != `{"f":"b2"}` {
+		t.Fatalf("the left file took the chat back: %v", c.recs)
 	}
 }
