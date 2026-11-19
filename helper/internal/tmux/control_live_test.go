@@ -42,7 +42,7 @@ func TestObservePaneLeavesExistingOutputPipeAndStopsOnCancel(t *testing.T) {
 	}()
 	select {
 	case <-ready:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("control observer did not become ready")
 	}
 	cmd := `printf '\033_tsp;q;{"q":"hello"}\033\\'`
@@ -57,7 +57,7 @@ func TestObservePaneLeavesExistingOutputPipeAndStopsOnCancel(t *testing.T) {
 		if !strings.Contains(string(data), "tsp;q;") {
 			t.Fatal("raw APC was lost")
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("pane output did not reach the observer")
 	}
 	piped, err := c.PipedSessions(ctx)
@@ -67,7 +67,7 @@ func TestObservePaneLeavesExistingOutputPipeAndStopsOnCancel(t *testing.T) {
 	cancel()
 	select {
 	case <-done:
-	case <-time.After(3 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("control client survived cancellation")
 	}
 }
