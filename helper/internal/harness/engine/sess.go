@@ -124,6 +124,11 @@ type sess struct {
 	settingUpUntil time.Time
 	// labels is what the model picker calls each model id (model_label.go).
 	labels modelLabels
+	// hooks keeps a hook-only session's hook records for a restart;
+	// hookReplayed names the feeds whose records were replayed
+	// (hookreplay.go).
+	hooks        *hookStore
+	hookReplayed map[string]bool
 }
 
 type queued struct {
@@ -557,6 +562,9 @@ func (s *sess) syncFeedsLocked() {
 		ctx, cancel := context.WithCancel(s.ctx)
 		run = &feedRun{name: name, rendered: string(rendered), cancel: cancel}
 		s.feeds[name] = run
+		if f.Hook != nil {
+			s.replayHooksLocked(name, f.Mapper)
+		}
 		go s.runFeed(ctx, run, harness.SourceSpec{Name: name, Kind: kindOf(f.Kinds), Raw: rendered}, f.Mapper)
 	}
 }
@@ -671,12 +679,18 @@ func (s *sess) recordLocked(mapper string, rec harness.Record) {
 	if m == nil {
 		return
 	}
+	pre := replayMark(m)
 	items, ops := safeMap(m, rec, s.e.cfg.Logf)
 	if s.movedLocked() {
 		m = s.startOverLocked(mapper)
+		if h := s.hookStoreLocked(); h != nil {
+			h.remove(false) // the stored chat is the old conversation's
+		}
+		pre = replayMark(m)
 		items, ops = safeMap(m, rec, s.e.cfg.Logf)
 		s.movedLocked()
 	}
+	s.keepHookLocked(rec, pre, replayMark(m))
 	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {

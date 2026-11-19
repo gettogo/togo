@@ -397,6 +397,10 @@ type (
 	SessionRemovedEvent struct{}
 	ApprovalOpenEvent   struct {
 		Approval Approval `json:"approval"`
+		// Restored marks a request the helper opened again after a
+		// restart, already announced before it: the push sender does not
+		// ring for it again. In-process only, never sent.
+		Restored bool `json:"-"`
 	}
 	ApprovalClosedEvent struct {
 		RequestID  string `json:"requestId"`

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -28,8 +27,9 @@ type Options struct {
 	// Replies, when set, reads what the agent said that its hooks do not
 	// carry (Copilot's hooks hold no reply text): the messages written to
 	// the harness's own log for session after offset, and the offset to go
-	// on from. An offset below zero asks only for the log's end.
-	Replies func(env harness.Env, session string, offset int64) ([]Reply, int64)
+	// on from. An offset below zero asks only for the log's end. A limit
+	// of zero or more reads nothing past it and calls it the log's end.
+	Replies func(env harness.Env, session string, offset, limit int64) ([]Reply, int64)
 	// Ask, when set, reads the harness's own ask tool: the question a
 	// PreToolUse payload for it raises, ok false for any other tool. The
 	// call becomes a question item instead of a tool row (ask.go).
@@ -94,6 +94,8 @@ type Mapper struct {
 	lastError string
 	// closed are the ops end made that the Map call in progress returns.
 	closed []harness.Op
+	// upTo bounds a replayed record's reads (mark.go).
+	upTo *mark
 }
 
 // New returns a mapper for one session.
@@ -176,6 +178,7 @@ func (m *Mapper) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	ops, m.closed = append(ops, m.closed...), nil
+	m.settle()
 	return items, ops
 }
 
@@ -479,66 +482,4 @@ func (m *Mapper) errorNotice(at time.Time, turn string, p payload, fallback stri
 		body = harness.ErrorNotice(harness.ErrOther, fallback)
 	}
 	return harness.Item{ID: fmt.Sprintf("hook-notice-%d-%d", at.UnixMilli(), m.n), TurnID: turn, Kind: harness.KindNotice, At: at, Notice: body}
-}
-
-// skipReplies starts reading the harness's log at its end when a turn
-// begins in a session not read yet, so an earlier conversation's messages
-// stay out of this turn.
-func (m *Mapper) skipReplies() {
-	session := m.state["harness_session"]
-	if m.opts.Replies == nil || session == "" || session == m.replySession {
-		return
-	}
-	_, end := m.opts.Replies(m.env, session, -1)
-	m.replySession, m.replyFrom = session, end
-}
-
-// replies returns the agent's messages written since the last read, as
-// the turn's assistant items. It reads again, for up to wait, until one of
-// them is the message want looks for.
-func (m *Mapper) replies(at time.Time, draw bool, wait time.Duration, want func(Reply) bool) []harness.Item {
-	if m.opts.Replies == nil || m.turn == "" {
-		return nil
-	}
-	session := m.state["harness_session"]
-	if session == "" {
-		return nil
-	}
-	if session != m.replySession {
-		// A session no prompt began here (the helper restarted mid-turn):
-		// its log holds earlier conversation, so read from the end.
-		m.seenCalls = map[string]bool{}
-		_, end := m.opts.Replies(m.env, session, -1)
-		m.replySession, m.replyFrom = session, end
-	}
-	var got []Reply
-	deadline := time.Now().Add(wait)
-	for {
-		more, next := m.opts.Replies(m.env, session, m.replyFrom)
-		m.replyFrom = next
-		got = append(got, more...)
-		for _, r := range more {
-			for _, c := range r.Calls {
-				m.seenCalls[c] = true
-			}
-		}
-		if slices.ContainsFunc(got, want) || !time.Now().Before(deadline) {
-			break
-		}
-		time.Sleep(replyPoll)
-	}
-	if !draw {
-		return nil
-	}
-	var items []harness.Item
-	for _, r := range got {
-		t := strings.TrimSpace(r.Text)
-		if t == "" {
-			continue
-		}
-		m.n++
-		items = append(items, harness.Item{ID: m.turn + ":reply-" + strconv.Itoa(m.n), TurnID: m.turn, Kind: harness.KindAssistant, At: at,
-			Assistant: &harness.TextBody{Text: Clip(t)}})
-	}
-	return items
 }

@@ -41,6 +41,11 @@ type Config struct {
 	TTL time.Duration
 	// NewID returns request ids; nil means wire.NewRequestID.
 	NewID func() string
+	// Path, when set, is where the open approvals are kept across a
+	// helper restart (persist.go): $TOGO_HOME/run/approvals.json.
+	Path string
+	// Logf logs failures to keep them; nil logs nothing.
+	Logf func(format string, args ...any)
 }
 
 // lifecycle is where an approval stands. Closed entries are kept until expiry
@@ -59,6 +64,11 @@ type entry struct {
 	fingerprint string // empty for ask approvals and hooks with no prompt on screen
 	ask         chan string
 	labels      map[int]string // an ask's option labels as given, by option number
+	restored    bool           // opened again from Config.Path after a restart
+	// hookSubject is what the permission hook asked about; shown is what
+	// the prompt this approval answers asks about, as read off the screen
+	// (adopt.go).
+	hookSubject, shown *wire.Subject
 }
 
 // notAnswerable is Approval.Answerable for a request the phone cannot
@@ -78,6 +88,10 @@ type Store struct {
 	// what it saw (an answer typing keys, the watcher closing a prompt),
 	// so a capture, its check and the keys sent are one step per pane.
 	paneLocks map[string]*sync.Mutex
+	// pub is Config.Pub without the write that follows each change;
+	// saver writes the open approvals off the lock (persist.go).
+	pub   wire.Publisher
+	saver *saver
 }
 
 // New returns an empty Store.
@@ -89,7 +103,20 @@ func New(cfg Config) *Store {
 	if cfg.NewID == nil {
 		cfg.NewID = wire.NewRequestID
 	}
-	return &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
+	s := &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
+	s.pub = cfg.Pub
+	if cfg.Path != "" {
+		s.saver = newSaver(s.logf)
+		s.cfg.Pub = persistPub{inner: cfg.Pub, s: s}
+		s.restore()
+	}
+	return s
+}
+
+func (s *Store) logf(format string, args ...any) {
+	if s.cfg.Logf != nil {
+		s.cfg.Logf(format, args...)
+	}
 }
 
 // lockFor returns the mutex serialising work on one session's pane.
@@ -137,10 +164,15 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 	cur := s.pendingForSession(sessionID)
 	switch {
 	case cur != nil && cur.fingerprint == p.Fingerprint:
+		if cur.restored && cur.a.Snippet == "" && p.Snippet != "" {
+			// Read again from the screen: the snippet is not kept on disk.
+			cur.a.Snippet = p.Snippet
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
+		}
 		s.mu.Unlock()
 		return
-	case cur != nil && cur.fingerprint == "" && cur.a.Source == wire.SourceHook:
-		cur.fingerprint = p.Fingerprint
+	case cur != nil && cur.fingerprint == "" && cur.a.Source == wire.SourceHook && hookOwns(cur.hookSubject, cur.a.Agent, p.Subject):
+		cur.fingerprint, cur.shown = p.Fingerprint, p.Subject
 		cur.a.Options = p.Options
 		cur.a.Snippet = p.Snippet
 		cur.a.Answerable = nil
@@ -150,7 +182,7 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		if cur.a.Subject == nil {
 			withSubject(&cur.a, p.Subject)
 		}
-		s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+		s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
 		s.mu.Unlock()
 		return
 	case cur != nil:
@@ -171,7 +203,8 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 		a.Answerable = notAnswerable()
 	}
 	withSubject(&a, p.Subject)
-	s.open(a, p.Fingerprint, nil, nil)
+	opened := s.open(a, p.Fingerprint, nil, nil)
+	s.withEntry(opened.RequestID, func(e *entry) { e.shown = p.Subject })
 }
 
 // PromptGone records that the prompt on a session's screen went away, which
@@ -222,11 +255,14 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 		a.Detail = &d
 	}
 	var fp string
+	var shown *wire.Subject
 	subject := ev.Data.Subject
 	if sessionID != "" {
 		if screen, err := s.cfg.Tmux.CapturePane(ctx, target(sessionID)); err == nil {
-			if p, ok := detect.Detect(screen); ok {
-				fp, a.Options, a.Snippet = p.Fingerprint, p.Options, p.Snippet
+			// The prompt on screen is taken only when it asks about what
+			// the hook asked about; another one opens its own request.
+			if p, ok := detect.Detect(screen); ok && hookOwns(ev.Data.Subject, a.Agent, p.Subject) {
+				fp, a.Options, a.Snippet, shown = p.Fingerprint, p.Options, p.Snippet, p.Subject
 				if subject == nil {
 					subject = p.Subject
 				}
@@ -251,13 +287,20 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 	}
 	if cur := s.pendingForSession(sessionID); cur != nil {
 		if fp == "" && cur.fingerprint != "" {
+			if !hookOwns(ev.Data.Subject, a.Agent, cur.shown) {
+				// The request the watcher read is about something else:
+				// it keeps its own words, and this hook opens nothing that
+				// could take its prompt.
+				s.mu.Unlock()
+				return wire.Approval{}
+			}
 			// A hook that saw nothing on screen never replaces a request
 			// the watcher read: that one can be answered, this one not.
 			cur.a.Source, cur.a.Agent, cur.a.Title, cur.a.Detail = a.Source, a.Agent, a.Title, a.Detail
 			if a.Subject != nil {
 				cur.a.Subject = a.Subject
 			}
-			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
 			s.mu.Unlock()
 			return cur.a
 		}
@@ -266,14 +309,16 @@ func (s *Store) OpenFromHook(ctx context.Context, sessionID string, ev wire.Hook
 			// what it knows about the request.
 			cur.a.Source, cur.a.Agent, cur.a.Title, cur.a.Detail = a.Source, a.Agent, a.Title, a.Detail
 			cur.a.Subject = a.Subject
-			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, wire.ApprovalOpenEvent{Approval: cur.a})
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, cur.a.SessionID, openEvent(cur))
 			s.mu.Unlock()
 			return cur.a
 		}
 		s.closeLocked(cur, wire.ResolutionDesk)
 	}
 	s.mu.Unlock()
-	return s.open(a, fp, nil, nil)
+	opened := s.open(a, fp, nil, nil)
+	s.withEntry(opened.RequestID, func(e *entry) { e.hookSubject, e.shown = ev.Data.Subject, shown })
+	return opened
 }
 
 // OpenAsk opens an approval for `togo ask`. Nothing is typed when it is
