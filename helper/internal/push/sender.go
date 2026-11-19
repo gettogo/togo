@@ -244,6 +244,12 @@ func (s *Sender) message(ev wire.Event, sid string, info SessionInfo) (Message, 
 	switch pl := deref(ev.Payload).(type) {
 	case wire.ApprovalOpenEvent:
 		a := pl.Approval
+		if pl.Restored {
+			// Rang before the helper restarted: not again, now or on a
+			// later update of the same request.
+			s.requests.mark(a.RequestID, seenPushed)
+			return Message{}, false
+		}
 		if s.requests.blocks(a.RequestID) {
 			return Message{}, false
 		}

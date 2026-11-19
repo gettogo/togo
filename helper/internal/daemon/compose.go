@@ -311,6 +311,9 @@ func (c *Components) Run(ctx context.Context) {
 	wg.Go(func() { c.Surface.Run(ctx) })
 	wg.Go(func() { c.Hub.RunActivity(ctx) })
 	wg.Wait()
+	// The open approvals are written off the store's lock: finish the
+	// last write before the helper exits.
+	c.Approvals.Flush()
 }
 
 func (c *Components) runFollowups(ctx context.Context) {

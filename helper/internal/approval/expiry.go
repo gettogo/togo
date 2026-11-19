@@ -66,6 +66,6 @@ func (s *Store) extend(requestID string) bool {
 	exp := wire.Stamp(s.cfg.Clock()).Add(s.cfg.TTL)
 	e.a.ExpiresAt = &exp
 	time.AfterFunc(s.cfg.TTL, func() { s.expire(requestID) })
-	s.cfg.Pub.Publish(wire.EventApprovalOpen, e.a.SessionID, wire.ApprovalOpenEvent{Approval: e.a})
+	s.cfg.Pub.Publish(wire.EventApprovalOpen, e.a.SessionID, openEvent(e))
 	return true
 }

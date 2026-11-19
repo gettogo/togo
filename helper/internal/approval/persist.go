@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"syscall"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
@@ -17,6 +19,15 @@ import (
 // Config.Path ($TOGO_HOME/run/approvals.json, 0600, folder 0700) and opens
 // them again, under the same ids, when it is built. An answer from a
 // notification sent before the restart then types into the pane as before.
+//
+// Only an approval tied to a prompt already read off the screen is kept
+// (it has the prompt's fingerprint). That is what keeps a restored request
+// on its own prompt: it can never adopt another (only a hook approval with
+// no fingerprint does, in PromptSeen), the watcher reading any other
+// prompt closes it, recheck closes it when the screen shows another, and
+// an answer is typed only after a capture shows its fingerprint. A hook
+// approval whose prompt was not drawn yet had no buttons on the phone; the
+// prompt, once drawn, opens a request of its own.
 //
 // Kept per approval: its id, session, agent, bib, source, title, detail,
 // subject and options as the phone was sent them, whether it can be
@@ -53,10 +64,11 @@ type persistOf struct {
 
 // keepable reports whether e is kept across a restart.
 func keepable(e *entry) bool {
-	return e.state == statePending && e.a.Source != wire.SourceAsk && e.a.SessionID != nil && e.a.SignIn == nil
+	return e.state == statePending && e.a.Source != wire.SourceAsk && e.a.SessionID != nil && e.a.SignIn == nil && e.fingerprint != ""
 }
 
-// saveLocked writes the open approvals. Callers hold s.mu.
+// saveLocked hands the open approvals to the writer, which writes them off
+// the lock. Callers hold s.mu.
 func (s *Store) saveLocked() {
 	if s.cfg.Path == "" {
 		return
@@ -70,24 +82,26 @@ func (s *Store) saveLocked() {
 		a.Snippet = ""
 		out.Approvals = append(out.Approvals, persistOf{Approval: a, Fingerprint: e.fingerprint})
 	}
-	if len(out.Approvals) == 0 {
-		if err := os.Remove(s.cfg.Path); err != nil && !os.IsNotExist(err) {
-			s.logf("approval: the open requests could not be cleared for a restart: %v", err)
+	var b []byte
+	if len(out.Approvals) > 0 {
+		var err error
+		if b, err = json.Marshal(out); err != nil {
+			s.logf("approval: the open requests could not be kept for a restart: %v", err)
+			return
 		}
-		return
 	}
-	b, err := json.Marshal(out)
-	if err == nil {
-		err = writeFile(s.cfg.Path, b)
-	}
-	if err != nil {
-		s.logf("approval: the open requests could not be kept for a restart: %v", err)
-	}
+	s.saver.put(s.cfg.Path, b)
 }
 
-// writeFile replaces path with b, 0600 in a 0700 folder, by a synced
-// rename.
-func writeFile(path string, b []byte) error {
+// writeKept replaces path with b, 0600 in a 0700 folder, by a synced
+// rename; a nil b removes it.
+func writeKept(path string, b []byte) error {
+	if b == nil {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
@@ -121,7 +135,7 @@ func (s *Store) load() []persistOf {
 	if s.cfg.Path == "" {
 		return nil
 	}
-	f, err := os.Open(s.cfg.Path)
+	f, err := os.OpenFile(s.cfg.Path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil
 	}
@@ -137,7 +151,7 @@ func (s *Store) load() []persistOf {
 	for _, p := range in.Approvals {
 		a := p.Approval
 		if a.RequestID == "" || a.SessionID == nil || a.ExpiresAt == nil || !now.Before(*a.ExpiresAt) ||
-			a.Source == wire.SourceAsk || a.SignIn != nil || len(out) == persistMax {
+			a.Source == wire.SourceAsk || a.SignIn != nil || p.Fingerprint == "" || len(out) == persistMax {
 			continue
 		}
 		a.State = wire.StatePending
@@ -161,7 +175,9 @@ func (s *Store) restore() {
 		s.entries[e.a.RequestID] = e
 		id := e.a.RequestID
 		time.AfterFunc(e.a.ExpiresAt.Sub(now), func() { s.expire(id) })
-		s.cfg.Pub.Publish(wire.EventApprovalOpen, e.a.SessionID, wire.ApprovalOpenEvent{Approval: e.a})
+		// Announced to the hub (its list, and the engine's on the
+		// session's start) without a write each.
+		s.pub.Publish(wire.EventApprovalOpen, e.a.SessionID, openEvent(e))
 	}
 	s.saveLocked()
 	s.mu.Unlock()
@@ -170,9 +186,10 @@ func (s *Store) restore() {
 	}
 }
 
-// recheck closes a restored approval whose prompt left the screen while
-// the helper was down: the desk answered it. One that a hook opened before
-// its prompt was drawn stays while any prompt shows.
+// recheck closes a restored approval whose prompt left the screen, or was
+// replaced, while the helper was down: the desk answered it. When its
+// prompt still shows, the options are taken from the screen again, not
+// from the file.
 func (s *Store) recheck(requestID string) {
 	s.mu.Lock()
 	e, ok := s.entries[requestID]
@@ -192,9 +209,19 @@ func (s *Store) recheck(requestID string) {
 	switch p, shown := detect.Detect(screen); {
 	case err != nil:
 		resolution = wire.ResolutionGone
-	case !shown || (fingerprint != "" && fingerprint != p.Fingerprint):
+	case !shown || fingerprint == "" || fingerprint != p.Fingerprint:
 		resolution = wire.ResolutionDesk
 	default:
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if e, ok = s.entries[requestID]; ok && e.state == statePending && !reflect.DeepEqual(e.a.Options, p.Options) {
+			e.a.Options = p.Options
+			e.a.Answerable = nil
+			if p.ReadOnly {
+				e.a.Answerable = notAnswerable()
+			}
+			s.cfg.Pub.Publish(wire.EventApprovalOpen, e.a.SessionID, openEvent(e))
+		}
 		return
 	}
 	s.mu.Lock()
@@ -202,6 +229,12 @@ func (s *Store) recheck(requestID string) {
 	if e, ok = s.entries[requestID]; ok && e.state == statePending {
 		s.closeLocked(e, resolution)
 	}
+}
+
+// openEvent announces e; a request opened again after a restart is marked
+// so the push sender does not ring for it a second time.
+func openEvent(e *entry) wire.ApprovalOpenEvent {
+	return wire.ApprovalOpenEvent{Approval: e.a, Restored: e.restored}
 }
 
 // limited reads at most n bytes.
