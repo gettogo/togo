@@ -65,7 +65,7 @@ func str(m map[string]any, k string) string { v, _ := m[k].(string); return v }
 func (s *APIServer) journal2() journal2 {
 	j := journal2{sessions: map[string]map[string]any{}, parent: map[string]string{}, busy: map[string]int64{},
 		step: map[string]string{}, asks: map[string]string{}, shells: map[string]map[string]any{}, msgs: map[string][]map[string]any{}}
-	lines, _ := readLines(s.journal, 0)
+	lines, _ := s.read(0)
 	h := history2{j: &j}
 	for _, l := range lines {
 		var ev event2

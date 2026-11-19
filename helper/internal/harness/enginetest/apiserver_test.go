@@ -117,3 +117,35 @@ func TestAPIServer(t *testing.T) {
 		t.Error("the stopped server still answers")
 	}
 }
+
+// A held journal shows only its first bytes to the stream and the routes,
+// whatever has been written after them, and the rest once released.
+func TestAPIServerHold(t *testing.T) {
+	s := &APIServer{journal: filepath.Join(t.TempDir(), "journal")}
+	s.shown.Store(-1)
+	write := func(text string) {
+		f, err := os.OpenFile(s.journal, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if _, err := f.WriteString(text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("a\nb\n")
+	s.Hold(int64(len("a\nb\n")))
+	write("c\nd\n")
+	lines, off := s.read(0)
+	if len(lines) != 2 || off != 4 || s.size() != 4 {
+		t.Fatalf("held: %q off %d size %d", lines, off, s.size())
+	}
+	s.Hold(int64(len("a\nb\nc\n")))
+	if lines, off = s.read(off); len(lines) != 1 || string(lines[0]) != "c" {
+		t.Fatalf("one more event: %q", lines)
+	}
+	s.Hold(-1)
+	if lines, _ = s.read(off); len(lines) != 1 || string(lines[0]) != "d" {
+		t.Fatalf("released: %q", lines)
+	}
+}

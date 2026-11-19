@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
@@ -49,11 +50,14 @@ type APIServer struct {
 	srv      *http.Server
 	port     int
 	from     int64 // where the next stream starts, -1 for the end
-	streams  map[chan struct{}]bool
-	calls    []APICall
-	fail     []failRule
-	delay    time.Duration
-	lost     map[string]bool
+	// shown is how much of the journal the stream and the routes see, in
+	// bytes; -1 is all of it (Hold).
+	shown   atomic.Int64
+	streams map[chan struct{}]bool
+	calls   []APICall
+	fail    []failRule
+	delay   time.Duration
+	lost    map[string]bool
 	// v2 is set for OpenCode 2.x, whose routes are under /api
 	// (apiroutes2.go).
 	v2 *v2State
@@ -91,8 +95,10 @@ func newAPIServer(agent, home string) *APIServer {
 		dir = "kilo"
 	}
 	prov, _ := os.ReadFile(filepath.Join(sourceDir(), "harness", "adapters", dir, "testdata", "providers.json"))
-	return &APIServer{journal: sessiongen.OpenCodeJournal(home), providers: prov, user: apiUsers[agent],
+	s := &APIServer{journal: sessiongen.OpenCodeJournal(home), providers: prov, user: apiUsers[agent],
 		streams: map[chan struct{}]bool{}, lost: map[string]bool{}}
+	s.shown.Store(-1)
+	return s
 }
 
 // Start listens on port with the password the agent was given. fromStart
@@ -302,7 +308,7 @@ func (s *APIServer) stream(w http.ResponseWriter, r *http.Request) int {
 	s.streams[done] = true
 	s.mu.Unlock()
 	if from < 0 {
-		from = fileSize(s.journal)
+		from = s.size()
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
@@ -317,7 +323,7 @@ func (s *APIServer) stream(w http.ResponseWriter, r *http.Request) int {
 	defer tick.Stop()
 	for {
 		var lines [][]byte
-		lines, from = readLines(s.journal, from)
+		lines, from = s.read(from)
 		for _, l := range lines {
 			if _, err := w.Write(append(append([]byte("data: "), l...), '\n', '\n')); err != nil {
 				return http.StatusOK
@@ -346,6 +352,26 @@ func (s *APIServer) forget(done chan struct{}) {
 	}
 }
 
+// Hold hides everything past the first n bytes of the journal from the
+// stream and the routes: the agent has written it, and the server has not
+// yet told. The journal itself is never rewritten, so no reader can see
+// it half swapped. Hold(-1) shows it all.
+func (s *APIServer) Hold(n int64) { s.shown.Store(n) }
+
+// size is the journal's size as the server shows it.
+func (s *APIServer) size() int64 {
+	n := fileSize(s.journal)
+	if h := s.shown.Load(); h >= 0 && h < n {
+		return h
+	}
+	return n
+}
+
+// read is readLines of the part of the journal the server shows.
+func (s *APIServer) read(off int64) ([][]byte, int64) {
+	return readLinesTo(s.journal, off, s.shown.Load())
+}
+
 func fileSize(path string) int64 {
 	if fi, err := os.Stat(path); err == nil {
 		return fi.Size()
@@ -356,6 +382,12 @@ func fileSize(path string) int64 {
 // readLines returns the whole lines written after off, and where the
 // next read starts.
 func readLines(path string, off int64) ([][]byte, int64) {
+	return readLinesTo(path, off, -1)
+}
+
+// readLinesTo is readLines of the first limit bytes of the file (all of
+// it when limit is negative); limit falls on the end of a line.
+func readLinesTo(path string, off, limit int64) ([][]byte, int64) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, off
@@ -368,7 +400,14 @@ func readLines(path string, off int64) ([][]byte, int64) {
 		return nil, off
 	}
 	var out [][]byte
-	rd := bufio.NewReaderSize(f, 1<<16)
+	var src io.Reader = f
+	if limit >= 0 {
+		if limit <= off {
+			return nil, off
+		}
+		src = io.LimitReader(f, limit-off)
+	}
+	rd := bufio.NewReaderSize(src, 1<<16)
 	for {
 		line, err := rd.ReadBytes('\n')
 		if err != nil {

@@ -72,59 +72,32 @@ func (s *apiSession) hold(t *testing.T, n int, turn sessiongen.Turn) (release fu
 	path := s.api.Journal()
 	support.Now(s.l)
 	// The agent's API streams the journal as it grows, so the whole turn
-	// must never sit in it, even for an instant: the stream could read it
-	// before it is cut, and the turn would end. The turn is written to a
-	// fresh file with the journal moved aside, and only its first n events
-	// are put back.
-	aside := path + ".aside"
-	if err := os.Rename(path, aside); err != nil {
+	// must never be shown, even for an instant. The journal is not moved
+	// or rewritten (a reader could see it half swapped, or its inode
+	// changed): the server is told how much of it to show, before the turn
+	// is written and after, and the rest is shown at release.
+	before, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
 		t.Fatal(err)
 	}
+	s.api.Hold(int64(len(before)))
 	if err := s.l.Append(turn); err != nil {
 		t.Fatal(err)
 	}
-	tail, err := os.ReadFile(path)
+	after, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cut := 0
+	cut := len(before)
 	for i := 0; i < n; i++ {
-		j := strings.IndexByte(string(tail[cut:]), '\n')
+		j := strings.IndexByte(string(after[cut:]), '\n')
 		if j < 0 {
 			t.Fatalf("the turn has fewer than %d events", n)
 		}
 		cut += j + 1
 	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.OpenFile(aside, os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = f.Write(tail[:cut])
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Rename(aside, path); err != nil {
-		t.Fatal(err)
-	}
-	held := append([]byte(nil), tail[cut:]...)
-	return func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer f.Close()
-		if _, err := f.Write(held); err != nil {
-			t.Fatal(err)
-		}
-	}
+	s.api.Hold(int64(cut))
+	return func() { s.api.Hold(-1) }
 }
 
 // answerPrompts makes the agent run a short turn for each prompt it takes

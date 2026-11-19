@@ -25,7 +25,7 @@ type apiState struct {
 func (s *APIServer) state() apiState {
 	st := apiState{sessions: map[string]json.RawMessage{}, parent: map[string]string{}, todos: map[string]json.RawMessage{},
 		diffs: map[string]json.RawMessage{}, asks: map[string]string{}}
-	lines, _ := readLines(s.journal, 0)
+	lines, _ := s.read(0)
 	for _, l := range lines {
 		typ, props, err := sessiongen.OpenCodeEvent(l)
 		if err != nil {
