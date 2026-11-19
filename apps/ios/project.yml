@@ -389,6 +389,7 @@ targets:
     sources:
       - path: TestSupport
       - path: TogoGeometryTests
+      - path: TogoTests/Harness/FakeHarnessServices.swift
     dependencies:
       - target: Togo
     settings:

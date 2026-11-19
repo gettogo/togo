@@ -49,6 +49,7 @@ struct ChatView: View {
                 ForEach(rows) { row in
                     gapped(row, gap: gaps[row.id])
                         .chatColumn()
+                        .chatFrameMarker(.row(row.id))
                         .id(row.id)
                         .modifier(NeedsVisibility(id: row.isNeeds ? row.id : nil, scroll: scroll))
                         .accessibilityRotorEntry(id: row.id, in: rotorSpace)
@@ -60,6 +61,7 @@ struct ChatView: View {
                 if let live {
                     LiveLine(state: live)
                         .chatColumn()
+                        .chatFrameMarker(.working)
                         .id("chat.working")
                         .accessibilityIdentifier("chat.working")
                         // motion: continuity — the line is simply there when a turn starts (the spinner starting is the signal) and leaves as the work line above turns into "Worked … ✓".
@@ -288,7 +290,7 @@ struct ChatView: View {
             }
         case .reply(let item):
             if case .assistant(let text) = item.body {
-                ReplyRow(text: text.text, partial: text.partial)
+                ReplyRow(text: text.text, partial: text.partial, frameRowID: item.id)
                     .modifier(RowActions(item: item, spoken: ChatCopy.spokenReply(RichMarkdown.spoken(text.text)), host: self, selectable: true) { selecting = $0 })
             }
         case .work(let id, let summary, let steps):

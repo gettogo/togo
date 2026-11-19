@@ -22,26 +22,34 @@ enum ChatMarkdown {
 struct MarkdownText: View, Equatable {
     let text: String
     var isStreaming = false
+    var frameRowID: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: ChatSelectable.blockSpacing) {
-            ForEach(Array(ChatSelectable.segments(ChatMarkdown.blocks(text)).enumerated()), id: \.offset) { _, segment in
-                switch segment {
-                case .text(let blocks):
-                    // A streamed reply changes only its last blocks; the text before keeps its
-                    // key, so it is neither rebuilt nor measured again.
-                    SelectableText(key: blocks, copy: { ChatPasteboard.copy(selection: $0) }) { traits in
-                        ChatSelectable.text(blocks, traits: traits)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                case .code(let code):
-                    CodeWell(text: code)
-                case .richCode(let fence):
-                    RichFenceView(fence: fence, streaming: isStreaming)
-                case .table(let table):
-                    MarkdownTableView(table: table)
+            ForEach(Array(ChatSelectable.segments(ChatMarkdown.blocks(text)).enumerated()), id: \.offset) { index, segment in
+                if let frameRowID {
+                    block(segment).chatFrameMarker(.leaf(frameRowID, index))
+                } else {
+                    block(segment)
                 }
             }
+        }
+    }
+
+    @ViewBuilder private func block(_ segment: ChatSelectable.Segment) -> some View {
+        switch segment {
+        case .text(let blocks):
+            // Streaming extends the last blocks. Earlier segments keep their measurement key.
+            SelectableText(key: blocks, copy: { ChatPasteboard.copy(selection: $0) }) { traits in
+                ChatSelectable.text(blocks, traits: traits)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        case .code(let code):
+            CodeWell(text: code)
+        case .richCode(let fence):
+            RichFenceView(fence: fence, streaming: isStreaming)
+        case .table(let table):
+            MarkdownTableView(table: table)
         }
     }
 }

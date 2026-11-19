@@ -47,6 +47,7 @@ import TogoKit
 
     var descriptor: HarnessDescriptor
     var feeds: [FeedScript] = []
+    var sendSequenceBase = 100
     var sendFailures = 0
     var beforeSendResult: (@MainActor () async throws -> Void)?
     var actionError: (any Error)?
@@ -98,7 +99,7 @@ import TogoKit
         sentImages.append(images)
         try await beforeSendResult?()
         let id = "sent-\(sent.count)"
-        return HarnessItem(id: id, seq: 100 + sent.count, turnId: id, at: WireDate(.now),
+        return HarnessItem(id: id, seq: sendSequenceBase + sent.count, turnId: id, at: WireDate(.now),
                            body: .user(.init(text: text, queued: false, source: "phone")))
     }
 

@@ -139,9 +139,10 @@ struct PendingPromptRow: View {
 struct ReplyRow: View, Equatable {
     let text: String
     var partial = false
+    var frameRowID: String?
 
     var body: some View {
-        MarkdownText(text: text, isStreaming: partial)
+        MarkdownText(text: text, isStreaming: partial, frameRowID: frameRowID)
             // Streamed and finalised text updates in place: a note's arrival transaction moves
             // the rows around it, never reflows this paragraph (motion v2 §5).
             .transaction { $0.animation = nil }

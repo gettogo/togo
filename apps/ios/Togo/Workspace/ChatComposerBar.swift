@@ -24,5 +24,6 @@ struct ChatComposerBar: View {
         }
         // motion: preventing a jump — count changes resize the inset at once, never animate the chat.
         .animation(nil, value: agentCount)
+        .chatFrameMarker(.composer)
     }
 }
