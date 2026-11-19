@@ -130,7 +130,7 @@ func TestClineExitAndRelaunch(t *testing.T) {
 	r.Restart()
 	again := settleUntil(r, 3)
 	checkEdge(t, "restart", again, l)
-	fail(t, "restart", exitNotices(restarted(after, again)))
+	fail(t, "restart", offeredAsks(after, exitNotices(restarted(after, again))))
 }
 
 // A failed run ends its turn failed with the reason in words; the next

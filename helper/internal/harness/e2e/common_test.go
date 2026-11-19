@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
+	"github.com/gettogo/togo/helper/internal/session"
 )
 
 // starter writes the turns as a session of the last ten minutes and
@@ -61,18 +63,35 @@ func dropAndReturn(t *testing.T, start starter) {
 	}
 }
 
-// removeAndServeAgain: a removed session is dropped by the engine; serving
-// it again rebuilds the same conversation from the files under a new epoch.
+// removeAndServeAgain: a removed session is dropped by the engine, and
+// the app's next harness.open or harness.history is answered "not found",
+// as the daemon answers it (api/api.go mapError, rpc.CodeNotFound): the
+// session service no longer resolves the id, so nothing is served again
+// from the files the agent left.
 func removeAndServeAgain(t *testing.T, start starter) {
-	l, r := start(t, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Say: 20})
+	_, r := start(t, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Say: 20})
 	st := settleUntil(r, 2)
-	r.Remove()
-	again := settleUntil(r, 2)
-	checkEdge(t, "after removal", again, l)
-	if st.Epoch == again.Epoch {
-		t.Error("the epoch is the same after the session was removed and served again")
+	if len(st.Items) == 0 {
+		t.Fatal("nothing was served before the removal")
 	}
-	fail(t, "removal", restarted(st, again))
+	r.Remove()
+	if _, ok := r.Engine.Summary(r.ID); ok {
+		t.Error("the engine still has a summary for the removed session")
+	}
+	for _, m := range []struct {
+		method string
+		params any
+	}{
+		{"harness.open", map[string]any{"id": r.ID, "after": 0, "limit": 50}},
+		{"harness.history", map[string]any{"id": r.ID, "before": st.Items[len(st.Items)-1].Seq, "limit": 50}},
+	} {
+		if _, err := r.Call(m.method, m.params); !errors.Is(err, session.ErrNotFound) {
+			t.Errorf("%s after the removal: %v, want session not found", m.method, err)
+		}
+	}
+	if _, ok := r.Engine.Summary(r.ID); ok {
+		t.Error("asking for the removed session served it again")
+	}
 }
 
 // concurrentReaders: many clients reading at once while the agent writes

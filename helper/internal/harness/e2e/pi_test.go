@@ -20,7 +20,7 @@ func piStart(t *testing.T, extra map[int]sessiongen.PiTurn, turns ...sessiongen.
 	if err != nil {
 		t.Fatal(err)
 	}
-	return e, l, e.rigMod(t, "pi", func(o *enginetest.Options) { o.PanePIDs = procsOf() })
+	return e, l, e.rigMod(t, "pi", func(o *enginetest.Options) { o.PanePIDs = procsOf(t) })
 }
 
 func piStarter(t *testing.T, turns ...sessiongen.Turn) (*sessiongen.Layout, *enginetest.Rig) {
@@ -75,7 +75,7 @@ func TestPiResumeOlderConversation(t *testing.T) {
 	if err := l.Append(sessiongen.Turn{New: true, Say: 20}); err != nil {
 		t.Fatal(err)
 	}
-	r := e.rigMod(t, "pi", func(o *enginetest.Options) { o.PanePIDs = procsOf() })
+	r := e.rigMod(t, "pi", func(o *enginetest.Options) { o.PanePIDs = procsOf(t) })
 	checkEdge(t, "start", settleUntil(r, 3), l)
 	now(l)
 	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil { // the resume: prompt 4, first file

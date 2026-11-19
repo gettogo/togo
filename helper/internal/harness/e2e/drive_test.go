@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -184,11 +185,26 @@ func edgeItems(before, after enginetest.State) map[string]bool {
 	return edge
 }
 
-// procsOf is the process view of a rig whose agent is this test process:
-// the engine then attributes files by who holds them open, as it does
-// with a real pane. Agents whose files are shared by a folder (pi, kimi)
-// need it to follow a /new.
-func procsOf() func() []int { return func() []int { return []int{os.Getpid()} } }
+// procsOf is the process view of a rig: the engine then attributes files
+// by who holds them open, as it does with a real pane. Agents whose files
+// are shared by a folder (pi, kimi) need it to follow a /new.
+//
+// The pane's process is a child that holds no file, as Pi and Kimi Code
+// hold none (they append and close per entry). It is not this test
+// process: the engine under test runs here and holds the files it tails,
+// so naming this process made the agent seem to hold whatever the engine
+// had open at the moment it looked, and a /new was followed or not by
+// timing.
+func procsOf(t *testing.T) func() []int {
+	t.Helper()
+	cmd := exec.Command("sleep", "600")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("pane process: %v", err)
+	}
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	pid := cmd.Process.Pid
+	return func() []int { return []int{pid} }
+}
 
 // rigMod is e.rig with its options changed by mod.
 func (e env) rigMod(t *testing.T, agent string, mod func(*enginetest.Options)) *enginetest.Rig {
@@ -278,4 +294,30 @@ func checkEdge(t *testing.T, where string, st enginetest.State, l *sessiongen.La
 		vs = keep
 	}
 	enginetest.Fail(t, where, vs)
+}
+
+// offeredAsks drops, from a restart's violations, the approval items the
+// engine made when it offered an open question to the phone as an ask
+// (engine/feedapproval.go offerLocked; the item names the question as its
+// owner, engine/builtin.go addApproval). The daemon keeps approvals in
+// memory only (daemon/compose.go builds approval.New with no file, and
+// the approval package writes none), so after a restart that link is
+// gone in the daemon too; the question item it pointed at is restored
+// from the agent's files and keeps its own state.
+func offeredAsks(before enginetest.State, vs []enginetest.Violation) []enginetest.Violation {
+	owned := map[string]bool{}
+	for _, it := range before.Items {
+		if it.Approval != nil && it.Approval.Owner != "" {
+			owned[it.ID] = true
+		}
+	}
+	var out []enginetest.Violation
+	for _, v := range vs {
+		id, _, _ := strings.Cut(v.Detail, " ")
+		if v.Rule == "restart-lost-item" && owned[id] {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
 }

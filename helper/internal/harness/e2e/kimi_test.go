@@ -21,7 +21,7 @@ func kimiStart(t *testing.T, procs bool, extra map[int]sessiongen.KimiTurn, turn
 	var r *enginetest.Rig
 	if procs {
 		e.start = time.Now().Add(-time.Second).UTC().Truncate(time.Second)
-		r = e.rigMod(t, "kimi", func(o *enginetest.Options) { o.PanePIDs = procsOf() })
+		r = e.rigMod(t, "kimi", func(o *enginetest.Options) { o.PanePIDs = procsOf(t) })
 	}
 	l, err := sessiongen.Write(e.home, &sessiongen.Kimi{Extra: extra}, sessiongen.Script{Seed: 41, Start: e.start, Cwd: e.cwd, Turns: turns})
 	if err != nil {
@@ -194,7 +194,7 @@ func TestKimiExitAndRelaunch(t *testing.T) {
 	r.Restart()
 	again := settleUntil(r, 4)
 	checkEdge(t, "restart", again, l)
-	fail(t, "restart", exitNotices(restarted(after, again)))
+	fail(t, "restart", offeredAsks(after, exitNotices(restarted(after, again))))
 }
 
 // TestKnownFault_KimiKilledAgentsJobRunsAgainAfterARestart documents a
