@@ -99,6 +99,8 @@ type Rig struct {
 	bin    string
 	mu     sync.Mutex
 	status string
+	// stopEngine stops the running engine and waits for what it started.
+	stopEngine func()
 }
 
 var pollOnce sync.Once
@@ -185,7 +187,18 @@ func (r *Rig) start() {
 	r.Engine = eng
 	r.mu.Unlock()
 	r.startPhone()
-	r.T.Cleanup(func() { eng.Forget(r.ID) })
+	engineStarted()
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			eng.Forget(r.ID)
+			r.engineStopped([]string{r.Opt.Home, r.Opt.Cwd, r.TogoHome, r.bin})
+		})
+	}
+	r.mu.Lock()
+	r.stopEngine = stop
+	r.mu.Unlock()
+	r.T.Cleanup(stop)
 	r.Sub = newSub()
 	res, err := r.Engine.Open(context.Background(), r.Sub, r.ID, 0, 1)
 	if err != nil {
@@ -240,7 +253,12 @@ func (r *Rig) Restart() {
 // Stop stops the engine, as the helper being down; Start builds a new
 // one. Files written between the two are found by the new engine's
 // restore, as after an update that took a while.
-func (r *Rig) Stop() { r.Engine.Forget(r.ID) }
+func (r *Rig) Stop() {
+	r.mu.Lock()
+	stop := r.stopEngine
+	r.mu.Unlock()
+	stop()
+}
 
 // Start builds a new engine over the same TOGO_HOME and files.
 func (r *Rig) Start() { r.start() }
