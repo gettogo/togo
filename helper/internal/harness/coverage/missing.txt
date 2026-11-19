@@ -98,14 +98,7 @@ opencode/capability/status.context
 opencode/lifecycle/helper_restart
 opencode2/capability/changes
 opencode2/capability/chat.anchors
-opencode2/capability/commands
-opencode2/capability/compact
-opencode2/capability/mcp
-opencode2/capability/mode
-opencode2/capability/model
 opencode2/capability/ports
-opencode2/capability/settings
-opencode2/capability/status
 pi/capability/chat.anchors
 pi/lifecycle/fork
 vibe/capability/changes
