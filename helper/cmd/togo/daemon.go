@@ -77,8 +77,9 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 	// shut down here rather than left to its own goroutine: the hold and
 	// any disablesleep must be released on SIGINT and SIGTERM.
 	var (
-		mu    sync.Mutex
-		built *daemon.Components
+		mu     sync.Mutex
+		built  *daemon.Components
+		finish func()
 	)
 	hostAwake := hostAwake()
 	err = daemon.Run(ctx, daemon.Config{
@@ -96,10 +97,10 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 				return nil, err
 			}
 			d.SetPending(c.PendingApprovals)
+			stop := c.Start(ctx)
 			mu.Lock()
-			built = c
+			built, finish = c, stop
 			mu.Unlock()
-			go c.Run(ctx)
 			return c.Handler(), nil
 		},
 		Info: info,
@@ -107,6 +108,9 @@ func runDaemon(ctx context.Context, args []string, stderr io.Writer) int {
 	})
 	mu.Lock()
 	if built != nil {
+		// No connection is served any more: the accepted hooks are read
+		// and stored and the open approvals written before the exit.
+		finish()
 		built.Awake.Shutdown(context.WithoutCancel(ctx))
 	}
 	mu.Unlock()
