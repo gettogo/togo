@@ -297,3 +297,35 @@ func TestHookStorePath(t *testing.T) {
 		t.Errorf("no run folder: %s", p)
 	}
 }
+
+// The file is never read or written through a symbolic link.
+func TestHookStoreRefusesALink(t *testing.T) {
+	togoHome := t.TempDir()
+	path := hookStorePath(togoHome, "s_store09")
+	_ = os.MkdirAll(filepath.Dir(path), 0o700)
+	target := filepath.Join(t.TempDir(), "elsewhere")
+	_ = os.WriteFile(target, []byte("{\"togo_hooks\":1}\n"+string(mustLine(t, line(1, 10)))), 0o600)
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatal(err)
+	}
+	h := &hookStore{path: path}
+	if got := h.load(time.Now()); len(got) != 0 {
+		t.Fatalf("read %d records through a link", len(got))
+	}
+	_ = os.Symlink(target, path)
+	before, _ := os.ReadFile(target)
+	if err := h.add(line(2, 10)); err == nil {
+		t.Fatal("wrote through a link")
+	}
+	if after, _ := os.ReadFile(target); string(after) != string(before) {
+		t.Fatal("the link's target changed")
+	}
+}
+
+func mustLine(t *testing.T, l hookLine) []byte {
+	b, err := json.Marshal(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return append(b, '\n')
+}
