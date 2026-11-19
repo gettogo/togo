@@ -48,6 +48,16 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 	if info.category == harness.ToolAgent && parent == "" {
 		for _, t := range taskList(args) {
 			aid := "agent-" + firstNonEmpty(t.id, callID+"-"+itoa(len(s.taskCalls[callID])+1))
+			if ai, ao, ok := s.adopt(aid, callID, t, tid, at); ok {
+				items, ops = append(items, ai...), append(ops, ao...)
+				continue
+			}
+			if !slices.Contains(s.taskCalls[callID], aid) {
+				if ai, ao, ok := s.takeOver(aid, callID, t, tid, at); ok {
+					items, ops = append(items, ai...), append(ops, ao...)
+					continue
+				}
+			}
 			if _, taken := s.agents[aid]; taken && !slices.Contains(s.taskCalls[callID], aid) {
 				// Another task call used this id ("1", "explore"): its own
 				// row, not a merge into the earlier run's.
@@ -60,6 +70,7 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 			if !slices.Contains(s.taskCalls[callID], aid) { // a replay reads the call again
 				s.taskCalls[callID] = append(s.taskCalls[callID], aid)
 				s.pending = append(s.pending, aid)
+				s.byFile.named(t.id, aid)
 			}
 			items = append(items, *a)
 			ops = append(ops, s.agentRow(a))

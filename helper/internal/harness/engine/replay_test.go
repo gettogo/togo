@@ -99,6 +99,35 @@ func TestRestoredTranscriptPublishesOnlyItsFinalState(t *testing.T) {
 	}
 }
 
+// fileSeen records the file each mapped record names.
+type fileSeen struct{ files []string }
+
+func (f *fileSeen) Name() string             { return "fake.files" }
+func (f *fileSeen) State() map[string]string { return map[string]string{} }
+func (f *fileSeen) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
+	f.files = append(f.files, rec.File)
+	return nil, nil
+}
+
+// A restored snapshot reaches the mapper record by record, each still
+// naming the file it came from, so a mapper serving a folder of files
+// can tell them apart.
+func TestRestoreKeepsEachRecordsFile(t *testing.T) {
+	const id = "s_replay002"
+	_, s := replaySession(t, id, "omp.session")
+	seen := &fileSeen{}
+	s.mu.Lock()
+	s.mappers["fake.files"] = seen
+	s.mu.Unlock()
+	recs := []json.RawMessage{json.RawMessage(`{"a":1}`), json.RawMessage(`{"a":2}`)}
+	s.record(context.Background(), "fake.files", harness.Record{Source: "subagents", At: time.Now(), Replay: recs, File: "/x/AuditOne.jsonl"})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(seen.files) != 2 || seen.files[0] != "/x/AuditOne.jsonl" || seen.files[1] != "/x/AuditOne.jsonl" {
+		t.Fatalf("files seen: %q", seen.files)
+	}
+}
+
 func TestRestoredUnfinishedTurnRemainsWorking(t *testing.T) {
 	const id = "s_replay001"
 	e, s := replaySession(t, id, "omp.session")

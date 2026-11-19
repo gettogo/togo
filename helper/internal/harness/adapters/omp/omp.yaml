@@ -34,15 +34,17 @@ feeds:
     # terminal record (~/.omp/agent/terminal-sessions/<tty>) names for the pane: start, /new and
     # /resume move it. Without a record it is the folder's files, exclusive: only a file this
     # session's own agent holds open is taken (a /new moves it, the old file is dropped); a file
-    # another process holds never is; with no evidence the session keeps its file.
-    jsonl: { glob: '{{.omp_sessions}}/{{.state.session_rel}}', follow: true, exclusive: true }
+    # another process holds never is; with no evidence the session keeps its file. header: the
+    # file opens with a title record and names its session on the next line; a restore of a long
+    # file keeps both, or the conversation and its subagents' folder are never known.
+    jsonl: { glob: '{{.omp_sessions}}/{{.state.session_rel}}', follow: true, exclusive: true, header: session }
     mapper: omp.session
     stability: documented
   subagents:        # task subagents: <session file without .jsonl>/<task id>.jsonl, only the
     # followed session's own folder, so another omp's subagents in the same folder are never read.
     # whole: a subagent that finished before a helper restart is read again, or its row
-    # would say running for good.
-    jsonl: { glob: '{{.omp_sessions}}/{{.state.subagent_rel}}', follow: true, whole: true }
+    # would say running for good. header: as for the session's own file.
+    jsonl: { glob: '{{.omp_sessions}}/{{.state.subagent_rel}}', follow: true, whole: true, header: session }
     mapper: omp.session
     stability: internal
   config:           # model roles for the picker's role chips
