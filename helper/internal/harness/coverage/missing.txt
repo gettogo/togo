@@ -18,7 +18,6 @@ claude/scale/at_limit
 claude/scale/long_session
 cline/capability/changes
 cline/capability/ports
-cline/lifecycle/new_conversation
 cline/lifecycle/resume
 codex/capability/chat.anchors
 codex/capability/ports
