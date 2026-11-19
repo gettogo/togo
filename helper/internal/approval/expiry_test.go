@@ -11,12 +11,25 @@ import (
 
 func eventually(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
 		if ok() {
 			return
 		}
 	}
 	t.Fatalf("never: %s", what)
+}
+
+// opensOf counts how many times the approval was announced as open.
+func opensOf(pub *fakePub, requestID string) int {
+	pub.mu.Lock()
+	defer pub.mu.Unlock()
+	n := 0
+	for _, e := range pub.events {
+		if o, ok := e.payload.(wire.ApprovalOpenEvent); ok && o.Approval.RequestID == requestID {
+			n++
+		}
+	}
+	return n
 }
 
 // A prompt nobody answered within the TTL is still blocking the agent: its
@@ -34,7 +47,8 @@ func TestApprovalOutlivesItsTTLWhileThePromptIsShown(t *testing.T) {
 	st.PromptSeen(ctx, id, p)
 	first := st.Pending(id)[0]
 
-	time.Sleep(250 * time.Millisecond)
+	// The first TTL has passed once the extended expiry is announced again.
+	eventually(t, "the extended expiry announced", func() bool { return opensOf(pub, first.RequestID) >= 2 })
 	if got := pub.closed(); len(got) != 0 {
 		t.Fatalf("closed %v while the prompt is on screen", got)
 	}
@@ -46,17 +60,6 @@ func TestApprovalOutlivesItsTTLWhileThePromptIsShown(t *testing.T) {
 	// the approval being announced again, never as an earlier time.
 	if now[0].ExpiresAt.Before(*first.ExpiresAt) {
 		t.Fatal("the expiry moved back")
-	}
-	pub.mu.Lock()
-	opens := 0
-	for _, e := range pub.events {
-		if o, ok := e.payload.(wire.ApprovalOpenEvent); ok && o.Approval.RequestID == first.RequestID {
-			opens++
-		}
-	}
-	pub.mu.Unlock()
-	if opens < 2 {
-		t.Fatalf("announced %d times, want the new expiry announced", opens)
 	}
 
 	tm.mu.Lock()

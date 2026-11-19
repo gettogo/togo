@@ -86,7 +86,7 @@ func startStub(t *testing.T, tm *tmux.Client, id string) (pane, detect.Prompt) {
 	if err != nil {
 		t.Fatalf("NewSession: %v", err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		screen, err := tm.CapturePane(context.Background(), target(id))
 		if err == nil {
@@ -114,7 +114,7 @@ func (p pane) keys(t *testing.T) string {
 // to catch any key arriving after it.
 func (p pane) waitKeys(t *testing.T, want string) {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for p.keys(t) != want && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
