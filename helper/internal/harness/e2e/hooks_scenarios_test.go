@@ -653,3 +653,59 @@ func questions(t *testing.T, a hookAgent, plan bool) {
 	}
 	checkHook(t, "questions", a, st, l, true)
 }
+
+// agentRows: subagents the agent starts show as running rows (one each,
+// even when they share a type) until a stop hook or the end of the turn
+// closes them.
+func agentRows(t *testing.T, a hookAgent) {
+	e := newEnv(t, time.Hour)
+	turns := []sessiongen.Turn{
+		{Say: 20, Tools: 1, Agents: &sessiongen.Batch{Size: 3, Background: true}},
+		{Say: 20, Tools: 1, Agents: &sessiongen.Batch{Size: 2}},
+	}
+	l := write(t, e, a, turns)
+	r := e.rig(t, a.name)
+	var ends []int
+	for i, c := range l.Hooks {
+		if c.End != "" {
+			ends = append(ends, i)
+		}
+	}
+	rows := func(st enginetest.State) (running, all int) {
+		for _, sec := range st.Mission.Sections {
+			if sec.Kind != harness.SectionAgents {
+				continue
+			}
+			for _, row := range sec.Rows {
+				all++
+				if runningState(row.State) {
+					running++
+				}
+			}
+		}
+		return
+	}
+	// Three running before the first turn ends.
+	run(t, r, a, l.Hooks[:ends[0]])
+	st := r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return st.Mission.Summary.Agents == 3 })
+	if n, all := rows(st); n != 3 || all != 3 {
+		t.Errorf("%d running rows of %d, want 3 of 3", n, all)
+	}
+	// None after the turn ends.
+	run(t, r, a, l.Hooks[ends[0]:ends[0]+1])
+	st = r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return st.Mission.Summary.Agents == 0 })
+	if n, _ := rows(st); n != 0 {
+		t.Errorf("%d rows still run after the turn ended", n)
+	}
+	// A foreground batch stops before the turn ends.
+	run(t, r, a, l.Hooks[ends[0]+1:ends[1]])
+	st = r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return st.Mission.Summary.Working })
+	if n, _ := rows(st); n != 0 || st.Mission.Summary.Agents != 0 {
+		t.Errorf("%d rows run after the foreground batch stopped (summary %d)", n, st.Mission.Summary.Agents)
+	}
+	run(t, r, a, l.Hooks[ends[1]:])
+	st = settled(r, lastPrompt(a, l.Hooks))
+	checkHook(t, "agents", a, st, l, true)
+}
+
+func runningState(s string) bool { return s == harness.StateRunning || s == harness.StateWaiting }

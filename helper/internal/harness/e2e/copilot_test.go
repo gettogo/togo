@@ -44,12 +44,18 @@ var copilotAgent = hookAgent{
 
 // A session of hundreds of turns, as long as the chat can keep.
 func TestCopilotLongSession(t *testing.T) {
-	coverage.Covers(t, "generated", "copilot/scale/long_session", "copilot/capability/chat", "copilot/capability/agents")
+	coverage.Covers(t, "generated", "copilot/scale/long_session", "copilot/capability/chat")
 	n := copilotAgent.long
 	if longRun() {
 		n = 2000
 	}
 	longScenario(t, copilotAgent, n)
+}
+
+// Subagents show as rows until a stop hook or the turn's end closes them.
+func TestCopilotSubagentRows(t *testing.T) {
+	coverage.Covers(t, "generated", "copilot/capability/agents")
+	agentRows(t, copilotAgent)
 }
 
 // The engine is restarted between turns, in the middle of one and while a

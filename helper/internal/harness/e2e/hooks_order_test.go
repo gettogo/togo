@@ -16,7 +16,11 @@ func hookOrder(t *testing.T, a hookAgent) {
 	last := func(st enginetest.State) bool { return len(st.Items) > 0 }
 	sound := func(where string, st enginetest.State, l *sessiongen.Layout) {
 		t.Helper()
-		checkHook(t, where, a, st, l, true)
+		// A reply whose hook was lost or moved leaves its prompt without
+		// one: that is the disturbance, not a fault.
+		b := a
+		b.replies = false
+		checkHook(t, where, b, st, l, true)
 		for _, it := range st.Items {
 			if it.Tool != nil && running(it.Tool.State) {
 				t.Errorf("%s: tool %s is %s", where, it.ID, it.Tool.State)

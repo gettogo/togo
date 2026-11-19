@@ -30,8 +30,11 @@ import (
 //	                     abort ends it interrupted, error ends it failed
 //	                     (copilotPrep, failures.go:170)
 //	errorOccurred        error.message (mapper.go:305)
-//	subagentStart/Stop   agentName, toolCallId (dialect.go Normalize; rows
-//	                     in hookstyle/rows.go)
+//	subagentStart/Stop   agentName (dialect.go Normalize; rows in
+//	                     hookstyle/rows.go). Both carry only the name
+//	                     here, as the tests quote them: a start that
+//	                     carried toolCallId would key its row by it, and a
+//	                     stop without one would not find it
 //	notification         read by the summary only; the chat ignores it
 //
 // What the agent said is not in a hook. The mapper reads it from
@@ -157,7 +160,7 @@ func (c *Copilot) Turn(g *Gen, t Turn) error {
 			return fmt.Errorf("sessiongen: copilot's hooks carry no step of a subagent")
 		}
 		for i := 0; i < t.Agents.Size; i++ {
-			g.call(c.session, "subagentStart", c.base(g, map[string]any{"agentName": "explore", "toolCallId": "toolu_" + g.Hex(24)}))
+			g.call(c.session, "subagentStart", c.base(g, map[string]any{"agentName": "explore"}))
 		}
 		if !t.Agents.Background {
 			for i := 0; i < t.Agents.Size; i++ {
