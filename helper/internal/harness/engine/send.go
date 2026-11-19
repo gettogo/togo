@@ -119,8 +119,9 @@ func (s *sess) pendPhone(text string, images []harness.ImageRef) string {
 func (s *sess) sentLocked(gen uint64, id, text string, images []harness.ImageRef, err error) (harness.SendResult, error) {
 	if s.convGen != gen {
 		// The chat started over while the prompt travelled: it is not
-		// shown as sent in a conversation it may not be part of. The
-		// start-over dropped its note.
+		// shown as sent in a conversation it may not be part of. A note
+		// made after the start-over cleared the old ones goes too.
+		s.settlePhoneLocked(id, false)
 		return harness.SendResult{}, errMoved
 	}
 	if s.settlePhoneLocked(id, err == nil) {

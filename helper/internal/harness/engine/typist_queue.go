@@ -114,6 +114,7 @@ func (e *Engine) typeNext(s *sess) bool {
 	if s.convGen != gen {
 		// The chat started over while the prompt travelled. It is not
 		// put back, shown as sent, or sent again; the new chat says so.
+		s.settlePhoneLocked(next.item.ID, false)
 		s.uncertainNoticeLocked(u.Text)
 		return false
 	}

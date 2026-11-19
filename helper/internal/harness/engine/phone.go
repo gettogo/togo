@@ -22,8 +22,12 @@ const phoneWindow = 2 * time.Minute
 // pending note when sending returns; a conversation start-over drops all
 // notes (conversation.go).
 type phoneText struct {
-	id      string
-	text    string
+	id   string
+	text string
+	// raw is the prompt as sent, before clipping and redaction: what the
+	// screen echoes, so awaitText takes it. Kept in memory only; never
+	// published or logged.
+	raw     string
 	images  []harness.ImageRef
 	at      time.Time
 	pending bool
@@ -45,6 +49,7 @@ func (s *sess) addPhoneLocked(p phoneText) {
 	// Kept in the form the agent's record is compared in (prepareLocked
 	// clips and redacts it first): a prompt over MaxItemText, or one with
 	// a key in it, still matches its record.
+	p.raw = p.text
 	p.text = strings.TrimSpace(clipItemText(s.e.red.String(p.text)))
 	now := s.e.cfg.Now()
 	keep := s.phone[:0]
@@ -102,7 +107,7 @@ func (s *sess) matchPhoneLocked(self, text string) (phoneText, bool) {
 				// Recorded while its sender still waits: the sender
 				// settles the note. The record is the proof it was sent.
 				s.phone[i].matched = true
-				s.awaitReply, s.awaitText = true, p.text
+				s.awaitReply, s.awaitText = true, p.raw
 				s.failedHold = false // a new prompt starts a new turn
 				return p, true
 			}

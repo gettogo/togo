@@ -280,3 +280,54 @@ func TestLongPromptShowsOnce(t *testing.T) {
 		})
 	}
 }
+
+func sessOf(e *Engine, id string) *sess {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.sessions[id]
+}
+
+// A phone prompt with a key in it, recorded early, is waited on as the
+// screen echoes it (unredacted), so its echo is not read as the turn's
+// error.
+func TestEarlyRecordedSecretPromptIsNotTheTurnError(t *testing.T) {
+	const id = "s_promptonce5"
+	e, pane := newRecordEngine(t, id)
+	pane.early = true
+	const text = "Error: the key sk-abcdefghijklmnopqrst is refused, find out why"
+	r := sendNow(t, e, id, text)
+	if strings.Contains(r.Item.User.Text, "sk-abcdefghijklmnopqrst") {
+		t.Fatalf("the chat shows the key: %q", r.Item.User.Text)
+	}
+	s := sessOf(e, id)
+	s.mu.Lock()
+	sent, waiting := s.awaitText, s.awaitReply
+	s.mu.Unlock()
+	if !waiting {
+		t.Fatal("no reply is awaited for a recorded prompt")
+	}
+	if line, ok := screenError(text+"\n\nThinking…\n", sent); ok {
+		t.Fatalf("the prompt's echo was read as the error: %q", line)
+	}
+}
+
+// A prompt noted after a start-over that its send did not see is dropped
+// when the send returns, not kept for the session's life.
+func TestPromptNotedAcrossAStartOverIsDropped(t *testing.T) {
+	const id = "s_promptonce6"
+	e, _ := newRecordEngine(t, id)
+	s := sessOf(e, id)
+	s.mu.Lock()
+	gen := s.convGen
+	s.convGen++ // the chat started over before the note was made
+	s.mu.Unlock()
+	note := s.pendPhone("carry on", nil)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.sentLocked(gen, note, "carry on", nil, nil); !errors.Is(err, errMoved) {
+		t.Fatalf("send across a start-over = %v", err)
+	}
+	if len(s.phone) != 0 {
+		t.Fatalf("notes left: %+v", s.phone)
+	}
+}
