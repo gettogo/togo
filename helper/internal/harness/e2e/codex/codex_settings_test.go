@@ -9,7 +9,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -24,16 +23,10 @@ import (
 func (c *codexSession) compactThread(t *testing.T) string {
 	t.Helper()
 	before := len(c.s.CallsOf("thread/compact/start"))
-	// The thread is known once the helper has read the server's reply to
-	// its join: until then the action falls back.
-	var res harness.ActionResult
-	var err error
-	for deadline := time.Now().Add(support.Quick); ; time.Sleep(20 * time.Millisecond) {
-		res, err = c.r.Act("compact", "", map[string]any{})
-		if err != nil || res.Result == harness.ResultApplied || time.Now().After(deadline) {
-			break
-		}
-	}
+	// The action names the thread the helper read from the server's reply
+	// to its join, which the chat shows: wait for the thread's history.
+	c.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return len(support.Items(st, isPrompt)) > 0 })
+	res, err := c.r.Act("compact", "", map[string]any{})
 	if err != nil || res.Result != harness.ResultApplied {
 		t.Fatalf("compact: %+v %v", res, err)
 	}
@@ -53,7 +46,7 @@ func (c *codexSession) compactThread(t *testing.T) string {
 // phone: after each, a prompt from the phone is typed into the terminal
 // and shown, and the helper's calls name the thread the terminal shows.
 // The chat starts over on the new thread. Resuming the first thread at
-// the desk is TestKnownFault_CodexDeskResumeOfAnEarlierThread; the resume
+// the desk is TestCodexDeskResumeOfAnEarlierThread; the resume
 // this test claims is the one from the phone.
 func TestCodexNewAndResume(t *testing.T) {
 	t.Parallel()
@@ -212,17 +205,12 @@ func TestCodexVersionOutsideRange(t *testing.T) {
 // /resume at the desk of the thread the helper joined before /new: the
 // server has that thread loaded already, so the helper's feed (one join
 // per thread and connection, source/rpc/attach.go) never lists it again.
-// The mapper made for the new conversation has never seen it described,
-// so its turn is not taken as top level (adapters/codex/appserver.go
-// turnStarted) and the chat stays on the /new thread: the helper's calls
-// (compact, interrupt) name that thread while the terminal shows the
-// resumed one.
-//
-// Correct: the helper follows the thread the terminal shows. This test
-// passes while the fault is present; when it fails the fault is fixed:
-// make it an ordinary test.
-func TestKnownFault_CodexDeskResumeOfAnEarlierThread(t *testing.T) {
+// Its next turn still moves the chat back to it (adapters/codex, Carrier),
+// and the chat starts over on it: the helper's calls (compact) name the
+// thread the terminal shows, and the /new thread's prompt is gone.
+func TestCodexDeskResumeOfAnEarlierThread(t *testing.T) {
 	t.Parallel()
+	coverage.Covers(t, "generated", "codex/lifecycle/new_conversation", "codex/lifecycle/resume")
 	c := codexStart(t, 91, nil, sessiongen.Turn{Say: 20})
 	support.SettleUntil(c.r, 1)
 	c.joined(t)
@@ -230,16 +218,28 @@ func TestKnownFault_CodexDeskResumeOfAnEarlierThread(t *testing.T) {
 	old := c.p.Thread()
 	c.add(t, sessiongen.Turn{New: true, Say: 10})
 	fresh := c.p.Thread()
-	c.r.SettleUntil(support.Quick, support.HasPrompt(2))
+	onFresh := c.r.SettleUntil(support.Quick, support.HasPrompt(2))
 	c.s.Join(old)
 	c.p.Resume(old)
 	c.add(t, sessiongen.Turn{Say: 10})
-	c.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return !st.Mission.Summary.Working })
-	switch got := c.compactThread(t); got {
-	case fresh:
-	case old:
-		t.Fatal("the fault is fixed: the helper names the thread resumed at the desk")
-	default:
-		t.Fatalf("the helper names thread %q, neither of the two", got)
+	// The chat starts over on the resumed thread: the /new thread's prompt
+	// leaves it and the resumed turn's prompt is shown.
+	var gone []string
+	for _, it := range support.Items(onFresh, isPrompt) {
+		gone = append(gone, it.User.Text)
+	}
+	st := c.r.SettleUntil(support.Quick, func(st enginetest.State) bool {
+		ps := support.Items(st, isPrompt)
+		return len(ps) > 0 && !slices.Contains(gone, ps[len(ps)-1].User.Text) && !st.Mission.Summary.Working
+	})
+	for _, text := range gone {
+		if n := len(promptsOn(st, text)); n != 0 {
+			t.Errorf("the /new thread's prompt %q is still shown (%d times)", text, n)
+		}
+	}
+	if got := c.compactThread(t); got != old {
+		t.Fatalf("the helper names thread %q, the terminal shows %q (the /new thread is %q)", got, old, fresh)
 	}
 }
+
+func isPrompt(it harness.Item) bool { return it.User != nil }
