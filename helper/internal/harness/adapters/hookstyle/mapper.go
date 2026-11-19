@@ -10,6 +10,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/errtext"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 )
 
 // Options tune the Mapper for one harness.
@@ -17,8 +18,12 @@ type Options struct {
 	// Name is the mapper name the adapter file uses.
 	Name string
 	// Transcript, when set, finds the session's transcript before any hook
-	// names it, so the transcript feed starts without hooks installed.
-	Transcript func(env harness.Env) string
+	// names it, so the transcript feed starts without hooks installed. It
+	// is asked again while no hook has named one, with the one it found
+	// last, so it can follow the agent to another conversation; alone
+	// says whether no other agent of the kind runs in the folder
+	// (source.Solo).
+	Transcript func(env harness.Env, current string, alone func() bool) string
 	// Mode maps the payload's permission_mode to the adapter's mode ids;
 	// nil keeps the value.
 	Mode func(string) string
@@ -75,14 +80,17 @@ type Mapper struct {
 	mu        sync.Mutex
 	state     map[string]string
 	guessedAt time.Time
-	turn      string
-	started   time.Time
-	steps     map[string]bool
-	planned   bool                // a task hook made plan rows
-	running   map[string][]string // tool name -> running call ids, oldest first
-	tools     map[string]harness.Item
-	asks      map[string]harness.Item // open ask-tool questions by call id
-	n         int
+	// hooked is set once a hook named the transcript: its word wins.
+	hooked  bool
+	solo    source.Solo
+	turn    string
+	started time.Time
+	steps   map[string]bool
+	planned bool                // a task hook made plan rows
+	running map[string][]string // tool name -> running call ids, oldest first
+	tools   map[string]harness.Item
+	asks    map[string]harness.Item // open ask-tool questions by call id
+	n       int
 	// replyFrom is where Options.Replies goes on reading replySession's log.
 	replySession string
 	replyFrom    int64
@@ -117,14 +125,14 @@ func Register(opts Options) {
 
 func (m *Mapper) Name() string { return m.opts.Name }
 
-// State reports what the hooks said. Before any hook names a transcript,
+// State reports what the hooks said. Until a hook names a transcript,
 // Options.Transcript stands in, checked at most every 5 seconds.
 func (m *Mapper) State() map[string]string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.state["transcript_path"] == "" && m.opts.Transcript != nil && time.Since(m.guessedAt) > 5*time.Second {
+	if !m.hooked && m.opts.Transcript != nil && time.Since(m.guessedAt) > 5*time.Second {
 		m.guessedAt = time.Now()
-		if p := m.opts.Transcript(m.env); p != "" {
+		if p := m.opts.Transcript(m.env, m.state["transcript_path"], func() bool { return m.solo.Alone(m.env) }); p != "" {
 			m.state["transcript_path"] = p
 		}
 	}
@@ -327,6 +335,7 @@ func (m *Mapper) learn(p payload) {
 		m.state["harness_session"] = p.SessionID
 	}
 	if p.Transcript != "" {
+		m.hooked = true
 		m.state["transcript_path"] = p.Transcript
 	}
 	if p.Mode != "" {

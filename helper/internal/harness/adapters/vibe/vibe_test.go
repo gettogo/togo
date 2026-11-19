@@ -214,7 +214,7 @@ func TestJournalForPicksThisFolder(t *testing.T) {
 	write("c", "/w/proj", 2*time.Hour, false)
 	write("d", "/w/proj", 0, true)
 	env := harness.Env{Cwd: "/w/proj", Vars: map[string]string{source.VarHome: home}}
-	if got := journalFor(env); got != want {
+	if got := journalFor(env, "", nil); got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
