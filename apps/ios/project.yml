@@ -368,6 +368,7 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
+      - path: TestSupport
       - path: TogoSnapshotTests
         excludes:
           - "**/__Snapshots__"
@@ -378,6 +379,21 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.togo.TogoSnapshotTests
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+
+  # A separate scheme keeps viewport checks independently runnable.
+  TogoGeometryTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TestSupport
+      - path: TogoGeometryTests
+    dependencies:
+      - target: Togo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.togo.TogoGeometryTests
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
 
@@ -419,3 +435,13 @@ schemes:
       config: Debug
       targets:
         - TogoUITests
+
+  TogoGeometryTests:
+    build:
+      targets:
+        Togo: all
+        TogoGeometryTests: [test]
+    test:
+      config: Debug
+      targets:
+        - TogoGeometryTests
