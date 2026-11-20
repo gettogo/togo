@@ -92,13 +92,19 @@ type StatusBlock struct {
 	Model  string `json:"model,omitempty"`
 	Mode   string `json:"mode,omitempty"`
 	Effort string `json:"effort,omitempty"`
-	// ContextPercent is how full the context window is, 0...100.
+	// ContextPercent is how full the context window is, 0...100. A mapper
+	// sends ContextUnknown to clear a percent shown before; nil leaves it.
 	ContextPercent *float64    `json:"contextPercent,omitempty"`
 	CostUSD        *float64    `json:"costUsd,omitempty"`
 	Meters         []Meter     `json:"meters,omitempty"`
 	Facts          []Fact      `json:"facts,omitempty"`
 	Actions        []ActionRef `json:"actions,omitempty"`
 }
+
+// ContextUnknown in a status block's ContextPercent says the context is
+// no longer known (a model with no known window): the engine clears the
+// percent it shows rather than keep the last one.
+const ContextUnknown = -1.0
 
 // Meter is a usage gauge with an optional reset time.
 type Meter struct {

@@ -338,7 +338,7 @@ func (e *Events) messageInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 		}
 		return []harness.Item{e.turnItem(in.ID, tu, nil)}, nil
 	}
-	ops := e.usage(in.SessionID, in.ID, in.Time.Created, in.ProviderID, in.ModelID, in.Tokens)
+	ops := e.usage(in.SessionID, in.ID, in.ProviderID, in.ModelID, in.Tokens)
 	if in.Error == nil {
 		return nil, ops
 	}

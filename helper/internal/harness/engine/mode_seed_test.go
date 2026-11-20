@@ -58,6 +58,21 @@ func TestPartialStatusKeepsMetersAndCost(t *testing.T) {
 	}
 }
 
+// A status that says the context is not known (another model with no
+// known window) clears the percent shown, and keeps the rest.
+func TestStatusContextUnknownClearsPercent(t *testing.T) {
+	const id = "s_modeseed04"
+	e := newSeq(t, id, &seqPane{mode: "a"}, nil)
+	cost, ctx, unknown := 0.5, 40.0, harness.ContextUnknown
+	deliver(id, map[string]any{"ops": []harness.Op{{Op: harness.OpStatus, Status: &harness.StatusBlock{Model: "Opus", CostUSD: &cost, ContextPercent: &ctx}}}})
+	waitFor(t, func() bool { st := statusOf(e, id); return st != nil && st.ContextPercent != nil })
+	deliver(id, map[string]any{"ops": []harness.Op{{Op: harness.OpStatus, Status: &harness.StatusBlock{ContextPercent: &unknown}}}})
+	waitFor(t, func() bool { st := statusOf(e, id); return st != nil && st.ContextPercent == nil })
+	if st := statusOf(e, id); st.Model != "Opus" || st.CostUSD == nil {
+		t.Fatalf("status %+v", st)
+	}
+}
+
 // A cycle that misses its target never leaves the session in a mode
 // nobody picked: it presses on back to where it began.
 func TestFailedCycleReturnsToTheOriginalMode(t *testing.T) {
