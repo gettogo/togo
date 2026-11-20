@@ -161,6 +161,12 @@ func newFixtureEnv(t *testing.T, name string) *fixtureEnv {
 		}
 	}
 	write(filepath.Join(bin, "claude"), fakeClaude, 0o755)
+	// A stand-in login shell that reads no startup file. With the real one,
+	// path_helper puts /usr/local/bin ahead of bin, the pane runs the
+	// machine's own claude with this folder as HOME, and that process
+	// writes into the folder after the test has removed it.
+	shell := filepath.Join(bin, "sh")
+	write(shell, "#!/bin/sh\n[ \"$1\" = -lic ] || exit 64\nshift\nexec /bin/sh -c \"$@\"\n", 0o755)
 	write(filepath.Join(home, "proj", "internal", "clock", "parse.go"), "package clock\n", 0o644)
 	write(filepath.Join(home, "proj", "internal", "clock", "clock.go"), "package clock\n", 0o644)
 	tr, err := os.ReadFile("../adapters/claude/testdata/transcript-basic.jsonl")
@@ -184,7 +190,7 @@ func newFixtureEnv(t *testing.T, name string) *fixtureEnv {
 	t.Cleanup(func() { waitNoProcessIn(t, home, togoHome) })
 	svc := &session.Service{
 		Tmux: tmuxtest.New(t), Recent: &state.Recent{File: filepath.Join(togoHome, "recent.json")},
-		LockFile: filepath.Join(togoHome, "run", "bib.lock"), Shell: "/bin/sh", Path: bin + ":/usr/bin:/bin",
+		LockFile: filepath.Join(togoHome, "run", "bib.lock"), Shell: shell, Path: bin + ":/usr/bin:/bin",
 		NewID: func() string { return sid }, Now: func() time.Time { return fixtureNow },
 	}
 	status := func(string) string { return "" }

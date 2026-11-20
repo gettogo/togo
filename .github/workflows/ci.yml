@@ -50,6 +50,35 @@ jobs:
       - name: Lint and test
         run: make lint test
 
+  e2e:
+    name: End-to-end suite (${{ matrix.os == 'ubuntu-latest' && 'Linux' || 'macOS' }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install tmux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tmux
+
+      - name: Install tmux
+        if: runner.os == 'macOS'
+        run: brew install tmux
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: helper/go.mod
+
+      - name: End-to-end suite
+        run: make e2e-test
+
   linux-386:
     name: Helper tests (Linux 32-bit)
     runs-on: ubuntu-latest

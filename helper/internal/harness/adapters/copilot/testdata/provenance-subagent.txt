@@ -1,0 +1,1 @@
+subagent-hooks.jsonl: raw GitHub Copilot CLI 1.0.114 hook payloads (one {event, payload} per line), captured 2026-11-19: one turn on Claude Haiku 4.5 that starts a subagent with the task tool.

@@ -1,0 +1,1 @@
+ask-two-questions-hooks.jsonl: raw Claude Code 2.1.329 hook payloads (one {event, payload} per line), captured 2026-11-19: a two-question AskUserQuestion turn, then /clear, /resume and a nested claude -p run.

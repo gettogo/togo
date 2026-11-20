@@ -1,0 +1,487 @@
+// Package enginetest runs the real harness engine and adapters over
+// session files on disk, for tests in other packages: a fake session
+// list, pane, typist and agent binary, a temporary TOGO_HOME, and helpers
+// to read every history page, collect notifications and restart.
+package enginetest
+
+import (
+	"cmp"
+	"context"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/gettogo/togo/helper/internal/approval"
+	"github.com/gettogo/togo/helper/internal/gitx"
+	"github.com/gettogo/togo/helper/internal/harness"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/amp"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/claude"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/copilot"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/cursor"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/droid"
+	_ "github.com/gettogo/togo/helper/internal/harness/adapters/omp"
+	"github.com/gettogo/togo/helper/internal/harness/anchor"
+	"github.com/gettogo/togo/helper/internal/harness/engine"
+	"github.com/gettogo/togo/helper/internal/harness/source"
+	"github.com/gettogo/togo/helper/internal/harness/source/rpc"
+	"github.com/gettogo/togo/helper/internal/ports"
+	"github.com/gettogo/togo/helper/internal/session"
+	"github.com/gettogo/togo/helper/internal/wire"
+)
+
+// SessionID is the Togo session a rig serves unless Options.ID names another.
+const SessionID = "s_enginetest"
+
+// TTY is the pane's terminal, for agents (omp) that record their session
+// file per terminal.
+const TTY = "/dev/ttys042"
+
+// versions are what the fake agent binaries print for the version gate.
+var versions = map[string]string{"omp": "omp/18.21.0", "claude": "2.1.319 (Claude Code)",
+	"copilot": "GitHub Copilot CLI 1.0.108.", "droid": "1.5.0", "cursor": "2026.11.05-86047df", "amp": "0.0.1794312042-g1a2b3c (released 2026-11-10T00:00:00.000Z)"}
+
+// programs are the names the adapters' version commands run, where they
+// differ from the agent's id.
+var programs = map[string]string{"cursor": "cursor-agent"}
+
+// subcommands are what a fake binary prints for a subcommand an adapter
+// lists models with; `cursor-agent models` lists them as the adapter's
+// jq reads (cursor/testdata, cursor_test.go).
+var subcommands = map[string]string{"cursor": "models) printf 'Available models\\n\\ngpt-5 - GPT-5\\ncomposer-2.5 - Composer 2.5 (current)\\n';;\n"}
+
+// Options picks the agent and folders a rig serves.
+type Options struct {
+	Agent string // "omp", "claude", "copilot", "droid", "cursor" or "amp"
+	// Home is the user's home folder, where the session files are; Cwd
+	// the session's folder under it.
+	Home string
+	Cwd  string
+	// Created is when the Togo session started: the agent's files must
+	// be from after it.
+	Created time.Time
+	// MaxItems is the engine's item log size; 0 keeps the default.
+	MaxItems int
+	// Scale multiplies the engine's own waits; 0 keeps the rig's 0.05.
+	Scale float64
+	// NoRedact passes records through unredacted. Redaction has its own
+	// tests, and it is four fifths of the time a restore of a large file
+	// takes (eight times that under the race detector).
+	NoRedact bool
+	// PanePIDs, when set, names the processes of the session's pane, so
+	// the engine attributes files to the session by who holds them open
+	// (the agents whose feed is exclusive: pi, kimi). Nil leaves the
+	// engine without a process view.
+	PanePIDs func() []int
+	// ID is the Togo session's id; empty means SessionID. Rigs that run
+	// at the same time need ids of their own: the hook bus and the typing
+	// locks are keyed by it. NewID makes one.
+	ID string
+	// ApprovalTTL is how long an approval stays answerable; 0 keeps the
+	// store's default.
+	ApprovalTTL time.Duration
+	// Version, when set, is what the fake agent program prints for the
+	// version gate instead of the agent's usual version.
+	Version string
+	// Adapter names the adapter of an agent with one per major version
+	// (OpenCode's opencode2): New sets it when Agent is given as such a
+	// name (variants, rig_api2.go), and Agent becomes the agent's id.
+	Adapter string
+	// Anchors gives the engine a marker over the scripted pane
+	// (anchors.go): items published while the screen is up carry the
+	// pane's position, and Locate finds it again.
+	Anchors bool
+	// Git gives the engine the machine's git, for the Changes section of
+	// a folder that is a repository.
+	Git bool
+	// Ports gives the engine a listing of the session's listening ports,
+	// which Listeners starts as and SetListeners changes; without it the
+	// section is not served.
+	Ports     bool
+	Listeners []ports.Listener
+}
+
+// asIs is a redactor that changes nothing.
+type asIs struct{}
+
+func (asIs) JSON(raw json.RawMessage) json.RawMessage { return raw }
+func (asIs) String(s string) string                   { return s }
+
+// Rig is a running engine over one session.
+type Rig struct {
+	T        testing.TB
+	Opt      Options
+	ID       string
+	TogoHome string
+	Engine   *engine.Engine
+	Sub      *Sub
+	// Term is the session's pane.
+	Term *Terminal
+	phoneState
+	lifeState
+	orderState
+
+	bin string
+	api *APIServer
+	// codex is a Codex session's app-server; codexLaunch the terminal
+	// client's arguments from its last launch (rig_codex.go).
+	codex       *CodexServer
+	codexLaunch []string
+	// launched is set once the API agent was launched.
+	launched bool
+	mu       sync.Mutex
+	status   string
+	// listeners are the ports SetListeners scripted.
+	listeners []ports.Listener
+	// stopEngine stops the running engine and waits for what it started.
+	stopEngine func()
+}
+
+var pollOnce sync.Once
+
+// New starts an engine for the session. The files may be written before
+// or after.
+func New(t testing.TB, opt Options) *Rig {
+	t.Helper()
+	// Set once, before any engine runs: the tails read it.
+	pollOnce.Do(func() {
+		source.PollEvery = 20 * time.Millisecond
+		// How often an app-server feed looks for newly loaded threads.
+		rpc.Default.Poll = 50 * time.Millisecond
+	})
+	if opt.ID == "" {
+		opt.ID = SessionID
+	}
+	version := versions[opt.Agent]
+	if v, ok := variants[opt.Agent]; ok {
+		opt.Adapter, opt.Agent, version = opt.Agent, v.agent, v.version
+	}
+	r := &Rig{T: t, Opt: opt, listeners: opt.Listeners, ID: opt.ID, TogoHome: t.TempDir(), bin: filepath.Join(t.TempDir(), "bin"), Term: newTerminal(opt.Agent)}
+	if err := os.MkdirAll(r.bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The gate runs `<agent> --version`; any other call fails at once.
+	// Every call but the version check is recorded, one argv per line,
+	// so a test sees what an action ran (CLICalls).
+	if opt.Version != "" {
+		version = opt.Version
+	}
+	sub := subcommands[opt.Agent]
+	if opt.Agent == "omp" {
+		// `omp models ls --json`, as omp 18 prints it (omp/testdata).
+		sub = "models) cat '" + filepath.Join(sourceDir(), "harness", "adapters", "omp", "testdata", "models.json") + "';;\n"
+		// `omp config list --json` (omp/testdata/config-list.json, OMP 18.22.2)
+		// from a copy in the binary's folder, which a test may change to
+		// stand for omp applying a `config set` (SetConfig); any other
+		// config call is recorded and succeeds, as a set does.
+		list := filepath.Join(r.bin, "config-list.json")
+		b, err := os.ReadFile(filepath.Join(sourceDir(), "harness", "adapters", "omp", "testdata", "config-list.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(list, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sub += "config) if [ \"$2\" = list ]; then cat '" + list + "'; else echo \"$*\" >> '" + filepath.Join(r.bin, "calls.log") + "'; fi;;\n"
+	}
+	if opt.Adapter == "opencode2" {
+		sub = serveCase(r.bin)
+	}
+	script := "#!/bin/sh\ncase \"$1\" in\n--version|version) echo '" + version + "';;\n" + sub +
+		"*) echo \"$*\" >> '" + filepath.Join(r.bin, "calls.log") + "'; exit 1;;\nesac\n"
+	prog := opt.Agent
+	if p, ok := programs[prog]; ok {
+		prog = p
+	}
+	if err := os.WriteFile(filepath.Join(r.bin, prog), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r.setupAPI()
+	r.setupCodex()
+	r.start()
+	return r
+}
+
+// SetStatus sets the hub's status for the session (working, idle,
+// ended); "" means unknown.
+func (r *Rig) SetStatus(s string) {
+	r.mu.Lock()
+	r.status = s
+	r.mu.Unlock()
+}
+
+func (r *Rig) start() {
+	path := r.bin + ":/usr/bin:/bin"
+	log := &engine.Log{}
+	if r.Opt.MaxItems > 0 {
+		log.Max = r.Opt.MaxItems
+	}
+	var red harness.Redactor
+	if r.Opt.NoRedact {
+		red = asIs{}
+	}
+	var panePIDs func(context.Context, string) ([]int, error)
+	if f := r.Opt.PanePIDs; f != nil {
+		panePIDs = func(context.Context, string) ([]int, error) { return f(), nil }
+	}
+	var listeners func(context.Context, string) ([]ports.Listener, error)
+	if r.api != nil && r.api.v2 == nil {
+		listeners = r.apiPorts
+	} else if r.Opt.Ports {
+		listeners = r.scriptedPorts
+	}
+	var git func(context.Context, string) (gitx.Status, error)
+	if r.Opt.Git {
+		git = (&gitx.Git{}).Status
+	}
+	var marker harness.Marker
+	if r.Opt.Anchors {
+		marker = &anchor.Marker{Home: r.TogoHome, Pane: termPane{r.Term}}
+	}
+	// Once this engine is stopped it is a helper that exited: nothing it
+	// still has running (a hub event's goroutine, a timer) may serve the
+	// session again, as a process that is gone cannot.
+	gone := &atomic.Bool{}
+	eng := engine.New(engine.Config{
+		Redactor: red,
+		PanePIDs: panePIDs,
+		Ports:    listeners,
+		Git:      git,
+		Marker:   marker,
+		Sessions: sessions{r: r, gone: gone}, Typist: r.Term, Log: log, Home: r.Opt.Home, TogoHome: r.TogoHome,
+		Approvals:    approvals{r},
+		Screen:       func(context.Context, string) (string, error) { return r.Term.Text(), nil },
+		StyledScreen: func(context.Context, string) (string, error) { return r.Term.Styled(), nil },
+		Cursor:       func(context.Context, string) (int, int, bool, error) { return r.Term.cursor() },
+		NeedsYou: func(id, title, body string) {
+			r.note(Event{Kind: wire.EventNotify, Payload: wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelNeedsYou}})
+		},
+		Done: func(id, title, body string) {
+			r.note(Event{Kind: wire.EventNotify, Payload: wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelDone}})
+		},
+		Relaunch:  r.relaunch,
+		Pane:      func(context.Context, string) (engine.PaneInfo, error) { return engine.PaneInfo{TTY: TTY}, nil },
+		LoginPath: func(context.Context) string { return path },
+		LoginEnv:  func(context.Context) []string { return []string{"HOME=" + r.Opt.Home, "PATH=" + path} },
+		Status: func(string) string {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			return r.status
+		},
+		Scale: cmp.Or(r.Opt.Scale, 0.05),
+		// The engine's log goes to the test's, shown when a test fails.
+		Logf: func(format string, args ...any) { r.T.Logf("engine: "+format, args...) },
+	})
+	r.mu.Lock()
+	r.Engine = eng
+	r.mu.Unlock()
+	if r.api != nil && !r.launched && (r.api.v2 != nil || r.api.Port() == 0) {
+		// The first start is the agent's launch; a restart finds the
+		// server it left running.
+		r.launched = true
+		if r.api.v2 != nil {
+			r.launchAPI2(eng)
+		} else {
+			r.launchAPI(eng, true)
+		}
+	}
+	if r.codex != nil && !r.launched {
+		r.launched = true
+		r.codexArgs(r.launchCodex(eng))
+	}
+	r.startPhone()
+	engineStarted()
+	var once sync.Once
+	stop := func() {
+		once.Do(func() {
+			// As a helper that exits: what it holds in memory goes, what
+			// it keeps under run/ for the next start stays.
+			gone.Store(true)
+			eng.Unload(r.ID)
+			r.engineStopped([]string{r.Opt.Home, r.Opt.Cwd, r.TogoHome, r.bin})
+		})
+	}
+	r.mu.Lock()
+	r.stopEngine = stop
+	r.mu.Unlock()
+	r.T.Cleanup(stop)
+	r.Sub = newSub()
+	res, err := r.Engine.Open(context.Background(), r.Sub, r.ID, 0, 1)
+	var fallback *harness.FallbackError
+	if err != nil && r.Opt.Version != "" && errors.As(err, &fallback) {
+		// A version the adapter does not serve: the session is its
+		// terminal, which the test checks.
+		return
+	}
+	if err != nil {
+		r.T.Fatalf("open: %v", err)
+	}
+	r.Engine.Release(r.Sub, r.ID)
+	_ = res
+}
+
+// approvals is the engine's view of the store; it follows the store a
+// restart builds.
+type approvals struct{ r *Rig }
+
+func (a approvals) store() *approval.Store {
+	a.r.mu.Lock()
+	defer a.r.mu.Unlock()
+	return a.r.Approvals
+}
+
+func (a approvals) Pending(id string) []wire.Approval {
+	if s := a.store(); s != nil {
+		return s.Pending(id)
+	}
+	return nil
+}
+
+func (a approvals) Answer(ctx context.Context, requestID, raw, by string) error {
+	return a.store().Answer(ctx, requestID, raw, by)
+}
+
+func (a approvals) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <-chan string) {
+	ap, ch := a.store().OpenAsk(ctx, p)
+	a.r.waitAskGate()
+	return ap, ch
+}
+
+func (a approvals) CloseDesk(requestID string) { a.store().CloseDesk(requestID) }
+
+// The ways the store answers a question with the pane's keys or a waiting
+// hook (the engine finds them by interface).
+
+func (a approvals) AnswerChoice(ctx context.Context, sessionID string, answers []approval.AskAnswer) error {
+	return a.store().AnswerChoice(ctx, sessionID, answers)
+}
+
+func (a approvals) AnswerAsk(ctx context.Context, sessionID string, answers []approval.AskAnswer) error {
+	return a.store().AnswerAsk(ctx, sessionID, answers)
+}
+
+func (a approvals) AnswerQuestion(sessionID string, prompts []string, answers map[string]string) bool {
+	return a.store().AnswerQuestion(sessionID, prompts, answers)
+}
+
+// Restart stops this engine and starts another over the same TOGO_HOME
+// and files, as `togo update` restarts the helper while the agent runs.
+//
+// That is a whole restart: the engine keeps nothing for a session outside
+// TOGO_HOME/run (the followed file, run/follow-<id>.json, source/
+// follow.go; an OpenCode conversation id and endpoint records,
+// engine/history.go and engine/recovery.go; a hook-only session's hook
+// records, engine/hookstore.go), and Unload drops the engine's memory of
+// the session and the hook bus's, as the helper's exit does, and keeps
+// those files.
+func (r *Rig) Restart() {
+	r.Stop()
+	r.Start()
+}
+
+// Stop stops the engine, as the helper being down; Start builds a new
+// one. Files written between the two are found by the new engine's
+// restore, as after an update that took a while.
+func (r *Rig) Stop() {
+	// As the daemon does on its way out (daemon/exit.go): the hooks it
+	// accepted are read and stored, it stops, and the open approvals
+	// reach disk.
+	if !r.DrainHooks(15 * time.Second) {
+		r.T.Errorf("the hook readers did not finish before the stop")
+	}
+	r.mu.Lock()
+	stop := r.stopEngine
+	store := r.Approvals
+	r.mu.Unlock()
+	stop()
+	store.Flush()
+}
+
+// Start builds a new engine over the same TOGO_HOME and files.
+func (r *Rig) Start() { r.start() }
+
+// Deliver sends a hook payload as the agent's hook command would.
+func (r *Rig) Deliver(event string, payload []byte) {
+	source.Hooks.Deliver(r.ID, source.Payload{Kind: source.BusHook, Event: event, Data: payload})
+}
+
+// DeliverStatusLine gives the engine one status line input, as `togo hook
+// claude statusline` forwards it.
+func (r *Rig) DeliverStatusLine(payload []byte) {
+	source.Hooks.Deliver(r.ID, source.Payload{Kind: source.BusStatusline, Data: payload})
+}
+
+// sessions resolves the rig's session for one engine; gone is set when
+// that engine stops.
+type sessions struct {
+	r    *Rig
+	gone *atomic.Bool
+}
+
+func (s sessions) Resolve(_ context.Context, id string) (session.Session, error) {
+	if s.gone != nil && s.gone.Load() {
+		return session.Session{}, session.ErrNotFound
+	}
+	s.r.mu.Lock()
+	removed := s.r.removed
+	s.r.mu.Unlock()
+	if id != s.r.ID || removed {
+		return session.Session{}, session.ErrNotFound
+	}
+	o := s.r.Opt
+	return session.Session{ID: id, Name: "test", Agent: o.Agent, Cwd: o.Cwd, CreatedAt: o.Created, Status: "running",
+		Managed: true, Command: []string{o.Agent}}, nil
+}
+
+// Sub collects the notifications the engine sends.
+type Sub struct {
+	mu    sync.Mutex
+	notes []harness.Notification
+	done  chan struct{}
+}
+
+func newSub() *Sub { return &Sub{done: make(chan struct{})} }
+
+func (s *Sub) Notify(n harness.Notification) error {
+	s.mu.Lock()
+	s.notes = append(s.notes, n)
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *Sub) Done() <-chan struct{} { return s.done }
+
+// Notes returns the notifications so far.
+func (s *Sub) Notes() []harness.Notification {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]harness.Notification(nil), s.notes...)
+}
+
+// SetConfig changes a value in the omp config list the fake omp prints
+// (`omp config list --json`), as omp does after a successful `config set`:
+// key is the setting's name, value its new JSON value.
+func (r *Rig) SetConfig(key string, value any) {
+	r.T.Helper()
+	path := filepath.Join(r.bin, "config-list.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		r.T.Fatal(err)
+	}
+	var all map[string]map[string]any
+	if err := json.Unmarshal(b, &all); err != nil {
+		r.T.Fatal(err)
+	}
+	if all[key] == nil {
+		r.T.Fatalf("enginetest: omp has no setting %q", key)
+	}
+	all[key]["value"] = value
+	out, _ := json.Marshal(all)
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		r.T.Fatal(err)
+	}
+}

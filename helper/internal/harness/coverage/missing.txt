@@ -1,0 +1,7 @@
+cursor/lifecycle/fork
+droid/capability/agents
+kilo/capability/status.context
+kilo/lifecycle/helper_restart
+kimi/capability/agents
+opencode/capability/chat.anchors
+opencode/lifecycle/helper_restart

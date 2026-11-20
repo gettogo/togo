@@ -1,0 +1,2 @@
+mode-dontask.ansi, mode-manual.ansi, mode-acceptedits.ansi, mode-plan.ansi, mode-auto.ansi: Claude Code 2.1.327 at 120x40 (capture-pane -p -e), captured 2026-11-19 after startup in don't ask mode and each Shift+Tab (manual, accept edits, plan, auto); the cycle goes on to manual and accept edits again. Remote-session link ids scrubbed.
+ask-step1.ansi to ask-step4.ansi: Claude Code 2.1.329 at 120x40, captured 2026-11-19: the two-question AskUserQuestion dialog (Colour tab, Fruit tab, review, answered). Remote-session link ids scrubbed.

@@ -1,0 +1,14 @@
+aider-idle.ansi: Aider 0.86.2, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+amp-idle.ansi: Amp 0.0.1795017641, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+cline-idle.ansi: Cline 3.0.74, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+codex-idle.ansi: Codex CLI 0.170.0, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+copilot-idle.ansi: GitHub Copilot CLI 1.0.114, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+crush-idle.ansi: Crush 0.100.0, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+cursor-idle.ansi: Cursor CLI 2026.11.17, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+droid-idle.ansi: Droid 1.5.0, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+goose-idle.ansi: Goose 1.57.0, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+kilo-idle.ansi: Kilo Code 7.8.27, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+kimi-idle.ansi: Kimi Code 2.6.0, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+opencode-idle.ansi: OpenCode 2.2.5, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+pi-idle.ansi: Pi 0.73.1, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
+vibe-idle.ansi: Mistral Vibe 3.1.0, idle screen at 120x40 (tmux capture-pane -p -e), captured 2026-11-19; paths and model names scrubbed.
