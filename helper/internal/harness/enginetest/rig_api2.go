@@ -54,12 +54,20 @@ func (r *Rig) setupAPI2() {
 	s := newAPIServer("opencode", r.Opt.Home)
 	s.v2 = newV2State()
 	s.OnAbort = func() { r.Term.CloseDialog(); r.Term.interrupted("api") }
-	port, err := freeLoopbackPort()
-	if err != nil {
-		r.T.Fatal(err)
-	}
+	// The port is free when it is picked and can be taken by another
+	// test before the server binds it, so a failed start picks again.
 	pw := secret()
-	if err := s.Start(port, pw, true); err != nil {
+	var port int
+	var err error
+	for try := 0; try < 5; try++ {
+		if port, err = freeLoopbackPort(); err != nil {
+			continue
+		}
+		if err = s.Start(port, pw, true); err == nil {
+			break
+		}
+	}
+	if err != nil {
 		r.T.Fatal(err)
 	}
 	if err := os.WriteFile(upstreamFile(r.bin), []byte("127.0.0.1:"+strconv.Itoa(port)+"\n"+pw+"\n"), 0o600); err != nil {
