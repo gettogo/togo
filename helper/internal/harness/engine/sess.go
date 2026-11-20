@@ -91,6 +91,11 @@ type sess struct {
 	awaitReply bool
 	// awaitText is the prompt awaitReply waits on, never read as its error.
 	awaitText string
+	// turnEnds counts the turn ends seen; awaitEnds is how many there were
+	// when the awaited prompt was about to be sent. A turn end judges only a
+	// prompt sent before it (see afterTurnLocked).
+	turnEnds  uint64
+	awaitEnds uint64
 	// exitNoticed is set once the chat was told the agent exited, until
 	// it runs again.
 	exitNoticed bool
@@ -751,6 +756,9 @@ func (s *sess) afterTurnLocked() {
 	if s.e.cfg.Done == nil && !s.awaitReply {
 		return
 	}
+	// A prompt sent after this turn ended (one queued behind it) starts a
+	// turn of its own, and that turn's end judges it.
+	ends := s.turnEnds
 	time.AfterFunc(s.e.scaled(turnSettle), func() {
 		// The screen is read before the lock: it may say why no reply came.
 		screen := s.screenNow()
@@ -760,7 +768,9 @@ func (s *sess) afterTurnLocked() {
 			return
 		}
 		s.doneLocked()
-		s.replyMissingLocked(screen)
+		if s.awaitEnds < ends {
+			s.replyMissingLocked(screen)
+		}
 	})
 }
 
@@ -846,6 +856,7 @@ func (s *sess) setWorkingLocked(w bool) {
 		s.missionDeltaLocked(d)
 	}
 	if was && !w && !s.restoring {
+		s.turnEnds++
 		s.closeIdleLocked()
 		if !agentGone(s.hubStatus()) {
 			// An agent that exited did not finish: no done push.

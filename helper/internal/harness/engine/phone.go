@@ -32,6 +32,9 @@ type phoneText struct {
 	at      time.Time
 	pending bool
 	matched bool
+	// ends is s.turnEnds when the prompt was noted: a turn that ended
+	// since did not answer it.
+	ends uint64
 }
 
 // notePhoneLocked remembers a prompt the helper typed.
@@ -50,6 +53,7 @@ func (s *sess) addPhoneLocked(p phoneText) {
 	// clips and redacts it first): a prompt over MaxItemText, or one with
 	// a key in it, still matches its record.
 	p.raw = p.text
+	p.ends = s.turnEnds
 	p.text = strings.TrimSpace(clipItemText(s.e.red.String(p.text)))
 	now := s.e.cfg.Now()
 	keep := s.phone[:0]
@@ -85,6 +89,17 @@ func (s *sess) settlePhoneLocked(id string, sent bool) (recorded bool) {
 	return false
 }
 
+// phoneEndsLocked is the turn ends seen when the prompt id was noted, or
+// the count now when no note is left.
+func (s *sess) phoneEndsLocked(id string) uint64 {
+	for _, p := range s.phone {
+		if p.id == id {
+			return p.ends
+		}
+	}
+	return s.turnEnds
+}
+
 // imagePlaceholder is how an agent writes a pasted picture into the prompt
 // text: "[Image #1]" (Claude Code) or "[Image 1]" (OpenCode 2).
 var imagePlaceholder = regexp.MustCompile(`\[Image #?\d+\]`)
@@ -107,8 +122,7 @@ func (s *sess) matchPhoneLocked(self, text string) (phoneText, bool) {
 				// Recorded while its sender still waits: the sender
 				// settles the note. The record is the proof it was sent.
 				s.phone[i].matched = true
-				s.awaitReply, s.awaitText = true, p.raw
-				s.failedHold = false // a new prompt starts a new turn
+				s.awaitLocked(p.raw, p.ends)
 				return p, true
 			}
 			s.phone = append(s.phone[:i], s.phone[i+1:]...)
