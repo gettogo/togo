@@ -70,6 +70,12 @@ func TestParseFormReadsTheFocusedField(t *testing.T) {
 	if f, ok := ParseForm(string(raw)); ok {
 		t.Errorf("answered screen read as a form: %+v", f)
 	}
+	// Esc at the desk gave the keys to omp's composer: the dialog draws no
+	// cursor, and a key sent now would be typed into the composer.
+	raw, _ = os.ReadFile("testdata/omp/real-form-released.txt")
+	if f, ok := ParseForm(string(raw)); ok {
+		t.Errorf("a released dialog read as one taking keys: %+v", f)
+	}
 	// The colours change nothing.
 	raw, _ = os.ReadFile("testdata/omp/real-form-open.ansi")
 	if f, ok := ParseForm(string(raw)); !ok || f.Stop != FormOption || f.Cursor != 0 || f.Prompt != "Which color should the button be?" {
