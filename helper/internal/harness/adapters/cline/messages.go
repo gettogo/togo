@@ -75,6 +75,8 @@ func newMessages(env harness.Env) *messages {
 	}
 	if id := argvID(env.Argv); id != "" {
 		m.lock(id)
+	} else {
+		m.restore()
 	}
 	return m
 }
@@ -112,6 +114,7 @@ func (m *messages) dir(id string) string {
 func (m *messages) lock(id string) {
 	m.session = id
 	m.state["harness_session"] = id
+	source.SaveFollowed(m.env, followName, id)
 	m.state["transcript_path"] = filepath.Join(m.dir(id), id+".messages.json")
 	if mf, ok := m.manifest(id); ok {
 		if mf.Model != "" {
