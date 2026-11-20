@@ -6,6 +6,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/detect"
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // claudeTwoQuestions is Claude Code's two-question AskUserQuestion as its
@@ -72,5 +73,32 @@ func TestOtherAgentsDialogsStayScreenPrompts(t *testing.T) {
 	s.mu.Unlock()
 	if e.QuestionDialog(id, detect.Prompt{Title: "Which colour do you prefer?", Ask: true}) {
 		t.Fatal("a screen_answer agent's dialog was claimed")
+	}
+}
+
+// The watcher found the first step before the question item arrived, so
+// the item was linked to that screen request. A later step unlinks it:
+// the caller closes the request, and the item is offered on its own.
+func TestPairedStepUnlinksAnEarlierScreenRequest(t *testing.T) {
+	const id = "s_dialog03"
+	ap := &fakeApprovals{pending: []wire.Approval{{RequestID: "rq_step1", Source: wire.SourceScreen,
+		Title: "Which colour do you prefer?", Options: []wire.Option{{N: 1, Label: "Red"}, {N: 2, Label: "Blue"}}}}}
+	e, s := questionEngine(t, id, ap)
+	claudeAnswering(s, "claude_ask")
+	s.mu.Lock()
+	s.publishLocked([]harness.Item{claudeTwoQuestions(nil)}, nil)
+	linked := s.needs.request["toolu_ask"]
+	s.mu.Unlock()
+	if linked != "rq_step1" {
+		t.Fatalf("linked to %q", linked)
+	}
+	if !e.QuestionDialog(id, detect.Prompt{Title: "Which fruit do you prefer?", Ask: true}) {
+		t.Fatal("the step was not claimed")
+	}
+	s.mu.Lock()
+	linked = s.needs.request["toolu_ask"]
+	s.mu.Unlock()
+	if linked != "" {
+		t.Fatalf("still linked to %q", linked)
 	}
 }
