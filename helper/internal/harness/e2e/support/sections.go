@@ -100,13 +100,17 @@ var ChangesAfter = map[string]string{"e0.go": "modified", "d0.go": "deleted", "a
 // ends.
 func ChangesScenario(t *testing.T, r *enginetest.Rig, cwd string, next func() func(enginetest.State) bool) enginetest.State {
 	t.Helper()
-	WaitFor(t, r, "the changes at the start", ChangesAre(ChangesAtStart))
+	// Quiet first: a turn that ended while the session was starting must
+	// not be the one that refreshes the section below.
+	if st := r.SettleUntil(FileLimit, ChangesAre(ChangesAtStart)); !ChangesAre(ChangesAtStart)(st) {
+		t.Fatalf("changes at the start: %+v, want %v", Rows(st, harness.SectionChanges), ChangesAtStart)
+	}
 	if err := os.Remove(filepath.Join(cwd, "e1.go")); err != nil {
 		t.Fatal(err)
 	}
 	put(t, cwd, "e2.go", "package e\n")
 	seen := next()
-	st := WaitFor(t, r, "the turn", seen)
+	st := r.SettleUntil(FileLimit, seen)
 	// The turn has ended. Its end refreshes the section within moments; the
 	// 30 second refresh is far enough off that waiting for it fails.
 	deadline := time.Now().Add(turnRefresh)
