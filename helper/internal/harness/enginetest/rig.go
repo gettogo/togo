@@ -170,6 +170,19 @@ func New(t testing.TB, opt Options) *Rig {
 	if opt.Agent == "omp" {
 		// `omp models ls --json`, as omp 18 prints it (omp/testdata).
 		sub = "models) cat '" + filepath.Join(sourceDir(), "harness", "adapters", "omp", "testdata", "models.json") + "';;\n"
+		// `omp config list --json` (omp/testdata/config-list.json, OMP 18.22.2)
+		// from a copy in the binary's folder, which a test may change to
+		// stand for omp applying a `config set` (SetConfig); any other
+		// config call is recorded and succeeds, as a set does.
+		list := filepath.Join(r.bin, "config-list.json")
+		b, err := os.ReadFile(filepath.Join(sourceDir(), "harness", "adapters", "omp", "testdata", "config-list.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(list, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sub += "config) if [ \"$2\" = list ]; then cat '" + list + "'; else echo \"$*\" >> '" + filepath.Join(r.bin, "calls.log") + "'; fi;;\n"
 	}
 	if opt.Adapter == "opencode2" {
 		sub = serveCase(r.bin)
@@ -441,4 +454,28 @@ func (s *Sub) Notes() []harness.Notification {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]harness.Notification(nil), s.notes...)
+}
+
+// SetConfig changes a value in the omp config list the fake omp prints
+// (`omp config list --json`), as omp does after a successful `config set`:
+// key is the setting's name, value its new JSON value.
+func (r *Rig) SetConfig(key string, value any) {
+	r.T.Helper()
+	path := filepath.Join(r.bin, "config-list.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		r.T.Fatal(err)
+	}
+	var all map[string]map[string]any
+	if err := json.Unmarshal(b, &all); err != nil {
+		r.T.Fatal(err)
+	}
+	if all[key] == nil {
+		r.T.Fatalf("enginetest: omp has no setting %q", key)
+	}
+	all[key]["value"] = value
+	out, _ := json.Marshal(all)
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		r.T.Fatal(err)
+	}
 }
