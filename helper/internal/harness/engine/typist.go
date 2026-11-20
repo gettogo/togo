@@ -51,9 +51,14 @@ func (t SessionTypist) TypeKeys(ctx context.Context, id, text string) error {
 			return errors.New("harness: text has a control character")
 		}
 	}
-	mu := panelock.For(id)
-	mu.Lock()
-	defer mu.Unlock()
+	ctx, release, err := panelock.Acquire(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if panelock.Stopped(ctx, id, 0) {
+		return errStopped
+	}
 	return t.Tmux.SendKeys(ctx, "="+id+":", true, text)
 }
 
@@ -69,8 +74,32 @@ func (t SessionTypist) Keys(ctx context.Context, id string, keys ...string) erro
 			return errors.New("harness: key not allowed")
 		}
 	}
-	mu := panelock.For(id)
-	mu.Lock()
-	defer mu.Unlock()
+	ctx, release, err := panelock.Acquire(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if panelock.Stopped(ctx, id, 0) {
+		return errStopped
+	}
+	return t.Tmux.SendKeys(ctx, "="+id+":", false, keys...)
+}
+
+// errStopped: a stop was sent while this sequence held the pane.
+var errStopped = errors.New("harness: a stop was sent; the rest was not typed")
+
+// StopKeys sends a stop's keys (spec.StopKeys and the interrupt keys) at
+// once, without waiting for the pane: a stop never waits behind a write.
+// A sequence holding the pane sends no further key after it.
+func (t SessionTypist) StopKeys(ctx context.Context, id string, keys ...string) error {
+	if _, err := session.ValidateID(id); err != nil {
+		return err
+	}
+	for _, k := range keys {
+		if !spec.StopKeys[k] && !spec.AllowedKeys[k] {
+			return errors.New("harness: key not allowed")
+		}
+	}
+	panelock.Stop(id)
 	return t.Tmux.SendKeys(ctx, "="+id+":", false, keys...)
 }

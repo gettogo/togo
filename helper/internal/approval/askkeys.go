@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 )
 
 // AskAnswer is the answer to one question of Claude Code's question
@@ -63,7 +64,7 @@ func (s *Store) AnswerAsk(ctx context.Context, sessionID string, answers []AskAn
 	mu := s.lockFor(sessionID)
 	mu.Lock()
 	defer mu.Unlock()
-	d := askDriver{s: s, ctx: ctx, target: target(sessionID)}
+	d := askDriver{s: s, ctx: ctx, target: target(sessionID), id: sessionID, gen: mu.Gen()}
 	var last detect.Ask
 	for i, a := range answers {
 		cur, ok := d.await(func(x detect.Ask) bool { return !x.Review && samePrompt(x.Prompt, a.Prompt) })
@@ -100,6 +101,8 @@ type askDriver struct {
 	s      *Store
 	ctx    context.Context
 	target string
+	id     string
+	gen    uint64 // the pane's stop generation when the answer began
 }
 
 func (d askDriver) read() (detect.Ask, bool) {
@@ -125,6 +128,9 @@ func (d askDriver) await(ok func(detect.Ask) bool) (detect.Ask, bool) {
 }
 
 func (d askDriver) keys(literal bool, keys ...string) error {
+	if panelock.Stopped(d.ctx, d.id, d.gen) {
+		return &AskError{"A stop was sent to the terminal; nothing more was typed"}
+	}
 	if err := d.s.cfg.Tmux.SendKeys(d.ctx, d.target, literal, keys...); err != nil {
 		return &AskError{"Sending keys to the terminal failed"}
 	}

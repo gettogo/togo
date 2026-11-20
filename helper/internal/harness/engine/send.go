@@ -251,6 +251,11 @@ func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []
 		return err
 	}
 	e.awaitReady(ctx, s)
+	ctx, release, err := e.paneSeq(ctx, s)
+	if err != nil {
+		return err
+	}
+	defer release()
 	if err := e.screenClear(ctx, s); err != nil {
 		return err
 	}

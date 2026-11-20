@@ -121,7 +121,7 @@ func (s *Store) logf(format string, args ...any) {
 // typing keys, the watcher closing a prompt) holds it, so a capture, its
 // check and the keys sent are one step per pane. It is the pane's one lock
 // (panelock), which prompts and harness keys take too.
-func (s *Store) lockFor(key string) *sync.Mutex {
+func (s *Store) lockFor(key string) *panelock.Pane {
 	return panelock.For(key)
 }
 
@@ -220,6 +220,9 @@ func (s *Store) PromptGone(ctx context.Context, sessionID string) {
 // and still waits for an answer or its own timeout.
 func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	mu := s.lockFor(sessionID)
+	// Dropped once given back: the session is gone for good, and its pane
+	// lock would otherwise stay for the life of the daemon.
+	defer panelock.Forget(sessionID)
 	mu.Lock()
 	defer mu.Unlock()
 	s.mu.Lock()
@@ -227,9 +230,6 @@ func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	for cur := s.pendingForSession(sessionID); cur != nil; cur = s.pendingForSession(sessionID) {
 		s.closeLocked(cur, wire.ResolutionGone)
 	}
-	// The session is gone for good: its pane lock would otherwise stay in
-	// the map for the life of the daemon.
-	panelock.Forget(sessionID)
 }
 
 // OpenFromHook opens an approval for an agent permission hook. The title

@@ -22,6 +22,11 @@ func (e *Engine) typeMenuCommand(ctx context.Context, s *sess, full string) (str
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
+	ctx, release, err := e.paneSeq(ctx, s)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	if err := e.heldForMenu(s); err != nil {
 		return "", err
 	}

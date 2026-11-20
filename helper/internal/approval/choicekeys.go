@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 )
 
 // AnswerChoice answers a selection dialog (detect.ParseChoice: a cursor on
@@ -34,15 +35,24 @@ func (s *Store) AnswerChoice(ctx context.Context, sessionID string, answers []As
 // typed into a follow-up dialog asking the same; and a form's answer is
 // taken only once open turns false (the agent recorded it).
 func (s *Store) AnswerChoiceOpen(ctx context.Context, sessionID string, answers []AskAnswer, open func() bool) error {
-	mu := s.lockFor(sessionID)
-	mu.Lock()
-	defer mu.Unlock()
+	held, release, err := panelock.Acquire(ctx, sessionID)
+	if err != nil {
+		return &AskError{"The terminal is busy with another answer or prompt; nothing was typed. Try again"}
+	}
+	defer release()
 	if open != nil && !open() {
 		return &AskError{"The question was already answered"}
 	}
-	d := choiceDriver{s: s, ctx: ctx, target: target(sessionID)}
+	d := choiceDriver{s: s, ctx: held, target: target(sessionID), id: sessionID, gen: s.lockFor(sessionID).Gen()}
 	if d.form() {
-		return s.answerForm(ctx, sessionID, answers, open)
+		fd, err := s.answerForm(held, sessionID, answers)
+		if err != nil {
+			return err
+		}
+		// Waiting for omp to take the answer sends no key: the pane is
+		// given back first.
+		release()
+		return fd.formGone(open)
 	}
 	for _, a := range answers {
 		if a.Keep {
@@ -102,6 +112,8 @@ type choiceDriver struct {
 	s      *Store
 	ctx    context.Context
 	target string
+	id     string
+	gen    uint64 // the pane's stop generation when the answer began
 }
 
 // form waits up to askWait for a dialog and reports whether it is omp's
@@ -172,6 +184,9 @@ func (d choiceDriver) settled(ok func(detect.Choice) bool) (detect.Choice, bool)
 }
 
 func (d choiceDriver) keys(literal bool, keys ...string) error {
+	if panelock.Stopped(d.ctx, d.id, d.gen) {
+		return &AskError{"A stop was sent to the terminal; nothing more was typed"}
+	}
 	if err := d.s.cfg.Tmux.SendKeys(d.ctx, d.target, literal, keys...); err != nil {
 		return &AskError{"Sending keys to the terminal failed"}
 	}

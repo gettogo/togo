@@ -3,6 +3,7 @@ package session
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -67,9 +68,13 @@ func (s *Service) SendText(ctx context.Context, id, text string, submit bool, st
 	// and Enter of two replies must not interleave into one submission.
 	// The pane's one lock (panelock): an answer typing keys into a dialog
 	// must not interleave with them either.
-	mu := panelock.For(id)
-	mu.Lock()
-	defer mu.Unlock()
+	// Taken for this request only: a request that ends while it waits
+	// types nothing (the app's retry must not send it twice).
+	ctx, release, err := panelock.Acquire(ctx, id)
+	if err != nil {
+		return err
+	}
+	defer release()
 	sess, err := s.find(ctx, id)
 	if err != nil {
 		return err
@@ -125,12 +130,20 @@ const (
 	settleInterval = 50 * time.Millisecond
 )
 
+// ErrStopped is returned when a stop was sent to the pane while a reply
+// was being typed: what was left of it was not sent.
+var ErrStopped = errors.New("a stop was sent to the terminal; the rest of the text was not sent")
+
 // typeReply pastes text into session id and, with submit, presses Enter
 // once the pane has settled: its screen stayed the same for one interval
 // or shows the last line of the text, after at least settleMin and at
 // most settleMax.
 func typeReply(ctx context.Context, p replyPane, id, text string, submit bool, sleep func(context.Context, time.Duration) error) error {
 	target := "=" + id + ":"
+	gen := panelock.For(id).Gen()
+	if panelock.Stopped(ctx, id, gen) {
+		return ErrStopped
+	}
 	if err := p.PasteText(ctx, target, text); err != nil {
 		return err
 	}
@@ -139,6 +152,10 @@ func typeReply(ctx context.Context, p replyPane, id, text string, submit bool, s
 	}
 	if err := settle(ctx, p, id, text, sleep); err != nil {
 		return err
+	}
+	if panelock.Stopped(ctx, id, gen) {
+		// A stop came during the settle: its Enter is not pressed.
+		return ErrStopped
 	}
 	return p.SendKeys(ctx, target, false, "Enter")
 }

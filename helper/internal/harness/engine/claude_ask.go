@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -78,6 +79,14 @@ func (e *Engine) answerScreenQuestion(ctx context.Context, s *sess, target strin
 		return ok && it.Question != nil && len(it.Question.Answered) == 0
 	}
 	if k, ok := e.cfg.Approvals.(openChoiceKeyer); ok {
+		// One answer per question at a time: the driver gives the pane
+		// back while omp records a form's answer, and a second device's
+		// answer must not drive the dialog that follows meanwhile.
+		key := s.id + "\x00" + target
+		if _, busy := answersInFlight.LoadOrStore(key, true); busy {
+			return harness.ActionResult{Result: harness.ResultFailed, Message: "Another answer to this question is being sent"}, nil
+		}
+		defer answersInFlight.Delete(key)
 		return keyedResult(k.AnswerChoiceOpen(ctx, s.id, keyed, open))
 	}
 	k, ok := e.cfg.Approvals.(choiceKeyer)
@@ -86,6 +95,9 @@ func (e *Engine) answerScreenQuestion(ctx context.Context, s *sess, target strin
 	}
 	return keyedResult(k.AnswerChoice(ctx, s.id, keyed))
 }
+
+// answersInFlight holds the questions an answer is being sent to.
+var answersInFlight sync.Map
 
 // openChoiceKeyer is a choiceKeyer that checks the question is still open
 // once it holds the pane, and confirms a form's answer by its closing.

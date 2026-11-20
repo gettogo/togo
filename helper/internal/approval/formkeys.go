@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 )
 
 // maxFormMoves bounds the Tab, arrow and Space presses of one step.
@@ -40,31 +41,31 @@ const otherPrefixCells = 11
 // Submit are never sent: they hand the keys to omp's composer. Typed words
 // that did not show as typed are removed again, only while their field
 // still has the focus. The caller holds the pane lock.
-func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskAnswer, open func() bool) error {
+func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskAnswer) (formDriver, error) {
 	for _, a := range answers {
 		t := a.Text
 		if strings.IndexFunc(t, unicode.IsControl) >= 0 {
-			return &AskError{"A typed answer with a line break or a tab can only be sent from the terminal"}
+			return formDriver{}, &AskError{"A typed answer with a line break or a tab can only be sent from the terminal"}
 		}
 		if t != strings.TrimSpace(t) {
-			return &AskError{"A typed answer that starts or ends with a space can only be sent from the terminal"}
+			return formDriver{}, &AskError{"A typed answer that starts or ends with a space can only be sent from the terminal"}
 		}
 	}
-	d := formDriver{s: s, ctx: ctx, target: target(sessionID)}
+	d := formDriver{s: s, ctx: ctx, target: target(sessionID), id: sessionID, gen: s.lockFor(sessionID).Gen()}
 	cur, ok := d.settled()
 	if !ok {
-		return &AskError{"The question is not waiting at the terminal"}
+		return d, &AskError{"The question is not waiting at the terminal"}
 	}
 	for _, a := range answers {
 		// Typed words must fit their row to be read back: an input scrolls
 		// longer text and shows no sign of it.
 		if cells(a.Text) > cur.Width-otherPrefixCells-1 {
-			return &AskError{"An answer this long can only be typed in the terminal"}
+			return d, &AskError{"An answer this long can only be typed in the terminal"}
 		}
 		if !cur.Scrolled && !asksAny(cur, []AskAnswer{a}) {
 			// The whole form shows: a question it does not ask is refused
 			// before any key.
-			return &AskError{"The terminal shows a different question; nothing was sent"}
+			return d, &AskError{"The terminal shows a different question; nothing was sent"}
 		}
 	}
 	var err error
@@ -75,7 +76,7 @@ func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskA
 		if cur, err = d.seek(cur, func(f detect.Form) bool {
 			return f.Stop != detect.FormSubmit && samePromptExact(f.Prompt, a.Prompt)
 		}); err != nil {
-			return err
+			return d, err
 		}
 		switch cur.Stop {
 		case detect.FormOption, detect.FormOther:
@@ -86,16 +87,13 @@ func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskA
 			cur, err = d.text(cur, a)
 		}
 		if err != nil {
-			return err
+			return d, err
 		}
 	}
 	if cur, err = d.checkForm(cur, answers); err != nil {
-		return err
+		return d, err
 	}
-	if err := d.press(isSubmit, false, "Enter"); err != nil {
-		return err
-	}
-	return d.formGone(open)
+	return d, d.press(isSubmit, false, "Enter")
 }
 
 func isSubmit(f detect.Form) bool { return f.Stop == detect.FormSubmit && f.Fix == 0 }
@@ -134,6 +132,8 @@ type formDriver struct {
 	s      *Store
 	ctx    context.Context
 	target string
+	id     string
+	gen    uint64 // the pane's stop generation when the answer began
 }
 
 func (d formDriver) read() (detect.Form, bool) {
@@ -147,6 +147,9 @@ func (d formDriver) read() (detect.Form, bool) {
 // press reads the screen and sends keys only while the form is there and
 // expect holds for it: the focus is where the driver left it.
 func (d formDriver) press(expect func(detect.Form) bool, literal bool, keys ...string) error {
+	if panelock.Stopped(d.ctx, d.id, d.gen) {
+		return &AskError{"A stop was sent to the terminal; nothing more was typed"}
+	}
 	f, found := d.read()
 	if !found {
 		return &AskError{"The form left the screen; nothing more was sent"}

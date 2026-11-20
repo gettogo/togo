@@ -311,3 +311,28 @@ func TestAnswerFormAndAPromptDoNotInterleave(t *testing.T) {
 		t.Fatalf("keys %v: the prompt came in the middle of the answer", sim.sent)
 	}
 }
+
+// A stop sent while the form is being answered goes past the pane lock;
+// the answer then sends no further key.
+func TestAnswerFormSendsNothingAfterAStop(t *testing.T) {
+	fastAsk(t)
+	sim := colorForm()
+	var once sync.Once
+	stopAt := -1
+	sim.onKey = func() {
+		once.Do(func() {
+			// What the engine's StopKeys does: no lock, the generation on.
+			panelock.Stop(sess)
+			sim.mu.Lock()
+			stopAt = len(sim.sent)
+			sim.mu.Unlock()
+		})
+	}
+	st := New(Config{Tmux: sim, Pub: &fakePub{}})
+	err := st.AnswerChoice(context.Background(), sess, []AskAnswer{
+		{Prompt: "Which color should the button be?", Labels: []string{"Blue"}}, {Prompt: "Button text", Text: "Go"},
+	})
+	if ae := answerErr(t, err); !strings.Contains(ae.Msg, "stop") || len(sim.sent) != stopAt || sim.closed {
+		t.Fatalf("err %v, keys %v after the stop at %d", err, sim.sent, stopAt)
+	}
+}

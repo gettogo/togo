@@ -345,3 +345,26 @@ func TestSendTextWaitsForThePaneLock(t *testing.T) {
 	}
 	eventually(t, "the prompt", func() bool { return fileText(t, out) == "the prompt\n" })
 }
+
+// A prompt whose request ends while another write holds the pane is not
+// typed at all, then or later: the app's retry must not send it twice.
+func TestSendTextAbandonedWhileWaitingNeverTypes(t *testing.T) {
+	s := replyService(t)
+	sess, out := teeSession(t, s)
+	mu := panelock.For(sess.ID)
+	mu.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := s.SendText(ctx, sess.ID, "too late", true, "done", nil)
+	mu.Unlock()
+	if !errors.Is(err, panelock.ErrBusy) {
+		t.Fatalf("err = %v, want ErrBusy", err)
+	}
+	if err := s.SendText(context.Background(), sess.ID, "next", true, "done", nil); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the next prompt", func() bool { return strings.Contains(fileText(t, out), "next") })
+	if got := fileText(t, out); got != "next\n" {
+		t.Fatalf("the agent read %q: the abandoned prompt was typed", got)
+	}
+}
