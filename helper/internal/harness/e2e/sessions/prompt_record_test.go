@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/coverage"
 	"github.com/gettogo/togo/helper/internal/harness/e2e/support"
 	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
@@ -24,8 +25,8 @@ func promptCount(r *enginetest.Rig, text string) int {
 // recordAfterSent is an agent that writes a submitted prompt to its file
 // once the send has returned and the chat shows the prompt: what a real
 // agent does when the helper's confirmation is quicker than its write. It
-// is the order the send tests assert on; the other order is pinned by
-// TestKnownFault_PromptRecordedBeforeSendReturnsShowsTwice.
+// is the order the send tests assert on; the other order is
+// TestPromptRecordedBeforeSendReturnsShowsOnce.
 func recordAfterSent(t *testing.T, r *enginetest.Rig, record func(text string) error) (hook func(string), written <-chan struct{}) {
 	done := make(chan struct{})
 	return func(text string) {
@@ -44,15 +45,12 @@ func recordAfterSent(t *testing.T, r *enginetest.Rig, record func(text string) e
 	}, done
 }
 
-// KNOWN FAULT. The engine remembers a prompt it typed (sess.phone,
-// publish.go notePhoneLocked) only after typePrompt has returned, which
-// includes confirmSubmit's wait on the screen. An agent whose own record of
-// the prompt is read in that window is not matched to the phone's prompt,
-// so the chat shows it twice: once as the agent's record, once as the
-// item Send then adds. This passes while the fault is present; when it
-// fails the fault is fixed: delete it.
-func TestKnownFault_PromptRecordedBeforeSendReturnsShowsTwice(t *testing.T) {
+// A prompt the engine typed is remembered before the send returns, so an
+// agent whose own record of it is read while the send still waits on the
+// screen is matched to the phone's prompt: the chat shows it once.
+func TestPromptRecordedBeforeSendReturnsShowsOnce(t *testing.T) {
 	t.Parallel()
+	coverage.Covers(t, "generated", "omp/capability/chat")
 	a := newOMPAgent(t, nil, sessiongen.Turn{Say: 30, Tools: 1, Output: 40})
 	r := a.r
 	r.SettleUntil(support.FileLimit, enginetest.Has(a.l.Truth.Last))
@@ -80,7 +78,7 @@ func TestKnownFault_PromptRecordedBeforeSendReturnsShowsTwice(t *testing.T) {
 			n++
 		}
 	}
-	if n != 2 {
-		t.Errorf("the chat shows the prompt %d times: the fault changed", n)
+	if n != 1 {
+		t.Errorf("the chat shows the prompt %d times, want once", n)
 	}
 }
