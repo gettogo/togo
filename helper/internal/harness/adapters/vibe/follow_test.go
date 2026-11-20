@@ -59,6 +59,11 @@ func TestJournalForFollowsANewConversation(t *testing.T) {
 	if got := journalFor(context.Background(), env, first, yes); got != second {
 		t.Fatalf("the new conversation is not followed: %q", got)
 	}
+	// A helper restart knows no journal: the one written last, the
+	// conversation the pane moved to, is found again.
+	if got := journalFor(context.Background(), env, "", no); got != second {
+		t.Fatalf("after a restart: %q, want the new conversation %q", got, second)
+	}
 	// Back to the first (vibe --resume): its journal is written last.
 	now := time.Now()
 	_ = os.Chtimes(firstSeg, now, now)

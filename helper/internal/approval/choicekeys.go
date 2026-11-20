@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 )
 
 // AnswerChoice answers a selection dialog (detect.ParseChoice: a cursor on
@@ -21,8 +22,42 @@ import (
 // something else. The pane lock is held throughout, so the prompt watcher
 // and other answers wait. omp's ask tool (18.16) is driven this way; any
 // agent whose dialog ParseChoice reads is too.
+//
+// omp's form dialog (18.20 on) is not such a list: when the screen shows
+// one, answerForm drives it instead.
 func (s *Store) AnswerChoice(ctx context.Context, sessionID string, answers []AskAnswer) error {
+	return s.AnswerChoiceOpen(ctx, sessionID, answers, nil)
+}
+
+// AnswerChoiceOpen is AnswerChoice for a question the caller tracks: open
+// reports that it is still waiting for an answer. It is asked once the
+// pane lock is held, so an answer that waited behind another one is not
+// typed into a follow-up dialog asking the same; and a form's answer is
+// taken only once open turns false (the agent recorded it).
+func (s *Store) AnswerChoiceOpen(ctx context.Context, sessionID string, answers []AskAnswer, open func() bool) error {
+	held, release, err := panelock.Acquire(ctx, sessionID)
+	if err != nil {
+		return &AskError{"The terminal is busy with another answer or prompt; nothing was typed. Try again"}
+	}
+	defer release()
+	if open != nil && !open() {
+		return &AskError{"The question was already answered"}
+	}
+	d := choiceDriver{s: s, ctx: held, target: target(sessionID), id: sessionID, gen: s.lockFor(sessionID).Gen()}
+	if d.form() {
+		fd, err := s.answerForm(held, sessionID, answers)
+		if err != nil {
+			return err
+		}
+		// Waiting for omp to take the answer sends no key: the pane is
+		// given back first.
+		release()
+		return fd.formGone(open)
+	}
 	for _, a := range answers {
+		if a.Keep {
+			return &AskError{"Answer every question"}
+		}
 		if strings.ContainsAny(a.Text, "\n\r") {
 			return &AskError{"A typed answer with a line break can only be sent from the terminal"}
 		}
@@ -30,10 +65,6 @@ func (s *Store) AnswerChoice(ctx context.Context, sessionID string, answers []As
 			return &AskError{"Type that answer in the terminal: a typed answer to a pick-any question can't be sent"}
 		}
 	}
-	mu := s.lockFor(sessionID)
-	mu.Lock()
-	defer mu.Unlock()
-	d := choiceDriver{s: s, ctx: ctx, target: target(sessionID)}
 	for i, a := range answers {
 		cur, ok := d.settled(func(c detect.Choice) bool { return !c.Review && samePrompt(c.Prompt, a.Prompt) })
 		if !ok {
@@ -81,6 +112,28 @@ type choiceDriver struct {
 	s      *Store
 	ctx    context.Context
 	target string
+	id     string
+	gen    uint64 // the pane's stop generation when the answer began
+}
+
+// form waits up to askWait for a dialog and reports whether it is omp's
+// form rather than a selection list.
+func (d choiceDriver) form() bool {
+	deadline := time.Now().Add(askWait)
+	for {
+		if screen, err := d.s.cfg.Tmux.CapturePane(d.ctx, d.target); err == nil {
+			if _, ok := detect.ParseChoice(screen); ok {
+				return false
+			}
+			if _, ok := detect.ParseForm(screen); ok {
+				return true
+			}
+		}
+		if time.Now().After(deadline) || d.ctx.Err() != nil {
+			return false
+		}
+		time.Sleep(askPoll)
+	}
 }
 
 func (d choiceDriver) read() (detect.Choice, bool) {
@@ -131,6 +184,9 @@ func (d choiceDriver) settled(ok func(detect.Choice) bool) (detect.Choice, bool)
 }
 
 func (d choiceDriver) keys(literal bool, keys ...string) error {
+	if panelock.Stopped(d.ctx, d.id, d.gen) {
+		return &AskError{"A stop was sent to the terminal; nothing more was typed"}
+	}
 	if err := d.s.cfg.Tmux.SendKeys(d.ctx, d.target, literal, keys...); err != nil {
 		return &AskError{"Sending keys to the terminal failed"}
 	}

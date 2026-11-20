@@ -16,6 +16,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
@@ -325,6 +326,42 @@ func TestSessionGoneClosesItsApprovalsButNotAsks(t *testing.T) {
 	}
 }
 
+// An agent that exited takes its approvals with it, a hook approval whose
+// prompt was never drawn included; asks and other sessions stay, and the
+// session can open approvals again once the agent is relaunched.
+func TestAgentExitedClosesItsApprovalsButNotAsks(t *testing.T) {
+	pub := &fakePub{}
+	st := New(Config{Tmux: &fakeTmux{}, Pub: pub})
+	sid, other := "s_aaaaaaaaaa", "s_bbbbbbbbbb"
+	st.OpenFromHook(context.Background(), sid, wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
+	ask, _ := st.OpenAsk(context.Background(), wire.AskParams{SessionID: &sid, Title: "Deploy?", Options: []string{"yes", "no"}})
+	kept := st.OpenFromHook(context.Background(), other, wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
+
+	exited := time.Now().Add(time.Second)
+	st.AgentExited(context.Background(), sid, exited)
+
+	if got := pub.closed(); !reflect.DeepEqual(got, []string{wire.ResolutionGone}) {
+		t.Fatalf("closed events = %v, want [gone]", got)
+	}
+	var open []string
+	for _, a := range st.Pending("") {
+		open = append(open, a.RequestID)
+	}
+	if want := []string{ask.RequestID, kept.RequestID}; !slices.Equal(slices.Sorted(slices.Values(open)), slices.Sorted(slices.Values(want))) {
+		t.Fatalf("pending %v, want the ask and the other session's approval", open)
+	}
+	again := st.OpenFromHook(context.Background(), sid, wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
+	if !slices.ContainsFunc(st.Pending(sid), func(a wire.Approval) bool { return a.RequestID == again.RequestID }) {
+		t.Fatal("the relaunched agent's approval did not open")
+	}
+	// Closing the dead agent's approvals late, once the relaunched agent
+	// asked, leaves the new one open.
+	st.AgentExited(context.Background(), sid, again.CreatedAt)
+	if !slices.ContainsFunc(st.Pending(sid), func(a wire.Approval) bool { return a.RequestID == again.RequestID }) {
+		t.Fatal("the relaunched agent's approval was closed with the dead agent's")
+	}
+}
+
 const bashPrompt = "│ Bash command               │\n│   rm -rf ./build && make   │\n│ Do you want to proceed?    │\n│ ❯ 1. Yes                   │\n│   2. No                    │\n"
 
 func TestHookSubjectWinsOverScreen(t *testing.T) {
@@ -396,11 +433,8 @@ func TestSessionGoneDropsThePaneLock(t *testing.T) {
 	pr, _ := detect.Detect(menu)
 	st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
 	st.SessionGone(context.Background(), "s_aaaaaaaaaa")
-	st.mu.Lock()
-	n := len(st.paneLocks)
-	st.mu.Unlock()
-	if n != 0 {
-		t.Fatalf("%d pane locks kept for a session that is gone", n)
+	if panelock.Held("s_aaaaaaaaaa") {
+		t.Fatal("the pane lock is kept for a session that is gone")
 	}
 }
 

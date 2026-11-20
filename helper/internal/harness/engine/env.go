@@ -34,12 +34,12 @@ func (e *Engine) envFor(info session.Session) harness.Env {
 		id := info.ID
 		env.Procs = procs.Session{Panes: func(ctx context.Context) ([]int, error) { return e.cfg.PanePIDs(ctx, id) }}
 	}
-	if e.cfg.PaneTTY != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		if tty, err := e.cfg.PaneTTY(ctx, info.ID); err == nil && tty != "" {
-			env.Vars[source.VarTTY] = tty
+	// Read again after the agent restarts in its pane (pane_moved.go);
+	// after a helper restart this reads the pane as it now runs.
+	for k, v := range e.paneVars(context.Background(), info.ID) {
+		if v != "" {
+			env.Vars[k] = v
 		}
-		cancel()
 	}
 	if e.cfg.LoginPath != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

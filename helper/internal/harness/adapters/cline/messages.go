@@ -73,8 +73,13 @@ func newMessages(env harness.Env) *messages {
 	if c, err := time.Parse(time.RFC3339, env.Vars["created"]); err == nil {
 		m.created = c
 	}
-	if id := argvID(env.Argv); id != "" {
-		m.lock(id)
+	// The session followed before a helper restart wins over the --id of
+	// the command line: the pane may have moved on since that resume (a
+	// /new at the desk). A later relaunch replaces what is kept (lock).
+	if !m.restore() {
+		if id := argvID(env.Argv); id != "" {
+			m.lock(id)
+		}
 	}
 	return m
 }
@@ -112,6 +117,7 @@ func (m *messages) dir(id string) string {
 func (m *messages) lock(id string) {
 	m.session = id
 	m.state["harness_session"] = id
+	source.SaveFollowed(m.env, followName, id)
 	m.state["transcript_path"] = filepath.Join(m.dir(id), id+".messages.json")
 	if mf, ok := m.manifest(id); ok {
 		if mf.Model != "" {

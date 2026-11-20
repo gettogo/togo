@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/tmux"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -84,10 +85,6 @@ type Store struct {
 	// questions are blocking AskUserQuestion hooks waiting for answers.
 	questions map[uint64]*questionWait
 	nextWait  uint64
-	// paneLocks serialise everything that reads a pane and then acts on
-	// what it saw (an answer typing keys, the watcher closing a prompt),
-	// so a capture, its check and the keys sent are one step per pane.
-	paneLocks map[string]*sync.Mutex
 	// pub is Config.Pub without the write that follows each change;
 	// saver writes the open approvals off the lock (persist.go).
 	pub   wire.Publisher
@@ -103,7 +100,7 @@ func New(cfg Config) *Store {
 	if cfg.NewID == nil {
 		cfg.NewID = wire.NewRequestID
 	}
-	s := &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
+	s := &Store{cfg: cfg, entries: map[string]*entry{}, questions: map[uint64]*questionWait{}}
 	s.pub = cfg.Pub
 	if cfg.Path != "" {
 		s.saver = newSaver(s.logf)
@@ -120,15 +117,12 @@ func (s *Store) logf(format string, args ...any) {
 }
 
 // lockFor returns the mutex serialising work on one session's pane.
-func (s *Store) lockFor(key string) *sync.Mutex {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	m, ok := s.paneLocks[key]
-	if !ok {
-		m = &sync.Mutex{}
-		s.paneLocks[key] = m
-	}
-	return m
+// Everything that reads a pane and then acts on what it saw (an answer
+// typing keys, the watcher closing a prompt) holds it, so a capture, its
+// check and the keys sent are one step per pane. It is the pane's one lock
+// (panelock), which prompts and harness keys take too.
+func (s *Store) lockFor(key string) *panelock.Pane {
+	return panelock.For(key)
 }
 
 // Pending returns the open approvals, oldest first, for sessionID or for
@@ -161,6 +155,14 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 	mu.Lock()
 	defer mu.Unlock()
 	s.mu.Lock()
+	if p.Ask && s.questionWaitingLocked(sessionID) {
+		// Claude's question dialog while its AskUserQuestion hook waits
+		// for the phone: the same request, answered through the hook. A
+		// request opened for an earlier step before the hook waited goes.
+		s.closeScreenLocked(sessionID)
+		s.mu.Unlock()
+		return
+	}
 	cur := s.pendingForSession(sessionID)
 	switch {
 	case cur != nil && cur.fingerprint == p.Fingerprint:
@@ -226,6 +228,9 @@ func (s *Store) PromptGone(ctx context.Context, sessionID string) {
 // and still waits for an answer or its own timeout.
 func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	mu := s.lockFor(sessionID)
+	// Dropped once given back: the session is gone for good, and its pane
+	// lock would otherwise stay for the life of the daemon.
+	defer panelock.Forget(sessionID)
 	mu.Lock()
 	defer mu.Unlock()
 	s.mu.Lock()
@@ -233,9 +238,25 @@ func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	for cur := s.pendingForSession(sessionID); cur != nil; cur = s.pendingForSession(sessionID) {
 		s.closeLocked(cur, wire.ResolutionGone)
 	}
-	// The session is gone for good: its pane lock would otherwise stay in
-	// the map for the life of the daemon.
-	delete(s.paneLocks, sessionID)
+}
+
+// AgentExited closes the pending approvals a session's agent opened
+// before it exited (before): the prompt they stand for died with it,
+// including a hook approval whose prompt was never drawn. One opened
+// since is the relaunched agent's and stays, as do asks, whose caller is
+// not the agent's pane, and the session itself.
+func (s *Store) AgentExited(_ context.Context, sessionID string, before time.Time) {
+	mu := s.lockFor(sessionID)
+	mu.Lock()
+	defer mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range s.entries {
+		if e.state == statePending && e.a.Source != wire.SourceAsk && e.a.SessionID != nil &&
+			*e.a.SessionID == sessionID && e.a.CreatedAt.Before(before) {
+			s.closeLocked(e, wire.ResolutionGone)
+		}
+	}
 }
 
 // OpenFromHook opens an approval for an agent permission hook. The title

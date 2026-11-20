@@ -70,6 +70,10 @@ type Prompt struct {
 	// keys open the field (none when the words go straight in), then the
 	// words are typed and Enter sent. Kimi's "Reject with feedback".
 	TextKeys []string
+	// Ask marks a step of Claude Code's question dialog (AskUserQuestion:
+	// one of its questions or its review). The question item the
+	// transcript draws stands for the whole dialog.
+	Ask bool
 }
 
 // Detect inspects the last 40 non-empty lines of screen and reports the
@@ -87,7 +91,8 @@ func Detect(screen string) (Prompt, bool) {
 	}
 	var p Prompt
 	ok := false
-	if a, isAsk := ParseAsk(screen); isAsk && !a.Review {
+	a, isAsk := ParseAsk(screen)
+	if isAsk && !a.Review {
 		p, ok = askPrompt(a), true
 	}
 	if !ok {
@@ -159,6 +164,7 @@ func Detect(screen string) (Prompt, bool) {
 	}
 	p.Snippet = snippet(raw)
 	p.Fingerprint = fingerprint(p)
+	p.Ask = isAsk
 	return p, true
 }
 

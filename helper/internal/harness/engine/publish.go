@@ -22,6 +22,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 	var ready []harness.Item
 	now := s.e.cfg.Now()
 	mark := s.batchMark()
+	ops = s.keepEndedRowsLocked(ops)
 	if !s.restoring {
 		// What an agent started by the session's agent does right now, not
 		// what a replayed file says it once did (see AgentsRunning).
@@ -31,6 +32,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			}
 		}
 	}
+	prompted := s.promptsLocked(items)
 	for _, it := range items {
 		if it.ID == "" || it.Kind == "" {
 			continue
@@ -44,6 +46,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 				s.missionDeltaLocked(d)
 			}
 		}
+		s.keepEndedLocked(&it, prompted)
 		s.prepareLocked(&it, mark)
 		s.labelModelNoticeLocked(&it)
 		if it.Kind == harness.KindQuestion && it.Question != nil {
@@ -84,6 +87,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 		s.missionDeltaLocked(d)
 	}
 	s.relinkLocked()
+	s.afterKeepLocked()
 }
 
 // decorateStatusLocked fills the status block's mode, effort and actions

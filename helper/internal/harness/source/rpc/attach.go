@@ -13,6 +13,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/fsx"
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
 
@@ -50,7 +51,7 @@ func readLimits(ctx context.Context, c *Conn, push func(Message)) {
 }
 
 // attach runs the feed's call on a fresh connection.
-func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, push func(Message)) {
+func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, env harness.Env, tr *threads, push func(Message)) {
 	p := params(b.Params)
 	if b.Method != MethodResume {
 		res, err := c.Call(ctx, b.Method, p)
@@ -62,7 +63,7 @@ func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, push func(Mess
 	go readLimits(ctx, c, push)
 	if id := p["threadId"]; id != "" {
 		for ctx.Err() == nil {
-			if r.resume(ctx, c, id, push) {
+			if r.resume(ctx, c, id, false, nil, push) {
 				return
 			}
 			if !r.sleep(ctx, c, r.Poll) {
@@ -72,9 +73,17 @@ func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, push func(Mess
 		return
 	}
 	joined := map[string]bool{}
+	// The thread the chat followed before a helper restart is joined
+	// first, whatever order the server lists threads in: the chat names
+	// it at once and does not start over when it comes later.
+	followed := source.LoadFollowed(env, FollowedThread)
 	for {
-		for _, id := range loaded(ctx, c) {
-			if !joined[id] && r.resume(ctx, c, id, push) {
+		ids, ok := loaded(ctx, c)
+		if ok {
+			tr.listed(ids)
+		}
+		for _, id := range followedFirst(ids, followed) {
+			if !joined[id] && r.resume(ctx, c, id, tr.late(id), tr, push) {
 				joined[id] = true
 			}
 		}
@@ -95,7 +104,9 @@ func (r *Runner) sleep(ctx context.Context, c *Conn, d time.Duration) bool {
 	}
 }
 
-func (r *Runner) resume(ctx context.Context, c *Conn, id string, push func(Message)) bool {
+// resume joins thread id and feeds its result, marked late when the
+// thread was loaded after the feed first asked (threads).
+func (r *Runner) resume(ctx context.Context, c *Conn, id string, late bool, tr *threads, push func(Message)) bool {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	res, err := c.Call(cctx, MethodResume, map[string]string{"threadId": id})
@@ -104,24 +115,42 @@ func (r *Runner) resume(ctx context.Context, c *Conn, id string, push func(Messa
 		// rollout found") is retried on the next poll.
 		return false
 	}
-	push(callRecord(MethodResume, res))
+	if tr != nil {
+		tr.joined(res, late)
+	}
+	push(joinRecord(res, late))
 	return true
 }
 
-func loaded(ctx context.Context, c *Conn) []string {
+// FollowedThread names the main thread a mapper keeps under the run
+// folder (source.SaveFollowed): the Codex mapper writes it.
+const FollowedThread = "codex"
+
+// followedFirst moves id to the front of ids when it is there.
+func followedFirst(ids []string, id string) []string {
+	i := slices.Index(ids, id)
+	if id == "" || i <= 0 {
+		return ids
+	}
+	out := append([]string{id}, ids[:i]...)
+	return append(out, ids[i+1:]...)
+}
+
+// loaded lists the threads the server has loaded; ok says it answered.
+func loaded(ctx context.Context, c *Conn) ([]string, bool) {
 	cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	res, err := c.Call(cctx, methodLoaded, map[string]any{})
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	var out struct {
 		Data []string `json:"data"`
 	}
 	if json.Unmarshal(res, &out) != nil {
-		return nil
+		return nil, false
 	}
-	return out.Data
+	return out.Data, true
 }
 
 // maxCarried bounds one carried option value.

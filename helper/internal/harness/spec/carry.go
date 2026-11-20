@@ -49,3 +49,18 @@ func (c *Carry) Pick(current, next []string, maxValue int) []string {
 	}
 	return out
 }
+
+// ForVersion returns the carry list for a harness version: the options of
+// From move from Flags to Values when inRange says the version is held.
+func (c *Carry) ForVersion(inRange func(rng string) bool) *Carry {
+	if c == nil || c.From == nil || len(c.From.Values) == 0 || !inRange(c.From.Range) {
+		return c
+	}
+	out := &Carry{Values: append(slices.Clone(c.Values), c.From.Values...)}
+	for _, f := range c.Flags {
+		if !slices.Contains(c.From.Values, f) {
+			out.Flags = append(out.Flags, f)
+		}
+	}
+	return out
+}

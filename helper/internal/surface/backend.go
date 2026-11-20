@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness/procs"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/session"
 )
 
@@ -186,6 +187,11 @@ func (b *paneBackend) send(ctx context.Context, id string, run runtimeInfo, owne
 	if !ready {
 		return errLease
 	}
+	// The pane's one lock: a prompt or an answer typing keys must not
+	// interleave with the reply.
+	mu := panelock.For(id)
+	mu.Lock()
+	defer mu.Unlock()
 	return b.sessions.Tmux.SendKeys(ctx, run.state.Pane, true, string(data))
 }
 

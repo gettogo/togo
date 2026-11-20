@@ -23,10 +23,17 @@ type hooks struct {
 	// ended is set when the followed session's SessionEnd came: the next
 	// session to start in the pane is the agent's own (a relaunch).
 	ended bool
+	// held is a startup of another session waiting on whether the pane's
+	// agent is gone (startcheck.go); wake tells the engine it ended.
+	held     *heldStart
+	accepted string // a session the check let in
+	wake     func()
 }
 
 func newHooks(env harness.Env) *hooks {
-	return &hooks{env: env, state: map[string]string{}}
+	h := &hooks{env: env, state: map[string]string{}}
+	h.restore()
+	return h
 }
 
 func (h *hooks) Name() string { return MapperHooks }
@@ -62,14 +69,24 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.holdLocked(p, rec) {
+		return nil, nil
+	}
+	return h.mapLocked(p, rec)
+}
+
+// mapLocked maps one decoded payload; held payloads come here when the
+// check they waited on accepts them.
+func (h *hooks) mapLocked(p map[string]any, rec harness.Record) ([]harness.Item, []harness.Op) {
 	if h.nested(p) {
 		return nil, nil
 	}
 	if v := str(p, "session_id"); v != "" {
 		h.state["harness_session"] = v
 	}
-	if v := str(p, "transcript_path"); v != "" {
+	if v := str(p, "transcript_path"); v != "" && v != h.state["transcript_path"] {
 		h.setTranscript(v)
+		h.remember(v)
 	}
 	if v := str(p, "permission_mode"); v != "" {
 		h.state["mode"] = v
@@ -89,7 +106,7 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "Stop", "SessionEnd":
 		h.setWorking(false, at)
 		if str(p, "hook_event_name") == "SessionEnd" {
-			h.ended = true
+			h.markEnded(true)
 		}
 	case "StopFailure":
 		h.setWorking(false, at)

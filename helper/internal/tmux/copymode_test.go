@@ -57,3 +57,17 @@ func TestSendKeysLeavesCopyMode(t *testing.T) {
 		t.Fatalf("pane_in_mode = %q after paste, want 0", got)
 	}
 }
+
+// tmux reads an argument ending in ";" as the end of its command: typed
+// words that end with one keep it.
+func TestSendKeysKeepsATrailingSemicolon(t *testing.T) {
+	c := tmuxtest.New(t)
+	out := rawSink(t, c, "s_semisemise")
+	target := "=s_semisemise:"
+	for _, k := range []string{"done;", `a\;`, ";"} {
+		if err := c.SendKeys(context.Background(), target, true, k); err != nil {
+			t.Fatalf("SendKeys %q: %v", k, err)
+		}
+	}
+	waitFor(t, func() bool { return readFile(t, out) == `done;a\;;` })
+}

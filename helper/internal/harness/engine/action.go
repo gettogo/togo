@@ -349,6 +349,11 @@ func (e *Engine) cycle(ctx context.Context, s *sess, act spec.Action, k *spec.Ke
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
+	ctx, release, err := e.paneSeq(ctx, s)
+	if err != nil {
+		return harness.ActionResult{}, err
+	}
+	defer release()
 	cur, ok := e.readValue(ctx, s, v, true)
 	if !ok {
 		return harness.ActionResult{Result: harness.ResultFallback, Message: "The current mode is not on screen"}, nil

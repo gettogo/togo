@@ -43,6 +43,9 @@ feeds:
     # helper restart, or moved to another conversation, shows what was said before. The
     # session log route would give the events themselves, but on 2.2.5 it answers with
     # its sync marker and no past events.
+    # Picking another session in the terminal (/sessions, a resume) sends no event:
+    # the TUI only reads it. The chat moves at the next prompt there
+    # (session.inbox.enqueued) and then reads that conversation's past.
     history:
       path: '/api/session/{{.conversation}}/message?limit=200&order=desc'
       items: '.data | reverse'

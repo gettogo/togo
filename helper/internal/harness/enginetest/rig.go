@@ -260,7 +260,7 @@ func (r *Rig) start() {
 			r.note(Event{Kind: wire.EventNotify, Payload: wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelDone}})
 		},
 		Relaunch:  r.relaunch,
-		PaneTTY:   func(context.Context, string) (string, error) { return TTY, nil },
+		Pane:      func(context.Context, string) (engine.PaneInfo, error) { return engine.PaneInfo{TTY: TTY}, nil },
 		LoginPath: func(context.Context) string { return path },
 		LoginEnv:  func(context.Context) []string { return []string{"HOME=" + r.Opt.Home, "PATH=" + path} },
 		Status: func(string) string {

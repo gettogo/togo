@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"strings"
 	"time"
 
@@ -166,6 +167,11 @@ func (e *Engine) walkCommandList(ctx context.Context, s *sess, conv uint64) (row
 		return nil, false
 	}
 	defer l.Unlock()
+	ctx, release, taken := panelock.TryAcquire(ctx, s.id)
+	if !taken {
+		return nil, false // an answer or a prompt has the pane: walk later
+	}
+	defer release()
 	if e.heldNatively(s) != nil || e.screenClear(ctx, s) != nil || !e.idleNow(s) {
 		return nil, false
 	}

@@ -14,6 +14,9 @@ capabilities: [chat, chat.stream, chat.anchors, send.api, send.queue, interrupt,
 images: { insert: together }   # how image paths are pasted into the input
 feeds:
   events:
+    # Picking another session in the TUI sends no event (tui.session.select comes
+    # only from the API that tells the TUI to switch), so the chat moves at the next
+    # prompt there, and shows what happens from then on: the past is not read.
     sse: { path: /event }
     mapper: opencode.events
     stability: documented

@@ -1,0 +1,42 @@
+{
+ "daemon": {
+  "pid": 4242,
+  "build": "19.0.1+1795145800433296",
+  "startedAt": 1795147091227
+ },
+ "reports": [
+  {
+   "scope": {
+    "kind": "global"
+   },
+   "units": [
+    {
+     "id": "f778f991-2551-41cf-80aa-6a6234c1f2ec",
+     "kind": "predict",
+     "scope": {
+      "kind": "global"
+     },
+     "key": "b95cfb7efe57",
+     "label": "text prediction (/Users/dev/.omp/agent)",
+     "generation": "953ea728-9bb0-4fdb-af4c-e3b327ce271b",
+     "state": "ready",
+     "pids": [],
+     "createdAt": 1795147091264,
+     "startedAt": 1795147091264,
+     "restartCount": 0,
+     "outputBytes": 0,
+     "leases": 1,
+     "policy": {
+      "hold": "leases",
+      "idleMs": 900000,
+      "onIdle": "flush-stop",
+      "restart": "no",
+      "survive": "none"
+     },
+     "supervised": true,
+     "readyAt": 1795147091264
+    }
+   ]
+  }
+ ]
+}

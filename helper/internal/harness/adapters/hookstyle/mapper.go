@@ -3,14 +3,12 @@ package hookstyle
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
-	"github.com/gettogo/togo/helper/internal/harness/adapters/internal/errtext"
 )
 
 // Options tune the Mapper for one harness.
@@ -97,8 +95,11 @@ type Mapper struct {
 	replyFrom    int64
 	// seenCalls are the tool calls the replies read so far requested.
 	seenCalls map[string]bool
-	// agents are the subagent rows not stopped yet, by hook agent id.
+	// agents are the subagents not stopped yet, by hook agent id.
 	agents map[string][]agentRow
+	// subs are the subagent ids whose own hooks may arrive, true once
+	// stopped (subagents.go).
+	subs map[string]bool
 	// lastError is the text of the last failure drawn, until a turn begins.
 	lastError string
 	// closed are the ops end made that the Map call in progress returns.
@@ -111,7 +112,8 @@ type Mapper struct {
 func New(env harness.Env, opts Options) *Mapper {
 	m := &Mapper{env: env, opts: opts, state: map[string]string{"working": "false", "idle": "true"},
 		steps: map[string]bool{}, running: map[string][]string{}, tools: map[string]harness.Item{},
-		asks: map[string]harness.Item{}, seenCalls: map[string]bool{}, agents: map[string][]agentRow{}}
+		asks: map[string]harness.Item{}, seenCalls: map[string]bool{}, agents: map[string][]agentRow{},
+		subs: map[string]bool{}}
 	m.guess.solo.Also = opts.Siblings
 	if env.Cwd != "" {
 		// Sources filter the harness's session lists by $state.cwd.
@@ -168,6 +170,11 @@ type payload struct {
 	LastMessage string `json:"last_assistant_message"`
 	AgentID     string `json:"agent_id"`
 	AgentType   string `json:"agent_type"`
+	// ParentAgentID names the agent that started a subagent, on the
+	// subagent's own hooks (Copilot's parentAgentId).
+	ParentAgentID string `json:"parent_agent_id"`
+	// Response is what a subagent answered, on Copilot's subagentStop.
+	Response    string `json:"response"`
 	TaskID      string `json:"task_id"`
 	TaskSubject string `json:"task_subject"`
 	TaskDesc    string `json:"task_description"`
@@ -199,11 +206,18 @@ func (m *Mapper) mapRecord(rec harness.Record) ([]harness.Item, []harness.Op) {
 	at = at.UTC()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.learn(p)
 	draw := !IsLive(m.env.SessionID)
+	if m.isSub(p) {
+		return m.subHook(p, at, draw), nil
+	}
+	if !m.fromSub(p) {
+		m.learn(p)
+	}
 	switch p.Event {
 	case SessionStart:
 		m.idle(at)
+		// Another conversation: the earlier one's subagent ids are moot.
+		m.subs = map[string]bool{}
 		if p.Source == "resume" {
 			return m.notice(at, harness.NoticeResumed, "info", "Resumed an earlier conversation"), nil
 		}
@@ -317,7 +331,11 @@ func (m *Mapper) mapRecord(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case PostCompact:
 		return m.notice(at, harness.NoticeCompacted, "info", "Conversation compacted"), nil
 	case SubagentStart, SubagentStop:
-		return nil, m.agentOps(p, at)
+		items, ops := m.agentOps(p, at)
+		if !draw {
+			items = nil
+		}
+		return items, ops
 	case TaskCreated, TaskCompleted:
 		ops := planOps(p)
 		m.planned = m.planned || len(ops) > 0
@@ -381,12 +399,13 @@ func (m *Mapper) end(p payload, at time.Time, draw bool, state string) []harness
 	case harness.StateFailed:
 		rowState = harness.StateFailed
 	}
-	m.closed = append(m.closed, m.closeAgents(rowState)...)
+	agents, ops := m.closeAgents(rowState, at)
+	m.closed = append(m.closed, ops...)
 	clearDrawn(m.env.SessionID, m.turn)
 	if !draw || m.turn == "" {
 		return nil
 	}
-	var items []harness.Item
+	items := agents
 	if p.LastMessage != "" && state == harness.StateOK {
 		items = append(items, harness.Item{ID: m.turn + ":reply", TurnID: m.turn, Kind: harness.KindAssistant, At: at,
 			Assistant: &harness.TextBody{Text: Clip(p.LastMessage)}})
@@ -464,28 +483,4 @@ func (m *Mapper) toolEnd(p payload, at time.Time, failed bool) (harness.Item, bo
 	}
 	x.Tool = &b
 	return x, true
-}
-
-func (m *Mapper) notice(at time.Time, code, level, text string) []harness.Item {
-	m.n++
-	return []harness.Item{{
-		ID: fmt.Sprintf("hook-notice-%d-%d", at.UnixMilli(), m.n), Kind: harness.KindNotice, At: at,
-		Notice: &harness.NoticeBody{Level: level, Code: code, Text: text},
-	}}
-}
-
-// errorNotice says why a turn failed: the reason the prep read, else one
-// picked from the agent's words, else fallback.
-func (m *Mapper) errorNotice(at time.Time, turn string, p payload, fallback string) harness.Item {
-	m.n++
-	var body *harness.NoticeBody
-	switch {
-	case p.ErrorReason != "":
-		body = errtext.Of(p.ErrorReason, p.ErrorDetails)
-	case p.ErrorDetails != "":
-		body = errtext.Notice(p.ErrorDetails, 0, fallback)
-	default:
-		body = harness.ErrorNotice(harness.ErrOther, fallback)
-	}
-	return harness.Item{ID: fmt.Sprintf("hook-notice-%d-%d", at.UnixMilli(), m.n), TurnID: turn, Kind: harness.KindNotice, At: at, Notice: body}
 }
