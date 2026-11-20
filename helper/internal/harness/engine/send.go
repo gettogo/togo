@@ -297,11 +297,18 @@ var insertGap = 150 * time.Millisecond
 func (s *sess) publishSentLocked(id, text string, images []harness.ImageRef) harness.SendResult {
 	it := s.newUserItemLocked(text, images, false)
 	it.ID = id
-	s.awaitReply, s.awaitText = true, text
-	s.failedHold = false // a new prompt starts a new turn
+	s.awaitLocked(text, s.phoneEndsLocked(id))
 	s.publishLocked([]harness.Item{it}, nil)
 	stored, _ := s.e.log.Get(s.id, it.ID)
 	return harness.SendResult{Item: stored}
+}
+
+// awaitLocked notes that a prompt from the phone was sent and waits for a
+// reply; ends is s.turnEnds when it was about to be sent. The end of the
+// turn it starts checks a reply came.
+func (s *sess) awaitLocked(text string, ends uint64) {
+	s.awaitReply, s.awaitText, s.awaitEnds = true, text, ends
+	s.failedHold = false // a new prompt starts a new turn
 }
 
 func (s *sess) newUserItemLocked(text string, images []harness.ImageRef, queued bool) harness.Item {

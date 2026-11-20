@@ -143,8 +143,7 @@ func (e *Engine) typeNext(s *sess) bool {
 	body := *u
 	body.Queued = false
 	it.User = &body
-	s.awaitReply, s.awaitText = true, u.Text
-	s.failedHold = false // a new prompt starts a new turn
+	s.awaitLocked(u.Text, s.phoneEndsLocked(next.item.ID))
 	s.publishLocked([]harness.Item{it}, nil)
 	return true
 }
