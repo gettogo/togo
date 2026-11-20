@@ -175,7 +175,7 @@ func openTurnAgent(agent string) bool {
 // idle screen, and the phone's chat open. A last turn is written whose
 // ending is held back (heldLines, heldCalls): the agent is at work on it
 // until endTurn writes the rest.
-func start(t *testing.T, agent string) *live {
+func start(t *testing.T, agent string, mods ...func(*enginetest.Options)) *live {
 	t.Helper()
 	home, cwd, begun, l, agents := script(t, agent)
 	lv := &live{t: t, agent: agent, l: l, hooks: hookAgent(agent), agents: agents}
@@ -193,8 +193,12 @@ func start(t *testing.T, agent string) *live {
 			t.Fatal(err)
 		}
 	}
-	r := enginetest.New(t, enginetest.Options{Agent: agent, Home: home, Cwd: cwd, ID: enginetest.NewID(),
-		Created: begun.Add(-30 * time.Second), NoRedact: true})
+	opt := enginetest.Options{Agent: agent, Home: home, Cwd: cwd, ID: enginetest.NewID(),
+		Created: begun.Add(-30 * time.Second), NoRedact: true}
+	for _, m := range mods {
+		m(&opt)
+	}
+	r := enginetest.New(t, opt)
 	lv.r = r
 	if rel, ok := idleScreens[agent]; ok {
 		r.Term.Show(r.Term.MustCapture(rel))

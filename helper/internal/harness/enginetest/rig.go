@@ -5,6 +5,7 @@
 package enginetest
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -65,6 +66,8 @@ type Options struct {
 	Created time.Time
 	// MaxItems is the engine's item log size; 0 keeps the default.
 	MaxItems int
+	// Scale multiplies the engine's own waits; 0 keeps the rig's 0.05.
+	Scale float64
 	// NoRedact passes records through unredacted. Redaction has its own
 	// tests, and it is four fifths of the time a restore of a large file
 	// takes (eight times that under the race detector).
@@ -269,7 +272,7 @@ func (r *Rig) start() {
 			defer r.mu.Unlock()
 			return r.status
 		},
-		Scale: 0.05,
+		Scale: cmp.Or(r.Opt.Scale, 0.05),
 		// The engine's log goes to the test's, shown when a test fails.
 		Logf: func(format string, args ...any) { r.T.Logf("engine: "+format, args...) },
 	})
