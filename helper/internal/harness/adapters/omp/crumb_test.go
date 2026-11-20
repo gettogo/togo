@@ -124,3 +124,67 @@ func TestSessionRelFallsBackToFolder(t *testing.T) {
 		t.Fatalf("state = %v", st)
 	}
 }
+
+// A resume restarts omp in a respawned pane on a new device. The session
+// then reads the new device's record only: the old device's, still naming
+// the conversation before the resume, is not read again, and a record the
+// new device kept from an earlier occupant (tmux reuses devices) is not
+// taken for the resumed omp's until omp writes it again.
+func TestPaneMovedReadsTheNewDevicesRecordOnly(t *testing.T) {
+	env, home := crumbEnv(t)
+	env.Vars["created"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	root := filepath.Join(home, ".omp", "agent", "sessions", "-project")
+	writeCrumb(t, home, "ttys011", env.Cwd+"\n"+filepath.Join(root, "before.jsonl")+"\ncwdstat 1 2")
+	writeCrumb(t, home, "ttys012", env.Cwd+"\n"+filepath.Join(root, "other-terminal.jsonl")+"\ncwdstat 1 2")
+	earlier := time.Now().Add(-10 * time.Minute)
+	if err := os.Chtimes(filepath.Join(home, ".omp", "agent", "terminal-sessions", "ttys012"), earlier, earlier); err != nil {
+		t.Fatal(err)
+	}
+	s := newSession(env)
+	if got := s.State()["session_rel"]; got != "-project/before.jsonl" {
+		t.Fatalf("before the resume: session_rel = %q", got)
+	}
+	moved := harness.Env{Cwd: env.Cwd, Vars: map[string]string{}}
+	for k, v := range env.Vars {
+		moved.Vars[k] = v
+	}
+	moved.Vars[source.VarTTY] = "/dev/ttys012"
+	moved.Vars[source.VarRelaunched] = time.Now().Add(-5 * time.Second).UTC().Format(time.RFC3339Nano)
+	s.PaneMoved(moved)
+	if got := s.State()["session_rel"]; got == "-project/before.jsonl" || got == "-project/other-terminal.jsonl" {
+		t.Fatalf("after the resume, before omp wrote its record: session_rel = %q", got)
+	}
+	writeCrumb(t, home, "ttys012", env.Cwd+"\n"+filepath.Join(root, "resumed.jsonl")+"\ncwdstat 1 2")
+	s.crumbAt = time.Time{} // the record is read again once a second
+	if got := s.State()["session_rel"]; got != "-project/resumed.jsonl" {
+		t.Fatalf("after omp wrote its record: session_rel = %q", got)
+	}
+	// A helper restart builds the session from the pane's device again:
+	// the resumed record is kept.
+	restarted := harness.Env{Cwd: env.Cwd, Vars: map[string]string{source.VarHome: home, source.VarTTY: "/dev/ttys012",
+		"created": env.Vars["created"]}}
+	if got := newSession(restarted).State()["session_rel"]; got != "-project/resumed.jsonl" {
+		t.Fatalf("after a helper restart: session_rel = %q", got)
+	}
+}
+
+// Two omp sessions in one folder each read their own device's record: a
+// resume in one moves only that one.
+func TestPaneMovedLeavesAnotherSessionInTheFolder(t *testing.T) {
+	env, home := crumbEnv(t)
+	root := filepath.Join(home, ".omp", "agent", "sessions", "-project")
+	other := harness.Env{Cwd: env.Cwd, Vars: map[string]string{source.VarHome: home, source.VarTTY: "/dev/ttys020"}}
+	writeCrumb(t, home, "ttys011", env.Cwd+"\n"+filepath.Join(root, "mine.jsonl"))
+	writeCrumb(t, home, "ttys020", env.Cwd+"\n"+filepath.Join(root, "theirs.jsonl"))
+	mine, theirs := newSession(env), newSession(other)
+	moved := harness.Env{Cwd: env.Cwd, Vars: map[string]string{source.VarHome: home, source.VarTTY: "/dev/ttys021",
+		source.VarRelaunched: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}}
+	mine.PaneMoved(moved)
+	writeCrumb(t, home, "ttys021", env.Cwd+"\n"+filepath.Join(root, "resumed.jsonl"))
+	if got := mine.State()["session_rel"]; got != "-project/resumed.jsonl" {
+		t.Fatalf("resumed session: session_rel = %q", got)
+	}
+	if got := theirs.State()["session_rel"]; got != "-project/theirs.jsonl" {
+		t.Fatalf("other session: session_rel = %q", got)
+	}
+}

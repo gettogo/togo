@@ -164,7 +164,7 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 	s.e.log.Forget(s.id)
 	var fresh harness.Mapper
 	if mapper != "" {
-		fresh = s.e.mapperFor(mapper, s.env)
+		fresh = s.e.mapperFor(mapper, s.mapperEnvLocked())
 		if c, ok := s.mappers[mapper].(harness.Carrier); ok {
 			c.Carry(fresh)
 		}

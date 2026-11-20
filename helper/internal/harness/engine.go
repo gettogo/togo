@@ -172,6 +172,15 @@ type Relauncher interface {
 	Relaunched(argv []string, at time.Time) []Op
 }
 
+// PaneMover is a mapper that reads files named after the terminal device
+// of the session's pane (omp's per-terminal record of its session file).
+// Restarting the agent respawns the pane, and tmux gives it a new device:
+// the engine hands the mapper the session's environment with the new
+// device and the time of the restart (source.VarTTY, VarRelaunched).
+type PaneMover interface {
+	PaneMoved(env Env)
+}
+
 // ReplayMarker is a mapper whose Map depends on more than the record: it reads
 // another file as it goes (Copilot's replies from its own log) or numbers
 // items with a running count. The engine keeps its marks with the hook

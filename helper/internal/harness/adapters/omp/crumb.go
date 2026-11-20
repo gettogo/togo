@@ -36,7 +36,7 @@ func terminalSession(env harness.Env) string {
 	}
 	// A tty can be reused before the new agent updates its record. The
 	// record must belong to this session's lifetime, not the old occupant.
-	if created, err := time.Parse(time.RFC3339, env.Vars["created"]); err == nil && info.ModTime().Before(created) {
+	if since := recordSince(env); !since.IsZero() && info.ModTime().Before(since) {
 		return ""
 	}
 	b, err := io.ReadAll(record)
@@ -53,6 +53,19 @@ func terminalSession(env harness.Env) string {
 		return ""
 	}
 	return filepath.ToSlash(rel)
+}
+
+// recordSince is the time a record for the pane's device must be written
+// at or after: the session's start, or the last restart of omp in its pane,
+// which tmux respawns on a device another terminal may have used (seen on
+// macOS: ttys002, ttys008, then ttys002 again). The restart is cut to the
+// second, as created is, for file systems that keep coarse times.
+func recordSince(env harness.Env) time.Time {
+	since, _ := time.Parse(time.RFC3339, env.Vars["created"])
+	if r, err := time.Parse(time.RFC3339Nano, env.Vars[source.VarRelaunched]); err == nil && r.After(since) {
+		since = r.Truncate(time.Second)
+	}
+	return since
 }
 
 func sameDir(a, b string) bool {

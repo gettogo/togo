@@ -94,6 +94,12 @@ type sess struct {
 	// exitNoticed is set once the chat was told the agent exited, until
 	// it runs again.
 	exitNoticed bool
+	// paneGone is set while the hub says the agent exited, so its next run
+	// (in a respawned pane) is noticed once (see paneMoved).
+	paneGone atomic.Bool
+	// pane is the pane's device after the agent was restarted in it
+	// (pane_moved.go); nil until then. Guarded by mu.
+	pane *paneState
 	// failedTurn is the turn the screen ended as failed while its hooks
 	// still said it ran (see hookfail.go); failedHold is set while it holds.
 	failedTurn string
@@ -261,7 +267,7 @@ func (s *sess) start() {
 	for _, name := range s.ad.feedOrder {
 		mname := s.ad.Feeds[name].Mapper
 		if _, ok := s.mappers[mname]; !ok {
-			s.mappers[mname] = s.e.mapperFor(mname, s.env)
+			s.mappers[mname] = s.e.mapperFor(mname, s.mapperEnvLocked())
 		}
 	}
 	s.storeSummaryLocked()
@@ -704,6 +710,14 @@ func (s *sess) statusChanged() {
 	case <-s.ready:
 	default:
 		return
+	}
+	gone := agentGone(s.hubStatus())
+	if gone {
+		s.paneGone.Store(true)
+	} else if s.paneGone.CompareAndSwap(true, false) {
+		// The agent runs again after it exited: session.relaunch
+		// respawned its pane, most often on a new terminal device.
+		s.e.paneMoved(s, time.Now().Add(-paneMovedSlack), true)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
