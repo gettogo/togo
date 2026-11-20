@@ -271,7 +271,6 @@ func TestClaudeTwoQuestionsAnsweredFromThePhone(t *testing.T) {
 // looking (any Claude Code 2.1.3xx session at the terminal).
 func TestKnownFault_ClaudeQuestionDialogShowsAsApprovals(t *testing.T) {
 	t.Parallel()
-	coverage.Covers(t, "tape", "claude/capability/needs.questions")
 	a := startAsk(t)
 	r := a.r
 	offer := r.Pending()
