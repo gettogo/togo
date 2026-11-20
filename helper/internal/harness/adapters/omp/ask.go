@@ -1,6 +1,8 @@
 package omp
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -24,7 +26,11 @@ import (
 
 // askQuestion turns an ask call into a question item, or nil when the
 // call asks nothing.
-func askQuestion(callID, tid, parent string, at time.Time, args map[string]any) *harness.Item {
+//
+// version is the omp that wrote the call: a form is offered to the phone
+// only from omp 19, whose dialog the driver was built and checked against
+// (18.20 to 18.22 draw forms too, but no capture of theirs exists).
+func askQuestion(callID, tid, parent string, at time.Time, args map[string]any, version string) *harness.Item {
 	if src := str(args, "html"); src != "" {
 		// 18.20's form (askform.go), answered from the phone with keys by
 		// the same screen_answer action, which finds omp's form dialog on
@@ -35,7 +41,7 @@ func askQuestion(callID, tid, parent string, at time.Time, args map[string]any) 
 			return nil
 		}
 		body := &harness.QuestionBody{Questions: qs}
-		if !drivable {
+		if !drivable || !formDriverVersion(version) {
 			no := false
 			body.Answerable = &no
 		}
@@ -142,4 +148,12 @@ func (s *session) closeAsks(tid string) []harness.Item {
 		delete(s.asks, callID)
 	}
 	return out
+}
+
+// formDriverVersion reports an omp whose form dialog the key driver knows:
+// 19 and later.
+func formDriverVersion(v string) bool {
+	major, _, _ := strings.Cut(v, ".")
+	n, err := strconv.Atoi(major)
+	return err == nil && n >= 19
 }

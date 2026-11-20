@@ -22,7 +22,10 @@ type session struct {
 	env harness.Env
 	cwd string
 
-	mu        sync.Mutex
+	mu sync.Mutex
+	// runtime is the omp version that wrote the record being mapped
+	// (its "runtime" field, from 19), "" when it does not say.
+	runtime   string
 	state     map[string]string
 	dirAt     time.Time
 	readAt    time.Time         // when the record being mapped was read
@@ -117,6 +120,7 @@ func (s *session) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.runtime = str(obj(e["runtime"]), "version")
 	items, ops := s.mapEntry(rec, e)
 	if rec.Source == feedSession {
 		s.byFile.passed()

@@ -125,7 +125,7 @@ func TestFormAskBecomesAQuestion(t *testing.T) {
 	if err := json.Unmarshal([]byte(call), &args); err != nil {
 		t.Fatal(err)
 	}
-	it := askQuestion("c1", "t1", "", t0, args)
+	it := askQuestion("c1", "t1", "", t0, args, "") // 18.20 wrote no runtime
 	if it == nil || len(it.Question.Questions) != 1 {
 		t.Fatalf("item = %+v, want one question", it)
 	}
@@ -133,8 +133,11 @@ func TestFormAskBecomesAQuestion(t *testing.T) {
 	if q.ID != "color" || q.Prompt != "Audit color" || q.Multi || len(q.Options) != 2 || q.Options[0].Label != "Red" || q.Options[1].Label != "Yellow" {
 		t.Fatalf("question = %+v", q)
 	}
-	if it.Question.Answerable != nil {
-		t.Error("the form is not offered as answerable from the phone")
+	if it.Question.Answerable == nil || *it.Question.Answerable {
+		t.Error("an 18.20 form is offered to the phone; the driver knows only omp 19's dialog")
+	}
+	if it := askQuestion("c1", "t1", "", t0, args, "19.0.1"); it.Question.Answerable != nil {
+		t.Error("the same form from omp 19 is not offered to the phone")
 	}
 	var result map[string]any
 	if err := json.Unmarshal([]byte(`{"role":"toolResult","toolName":"ask","details":{"answers":[{"name":"color","question":"Audit color","answer":"Red"}]},"isError":false}`), &result); err != nil {

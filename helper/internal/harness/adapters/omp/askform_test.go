@@ -104,7 +104,7 @@ func TestFormsThePhoneCannotFill(t *testing.T) {
 		if len(qs) == 0 || drivable {
 			t.Errorf("%s: %d questions, drivable %v", c.name, len(qs), drivable)
 		}
-		it := askQuestion("c", "t", "", t0, map[string]any{"html": c.html})
+		it := askQuestion("c", "t", "", t0, map[string]any{"html": c.html}, "19.0.1")
 		if it == nil || it.Question.Answerable == nil || *it.Question.Answerable {
 			t.Errorf("%s: offered to the phone: %+v", c.name, it)
 		}
@@ -135,5 +135,27 @@ func TestRealFormAnsweredFromThePhone(t *testing.T) {
 	want := map[string][]string{"color": {"Other: Teal (not listed)"}, "label": {"/Ship it — ñ 100%! (a|b)* [x];"}}
 	if last.Question == nil || last.Question.Answerable != nil || !reflect.DeepEqual(last.Question.Answered, want) {
 		t.Fatalf("question %+v", last.Question)
+	}
+}
+
+// The driver was built and checked on omp 19's dialog only: the same
+// records written by 18.22 keep the form answerable at the terminal.
+func TestFormFromAnOlderOmpStaysAtTheTerminal(t *testing.T) {
+	s := newSession(env())
+	n := 0
+	for _, r := range records(t, "ask-form-19.jsonl", "session") {
+		r.Data = []byte(strings.ReplaceAll(string(r.Data), `"version":"19.0.1"`, `"version":"18.22.2"`))
+		items, _ := s.Map(r)
+		for _, it := range items {
+			if it.Kind == harness.KindQuestion && len(it.Question.Answered) == 0 {
+				n++
+				if it.Question.Answerable == nil || *it.Question.Answerable {
+					t.Errorf("%s offered to the phone from omp 18.22", it.ID)
+				}
+			}
+		}
+	}
+	if n != 2 {
+		t.Fatalf("%d open questions, want 2", n)
 	}
 }
