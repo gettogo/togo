@@ -1,7 +1,7 @@
 .PHONY: lint test build check-trailers relay-test lint-motion \
 	togokit-test ios-sims ios-bootstrap ios-gen ios-build ios-test ios-ui-test ios-launch-perf ios-scroll-perf ios-snapshots ios-snapshots-record \
 	ios-release-check release-build release-test install-test repo-docs-check tokens tokens-check togopush-test watch-test \
-	replay-check conformance ci-scripts-test coverage-matrix
+	replay-check conformance ci-scripts-test coverage-matrix e2e-test
 
 IOS_DIR := apps/ios
 IOS_PROJECT := $(IOS_DIR)/Togo.xcodeproj
@@ -18,8 +18,19 @@ lint:
 	if [ -n "$$files" ]; then echo "gofmt -l reports:"; echo "$$files"; exit 1; fi
 	cd helper && go vet ./...
 
+# The end-to-end suite (the engine driven through recorded and generated
+# agent sessions) runs in e2e-test, its own CI job.
+E2E_PKGS := ./internal/harness/e2e/... ./internal/harness/enginetest/... ./cmd/togo-tape/...
+
 test:
-	cd helper && go test -race ./...
+	cd helper && go test -race $$(go list ./... | grep -v -e /internal/harness/e2e/ -e /internal/harness/enginetest -e /cmd/togo-tape)
+
+# The suite's packages, two at a time. The race detector runs on the rig
+# (enginetest) alone: across the scenarios it multiplies their time
+# several fold.
+e2e-test:
+	cd helper && go test -p 2 $(E2E_PKGS)
+	cd helper && go test -race ./internal/harness/enginetest
 
 build:
 	cd helper && go build -o bin/togo -ldflags "-X github.com/gettogo/togo/helper/internal/version.Version=$$(git describe --always --dirty)" ./cmd/togo
