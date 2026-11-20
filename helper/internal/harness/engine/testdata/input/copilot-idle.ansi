@@ -1,0 +1,40 @@
+ [1m[97m[44m[Current][0m  Sessions  [2m Issues [0m [2m Pull requests [0m  Gists
+
+[2m[90m╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮[0m
+[2m[90m│[0m                                                                                                                    [2m[90m│[0m
+[2m[90m│[0m [34m ╭─╮╭─╮[39m                             [2m[90m│[0m  [1m[34mGetting started[0m                                                             [2m[90m│[0m
+[2m[90m│[0m [34m ╰─╯╰─╯[39m  Copilot v1.0.114 uses AI.  [2m[90m│[0m  Use the tabs above to explore your sessions and pull requests               [2m[90m│[0m
+[2m[90m│[0m [35m █ [96m▘▝[35m █[39m  Check for mistakes.        [2m[90m│[0m  /init — Initialize Copilot instructions for this repository                 [2m[90m│[0m
+[2m[90m│[0m [35m  ▔▔▔▔ [39m                             [2m[90m│[0m  /model — Switch models across providers, or use Copilot Fusion              [2m[90m│[0m
+[2m[90m│[0m                                                                                                                    [2m[90m│[0m
+[2m[90m╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯[0m
+
+ [34m●[39m No Copilot instructions found for this repository. Run /init to generate them.
+
+ [34m●[39m MCP Servers reloaded: 1 server connected
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ /Users/dev/proj [⎇ main]        Run on: This computer [1mctrl+e[0m change environment
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[0m❯
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[0m [1m←[0m open sidebar · Interactive · Manual Approval · [1m/[0m commands · [1m?[0m help · [1mtab[0m next tab                         gpt-5-mini

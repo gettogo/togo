@@ -1,0 +1,1 @@
+config-list.json: `omp config list --json` from OMP 18.22.2, captured 2026-11-19; model roles scrubbed to a hosted model.
