@@ -30,7 +30,10 @@ func (c *countingProcs) Others(ctx context.Context, cmds []string, cwd string) (
 	return c.fakeProcs.Others(ctx, cmds, cwd)
 }
 
-// soloAsk calls Alone until a lookup begun at or after since has answered.
+// soloAsk calls Alone until a lookup begun at or after since has answered,
+// and returns that answer. The answer is read in one step under the lock:
+// the lookup can end between Alone's reply and a later check, and a "no"
+// taken from Alone alone would then be a stale one.
 func soloAsk(t *testing.T, s *Solo, env harness.Env, since time.Time) bool {
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
@@ -40,9 +43,10 @@ func soloAsk(t *testing.T, s *Solo, env harness.Env, since time.Time) bool {
 		}
 		s.mu.Lock()
 		answered := s.done && !s.asking && !s.began.Before(since)
+		alone := s.alone
 		s.mu.Unlock()
 		if answered {
-			return false
+			return alone
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
