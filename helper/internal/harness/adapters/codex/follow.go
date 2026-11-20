@@ -72,3 +72,27 @@ func freshness(r resumeResult) time.Time {
 	}
 	return t
 }
+
+// otherConversation records that subagent thread id was spawned from
+// thread up, and reports whether its top-level thread is known and is not
+// the main one: a subagent of the conversation the desk left, whose
+// history is not this chat's either. Nothing of such a thread is
+// described to the mapper, so its later events draw nothing.
+func (a *AppServer) otherConversation(id, up string) bool {
+	if a.ups == nil {
+		a.ups = map[string]string{}
+	}
+	if len(a.ups) < 4096 {
+		a.ups[id] = up
+	}
+	top := up
+	for range 16 {
+		next, ok := a.ups[top]
+		if !ok {
+			break
+		}
+		top = next
+	}
+	t := a.threads[top]
+	return t != nil && t.top && a.main != "" && top != a.main
+}

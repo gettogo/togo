@@ -95,3 +95,41 @@ func TestRestartKeepsTheFollowedThread(t *testing.T) {
 		t.Fatalf("with nothing remembered the most recent thread is main, got %q", got)
 	}
 }
+
+// subagentOf is a subagent thread spawned from up, with its own items.
+func subagentOf(t *testing.T, id, up string) harness.Record {
+	t.Helper()
+	raw := string(records(t, "appserver-turn.jsonl")[0].Data)
+	raw = strings.ReplaceAll(raw, threadA, id)
+	raw = strings.Replace(raw, `"parentThreadId": null`, `"parentThreadId": "`+up+`"`, 1)
+	for _, x := range []string{"u-old", "call_old", "msg_old", "019a0000-0000-7000-8000-0000000000a1"} {
+		raw = strings.ReplaceAll(raw, `"`+x+`"`, `"`+x+`-`+id[len(id)-2:]+`"`)
+	}
+	return harness.Record{At: t0, Data: json.RawMessage(raw)}
+}
+
+// After a restart the server lists the left conversation's subagents
+// too: their history is not this chat's, nor is a subagent of theirs.
+// A subagent of the main thread is still drawn.
+func TestOtherConversationsSubagentsStayOut(t *testing.T) {
+	m := NewAppServer(harness.Env{SessionID: "s_codexsub1"})
+	m.Map(resumeOf(t, threadA, 1794000100))
+	m.Map(resumeOf(t, threadB, 1794000000))
+	if got := m.State()["harness_session"]; got != threadA {
+		t.Fatalf("main thread %q", got)
+	}
+	const subB, subSubB, subA = "019a0000-0000-7000-8000-0000000000c1", "019a0000-0000-7000-8000-0000000000c2", "019a0000-0000-7000-8000-0000000000c3"
+	if items, _ := m.Map(subagentOf(t, subB, threadB)); len(items) != 0 {
+		t.Fatalf("a subagent of the other conversation went into the chat: %s", itemIDs(items))
+	}
+	if items, _ := m.Map(subagentOf(t, subSubB, subB)); len(items) != 0 {
+		t.Fatalf("a subagent's subagent of the other conversation went into the chat: %s", itemIDs(items))
+	}
+	started := `{"method": "turn/started", "params": {"threadId": "` + subB + `", "turn": {"id": "t-subb", "items": [], "status": "inProgress", "startedAt": 1794000300}}}`
+	if items, _ := m.Map(harness.Record{At: t0, Data: json.RawMessage(started)}); len(items) != 0 || m.State()["harness_session"] != threadA {
+		t.Fatalf("its later turn drew %s, main %q", itemIDs(items), m.State()["harness_session"])
+	}
+	if items, _ := m.Map(subagentOf(t, subA, threadA)); len(items) == 0 {
+		t.Fatal("a subagent of the main thread was not drawn")
+	}
+}

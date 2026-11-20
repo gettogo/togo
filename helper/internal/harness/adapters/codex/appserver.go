@@ -30,6 +30,7 @@ type AppServer struct {
 	// until a turn moves the chat; saved is the one last remembered
 	// (follow.go).
 	follow, saved string
+	ups           map[string]string // subagent thread -> the thread it was spawned from
 	threads       map[string]*threadInfo
 	turns         map[string]*turnInfo
 	streams       map[string]*stream
@@ -233,6 +234,9 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 		a.applySettings(r.Model, r.ReasoningEffort, r.ApprovalPolicy)
 		ops = append(ops, a.statusOp())
 	} else {
+		if a.otherConversation(id, *r.Thread.ParentThreadID) {
+			return nil, nil
+		}
 		x := a.resumedAgent(r, at)
 		items = append(items, x)
 		ops = append(ops, agentRow(x))
