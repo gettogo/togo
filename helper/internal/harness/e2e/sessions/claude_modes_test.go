@@ -101,27 +101,41 @@ func TestClaudeModeCycle(t *testing.T) {
 	}
 }
 
-// Claude Code started in "don't ask" mode shows it on its first screen,
-// and the first Shift+Tab takes it to manual, the start of the cycle (live,
-// 2.1.327). With nothing from the hooks yet to say the mode, the mode read
-// off the screen is what the phone changes it from: manual to plan from
-// there is one press more than the cycle's own two.
-func TestClaudeModeLeavesDontAskThroughTheCycle(t *testing.T) {
+// "Don't ask" is not in Shift+Tab's cycle, so a session whose mode is
+// don't ask is changed by restarting Claude Code with --permission-mode,
+// on the same conversation. The pane shows the startup screen of a Claude
+// Code launched in that mode (a real capture); once the status shows the
+// mode the engine read off it, no key is pressed to leave it.
+//
+// Before the engine has read the screen it does not know the mode, and the
+// same request presses Shift+Tab instead (the first press of the real
+// cycle leaves don't ask for manual), so this waits for the status.
+func TestClaudeModeLeavesDontAskByRestart(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "tape", "claude/capability/mode")
 	_, l, r := claudeSession(t, time.Hour, nil, enginetest.Options{}, sessiongen.Turn{Say: 30})
 	r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
-	// The pane shows the startup screen; the next press draws manual.
-	keys := newShiftTab(r, len(modeCycle)-1)
-	r.Term.Open(&enginetest.Dialog{Screen: r.Term.MustCapture(modeShots + "dontask.ansi")})
+	r.Term.Show(r.Term.MustCapture(modeShots + "dontask.ansi"))
+	r.SettleUntil(support.FileLimit, func(st enginetest.State) bool { return support.StatusOf(st).Mode == "dontAsk" })
 	res, err := r.Act("set_mode", "", map[string]any{"id": "plan"})
-	if err != nil || res.Result != harness.ResultApplied {
+	if err != nil || res.Result != harness.ResultRelaunched {
 		t.Fatalf("set mode plan from don't ask: %+v %v", res, err)
 	}
-	if got := keys.take(); got != 3 {
-		t.Errorf("%d presses of Shift+Tab from don't ask to plan, want 3 (manual, accept edits, plan)", got)
+	rel := r.Relaunches()
+	got := rel[len(rel)-1]
+	if got[0] != "claude" || !slices.Contains(got, "--resume") || !containsPair(got, "--permission-mode", "plan") {
+		t.Errorf("relaunched %q, want claude --resume <conversation> --permission-mode plan", got)
 	}
-	if len(r.Relaunches()) != 0 {
-		t.Errorf("the session was relaunched: %v", r.Relaunches())
+	if keys := r.Term.KeysSent(); slices.Contains(keys, "BTab") {
+		t.Errorf("Shift+Tab was pressed to leave don't ask: %v", keys)
 	}
+}
+
+func containsPair(argv []string, flag, value string) bool {
+	for i := 0; i+1 < len(argv); i++ {
+		if argv[i] == flag && argv[i+1] == value {
+			return true
+		}
+	}
+	return false
 }
