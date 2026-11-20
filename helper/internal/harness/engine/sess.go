@@ -100,6 +100,8 @@ type sess struct {
 	failedHold bool
 	// relaunchedAt is when an action last restarted the agent.
 	relaunchedAt time.Time
+	// exit is what the agent's last exit ended (see exit.go).
+	exit *exitFence
 	// statusModelFromState is the status block's model when the session's
 	// state filled it in (no status line named one), so a later switch
 	// replaces it.
@@ -236,7 +238,9 @@ func (s *sess) checkGate() gateResult {
 func (s *sess) start() {
 	defer close(s.ready)
 	r := s.checkGate()
+	fence := s.e.loadExitFence(s.id)
 	s.mu.Lock()
+	s.exit = fence
 	s.version, s.gateOK, s.gateWhy = r.version, r.ok, r.reason
 	if !r.ok {
 		for _, c := range s.ad.Capabilities {
@@ -427,7 +431,7 @@ func (s *sess) mapperStateLocked() (map[string]string, []map[string]string) {
 		if m == nil {
 			continue
 		}
-		st := m.State()
+		st := s.maskedLocked(mname, m.State())
 		states = append(states, st)
 		for k, v := range st {
 			if k == "working" || k == harness.StateWorkingAt {
@@ -706,9 +710,14 @@ func (s *sess) statusChanged() {
 	// once omp makes it) re-renders here too: waiting on a folder that
 	// does not exist, it reads no record that would do it.
 	s.syncFeedsLocked()
-	s.setWorkingLocked(s.stateLocked()["working"] == "true")
-	if agentGone(s.hubStatus()) {
+	gone := agentGone(s.hubStatus())
+	if gone {
+		// Before the working flag falls: what the agent left open ends
+		// interrupted, not as a turn that finished.
 		s.agentExitedLocked()
+	}
+	s.setWorkingLocked(s.stateLocked()["working"] == "true")
+	if gone {
 		s.exitNoticeLocked()
 	} else {
 		s.checkStuckTurnLocked()
@@ -810,70 +819,6 @@ func agentGone(status string) bool {
 	return status == wire.StatusEnded || status == wire.StatusFailed || status == "exited"
 }
 
-// agentExitedLocked closes what the dead agent left open: running turns,
-// tools, subagents and background jobs end as interrupted, and prompts
-// queued behind them are withdrawn, since nothing will ever drain them.
-func (s *sess) agentExitedLocked() {
-	recent, _, _ := s.e.log.Since(s.id, 0, 200)
-	now := s.e.cfg.Now()
-	var ended []harness.Item
-	for _, it := range recent {
-		switch {
-		case it.Kind == harness.KindTurn && it.Turn != nil && it.Turn.State == harness.StateRunning:
-			t := *it.Turn
-			t.State, t.Ended = harness.StateInterrupted, &now
-			it.Turn = &t
-		case it.Kind == harness.KindTool && it.Tool != nil && it.Tool.State == harness.StateRunning:
-			t := *it.Tool
-			t.State, t.Ended = harness.StateInterrupted, &now
-			it.Tool = &t
-		case it.Kind == harness.KindAgent && it.Agent != nil && it.Agent.State == harness.StateRunning:
-			a := *it.Agent
-			a.State, a.Ended = harness.StateInterrupted, &now
-			it.Agent = &a
-		case it.Kind == harness.KindBackground && it.Background != nil && it.Background.State == harness.StateRunning:
-			b := *it.Background
-			b.State, b.Ended = harness.StateInterrupted, &now
-			it.Background = &b
-		default:
-			continue
-		}
-		it.Seq = 0
-		ended = append(ended, it)
-	}
-	rows := s.mission.stopRunning()
-	for _, q := range s.queue {
-		if q.item.User == nil {
-			continue
-		}
-		it := q.item
-		u := *it.User
-		u.Queued, u.Withdrawn = false, true
-		it.User = &u
-		ended = append(ended, it)
-	}
-	s.queue = nil
-	asked := s.unansweredLocked()
-	ended = append(ended, asked...)
-	if len(ended) > 0 || len(rows) > 0 {
-		s.publishLocked(ended, rows)
-	}
-	s.forgetQuestionsLocked()
-}
-
-// closeIdleLocked publishes what IdleCloser mappers close once the session
-// went idle.
-func (s *sess) closeIdleLocked() {
-	now := s.e.cfg.Now()
-	for _, m := range s.mappers {
-		if c, ok := m.(harness.IdleCloser); ok {
-			if items := c.CloseIdle(now); len(items) > 0 {
-				s.publishLocked(items, nil)
-			}
-		}
-	}
-}
-
 func (s *sess) setWorkingLocked(w bool) {
 	was := s.working
 	s.working = w
@@ -882,7 +827,10 @@ func (s *sess) setWorkingLocked(w bool) {
 	}
 	if was && !w && !s.restoring {
 		s.closeIdleLocked()
-		s.afterTurnLocked()
+		if !agentGone(s.hubStatus()) {
+			// An agent that exited did not finish: no done push.
+			s.afterTurnLocked()
+		}
 		s.e.turnEnded(s)
 		s.drainLocked()
 		go s.seedFromScreen(seedSettle)

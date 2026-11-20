@@ -31,6 +31,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 			}
 		}
 	}
+	prompted := s.promptsLocked(items)
 	for _, it := range items {
 		if it.ID == "" || it.Kind == "" {
 			continue
@@ -44,6 +45,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 				s.missionDeltaLocked(d)
 			}
 		}
+		s.keepEndedLocked(&it, prompted)
 		s.prepareLocked(&it, mark)
 		s.labelModelNoticeLocked(&it)
 		if it.Kind == harness.KindQuestion && it.Question != nil {
