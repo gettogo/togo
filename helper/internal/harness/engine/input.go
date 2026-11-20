@@ -231,7 +231,12 @@ func (e *Engine) clearInput(ctx context.Context, s *sess) error {
 	if in == nil || e.cfg.Screen == nil {
 		return nil
 	}
-	cur, ok := e.inputNow(ctx, s)
+	// Raw: a remembered suggestion proves nothing before the clear keys
+	// went out; a draft can read the same.
+	cur, ok := e.inputRaw(ctx, s)
+	if ok {
+		s.lineBeforeTyping(cur)
+	}
 	if !ok || cur == "" {
 		return nil
 	}
@@ -239,10 +244,10 @@ func (e *Engine) clearInput(ctx context.Context, s *sess) error {
 		if err := e.cfg.Typist.Keys(ctx, s.id, in.Clear...); err != nil {
 			return err
 		}
-		if !e.pause(ctx) {
-			return ctx.Err()
+		if cur, ok = e.repainted(ctx, s, cur); !ok || cur == "" {
+			return nil
 		}
-		if cur, ok = e.inputNow(ctx, s); !ok || cur == "" {
+		if e.shownSuggestion(ctx, s, cur) {
 			return nil
 		}
 	}

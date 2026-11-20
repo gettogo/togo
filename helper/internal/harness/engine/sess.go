@@ -686,6 +686,9 @@ func (s *sess) afterRecordLocked() {
 	st := s.stateLocked()
 	s.followedLocked()
 	if t := st["turn"]; t != "" {
+		if t != s.turn {
+			s.forgetSuggestionLocked() // a new turn brings a new prediction
+		}
 		s.turn = t
 	}
 	s.setWorkingLocked(st["working"] == "true")

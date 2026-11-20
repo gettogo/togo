@@ -67,6 +67,7 @@ group:
 	}
 	s.mu.Lock()
 	s.relaunchedAt = time.Now()
+	s.forgetSuggestionLocked()
 	for _, m := range s.mappers {
 		if r, ok := m.(harness.Relauncher); ok {
 			if ops := r.Relaunched(argv, s.relaunchedAt); len(ops) > 0 {
