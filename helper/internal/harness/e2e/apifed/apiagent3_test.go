@@ -1,6 +1,7 @@
 package apifed
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -132,6 +133,24 @@ func apiStream(t *testing.T, agent string) {
 		}
 		return harness.Item{}, false
 	}
+	// Not found in time: say what the chat held, so a failure on a slow
+	// machine names the item that was missing or different.
+	defer func() {
+		if !t.Failed() {
+			return
+		}
+		for _, it := range s.r.Read().Items {
+			var text string
+			switch {
+			case it.Assistant != nil:
+				text = fmt.Sprintf("assistant partial=%v %d bytes", it.Assistant.Partial, len(it.Assistant.Text))
+			case it.User != nil:
+				text = fmt.Sprintf("user %q", it.User.Text[:min(len(it.User.Text), 12)])
+			}
+			t.Logf("chat held: %s %s turn=%q parent=%q %s", it.Kind, it.ID, it.TurnID, it.Parent, text)
+		}
+		t.Logf("API calls: %v", s.api.Calls())
+	}()
 	st := s.r.SettleUntil(support.Quick, func(st enginetest.State) bool { _, ok := partial(st); return ok })
 	it, ok := partial(st)
 	if !ok || len(it.Assistant.Text) > 128 {
