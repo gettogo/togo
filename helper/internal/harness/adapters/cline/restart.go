@@ -18,8 +18,9 @@ import (
 //
 // Set: whenever the chat locks onto a session (its first document, a move
 // to a newer session of this pane, a resume relaunch). Cleared: with the
-// session (Engine.Forget, source.RemoveFollows). A relaunch onto another
-// session replaces it; one that starts a new session keeps it until that
+// session (Engine.Forget, source.RemoveFollows). It wins over the --id
+// the session's command line still carries from an earlier resume
+// relaunch. A relaunch onto another session replaces it; one that starts a new session keeps it until that
 // session's document moves the chat. Kept on turn ends, interrupts,
 // reconnects and helper restarts.
 const followName = "cline"
@@ -28,13 +29,14 @@ const followName = "cline"
 // it is still a session of this folder. Its document's updated_at is read
 // back too, so an older document of another session read after the
 // restart is not taken for a newer one.
-func (m *messages) restore() {
+func (m *messages) restore() bool {
 	id := source.LoadFollowed(m.env, followName)
 	if !sessionID.MatchString(id) || !m.started(id) {
-		return
+		return false
 	}
 	m.lock(id)
 	m.updated = updatedAt(m.state["transcript_path"])
+	return true
 }
 
 // started reports whether the session's manifest names this folder.

@@ -56,3 +56,38 @@ func TestRestartKeepsTheFollowedSession(t *testing.T) {
 		t.Fatalf("the removed session's follow outlived it: %q", got)
 	}
 }
+
+// The phone resumed X (the command line is now `cline --id X`, kept
+// across a helper restart), then /new at the desk moved the chat to Y.
+// After a restart the chat stays on Y; a later phone resume of another
+// session still wins.
+func TestRestartPrefersTheFollowedSessionOverTheResumeID(t *testing.T) {
+	h, doc := home(t)
+	interactive(t, h, fixtureID)
+	const y = "1794200000003_nopid"
+	newer := addSession(t, h, y, 0, doc)
+	interactive(t, h, y)
+	if err := os.WriteFile(filepath.Join(h, ".cline", "data", "sessions", y, y+".messages.json"), newer, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e := clineEnv(h, fakeProcs{tree: []int{100}})
+	e.SessionID = "s_clinefol2"
+	e.Vars[source.VarTogoHome] = t.TempDir()
+	e.Argv = []string{"cline", "-i", "--id", fixtureID}
+
+	m := newMessages(e)
+	if got := follows(m, newer, y); got != y {
+		t.Fatalf("the /new is not followed: %q", got)
+	}
+	after := newMessages(e) // restarted, still with --id X on the command line
+	if got := after.State()["harness_session"]; got != y {
+		t.Fatalf("after the restart: %q, want the /new session %q", got, y)
+	}
+	if got := source.LoadFollowed(e, followName); got != y {
+		t.Fatalf("the restart overwrote the kept session with %q", got)
+	}
+	after.Relaunched([]string{"cline", "-i", "--id", fixtureID}, time.Now())
+	if got := newMessages(e).State()["harness_session"]; got != fixtureID {
+		t.Fatalf("a later resume relaunch did not win: %q", got)
+	}
+}

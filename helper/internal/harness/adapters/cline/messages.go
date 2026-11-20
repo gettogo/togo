@@ -73,10 +73,13 @@ func newMessages(env harness.Env) *messages {
 	if c, err := time.Parse(time.RFC3339, env.Vars["created"]); err == nil {
 		m.created = c
 	}
-	if id := argvID(env.Argv); id != "" {
-		m.lock(id)
-	} else {
-		m.restore()
+	// The session followed before a helper restart wins over the --id of
+	// the command line: the pane may have moved on since that resume (a
+	// /new at the desk). A later relaunch replaces what is kept (lock).
+	if !m.restore() {
+		if id := argvID(env.Argv); id != "" {
+			m.lock(id)
+		}
 	}
 	return m
 }
