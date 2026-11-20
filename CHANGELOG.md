@@ -4,6 +4,29 @@ The helper and the app are versioned separately. A newer helper always works wit
 
 ## Helper
 
+### 1.1.2 (2026-11-20)
+
+**Added**
+
+- OMP 19 is supported: chat, sends, background jobs and resume work as they did on OMP 18.
+- In OMP 19, a form question can be answered from the phone.
+- In OpenCode 1.x, the chat shows how full the context is.
+
+**Changed**
+
+- When you start a new conversation or resume another one in the agent, the chat follows it and starts over with that conversation, as the agent's own screen does.
+
+**Fixed**
+
+- After a helper restart, the chat of a Claude Code, Codex or Cline session could go back to the conversation the session started with. It now stays on the one you were in.
+- In Codex, a conversation from an earlier run that was resumed in the terminal showed in the chat only after its next message, without its history. It now shows at once, with its history.
+- In OMP, after resuming a conversation from the phone, the chat stayed on the old one. It now follows the resumed conversation.
+- In Copilot CLI, a subagent's steps showed as separate turns, and its answer could show as the turn's reply in place of the agent's own. The steps now stay inside the turn that started them, and the turn ends with the agent's reply.
+- In Claude Code, a question with several steps showed as one request per step. It is now one request.
+- A session whose agent was restarted while a turn was running stayed on "working". The interrupted turn now ends, and the session shows what the new run does.
+- A prompt sent while the agent was still working could be marked as ended without a reply before its own turn had run. It is now judged after its own turn.
+- A prompt sent from the phone could show twice in the chat. It now shows once.
+
 ### 1.1.1 (2026-11-19)
 
 **Changed**
