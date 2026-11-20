@@ -33,7 +33,8 @@ type Events struct {
 	closed    map[string]bool         // the last turns closed, so a late update of their prompt opens none
 	closedIDs []string
 	planFirst map[string]time.Time
-	kids      childSet // every session reported with a parent (children.go)
+	kids      childSet     // every session reported with a parent (children.go)
+	ctx       contextState // how full the context window is (context.go)
 }
 
 type session struct {
@@ -163,6 +164,7 @@ func (e *Events) setMain(id string) {
 		e.state["working"], e.state["idle"] = "false", "true"
 		delete(e.state, "turn")
 		e.tools, e.waits, e.lost = map[string]harness.Item{}, map[string]string{}, false
+		e.resetContext()
 	}
 	e.main = id
 	e.state["harness_session"] = id
@@ -273,6 +275,7 @@ type messagePayload struct {
 		// Summary is on the updates a user message gets after its prompt
 		// started the turn; the first update of a prompt has none.
 		Summary json.RawMessage `json:"summary"`
+		Tokens  *tokenCounts    `json:"tokens"`
 		Time    struct {
 			Created   int64 `json:"created"`
 			Completed int64 `json:"completed"`
@@ -335,21 +338,22 @@ func (e *Events) messageInfo(raw json.RawMessage, at time.Time) ([]harness.Item,
 		}
 		return []harness.Item{e.turnItem(in.ID, tu, nil)}, nil
 	}
+	ops := e.usage(in.SessionID, in.ID, in.Time.Created, in.ProviderID, in.ModelID, in.Tokens)
 	if in.Error == nil {
-		return nil, nil
+		return nil, ops
 	}
 	tu := e.turns[t]
 	if in.Error.Name == "MessageAbortedError" {
 		if tu != nil {
 			tu.state = harness.StateInterrupted
 		}
-		return []harness.Item{e.notice("aborted-"+in.ID, t, e.parentOf(in.SessionID), at, "info", harness.NoticeInterrupted, "Interrupted")}, nil
+		return []harness.Item{e.notice("aborted-"+in.ID, t, e.parentOf(in.SessionID), at, "info", harness.NoticeInterrupted, "Interrupted")}, ops
 	}
 	if tu != nil {
 		tu.state = harness.StateFailed
 	}
 	return []harness.Item{e.noticeBody("error-"+t, t, e.parentOf(in.SessionID), at,
-		errorBody(in.Error.Name, in.Error.Data.StatusCode, in.Error.Data.Message))}, nil
+		errorBody(in.Error.Name, in.Error.Data.StatusCode, in.Error.Data.Message))}, ops
 }
 
 // noticeBody is a notice item with a ready body (an error notice).
