@@ -26,7 +26,9 @@ type hooks struct {
 }
 
 func newHooks(env harness.Env) *hooks {
-	return &hooks{env: env, state: map[string]string{}}
+	h := &hooks{env: env, state: map[string]string{}}
+	h.restore()
+	return h
 }
 
 func (h *hooks) Name() string { return MapperHooks }
@@ -68,8 +70,9 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	if v := str(p, "session_id"); v != "" {
 		h.state["harness_session"] = v
 	}
-	if v := str(p, "transcript_path"); v != "" {
+	if v := str(p, "transcript_path"); v != "" && v != h.state["transcript_path"] {
 		h.setTranscript(v)
+		h.remember(v)
 	}
 	if v := str(p, "permission_mode"); v != "" {
 		h.state["mode"] = v
@@ -89,7 +92,7 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	case "Stop", "SessionEnd":
 		h.setWorking(false, at)
 		if str(p, "hook_event_name") == "SessionEnd" {
-			h.ended = true
+			h.markEnded(true)
 		}
 	case "StopFailure":
 		h.setWorking(false, at)
