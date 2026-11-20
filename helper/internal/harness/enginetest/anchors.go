@@ -3,6 +3,8 @@ package enginetest
 import (
 	"context"
 	"errors"
+	"regexp"
+	"strings"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/anchor"
@@ -87,4 +89,21 @@ func (r *Rig) Locate(a harness.Anchor) (harness.Location, error) {
 		return res, err
 	}
 	return res, jsonInto(raw, &res)
+}
+
+// PlaceCursor puts the pane's cursor on the last row of s whose text
+// (without colours) matches re: the input line of an agent whose adapter
+// declares no input pattern. A capture does not record where the cursor
+// was; the rows that hold the agent's prompt marker are where it sits.
+// offset moves it from that row (Pi's input is the blank row two above
+// its working directory line). It panics when no row matches.
+func (t *Terminal) PlaceCursor(s Screen, re string, offset int) Screen {
+	rx := regexp.MustCompile(re)
+	for i := len(s.Rows) - 1; i >= 0; i-- {
+		if rx.MatchString(strings.TrimRight(Plain(s.Rows[i]), " ")) {
+			s.Input, s.Prefix, s.Text = i+offset, "", ""
+			return s
+		}
+	}
+	panic("enginetest: no row of " + s.Name + " matches " + re)
 }
