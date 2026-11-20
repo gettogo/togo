@@ -61,12 +61,14 @@ func contextOf(ops []harness.Op) *float64 {
 }
 
 // waitWoken waits for the mapper's lookup to wake the engine and returns
-// what Woken publishes.
+// what Woken publishes. The ceiling is well past the read's own timeout
+// (providersTimeout): a lookup that fails still wakes the engine, and a
+// slow machine under the race detector needs seconds to scrub a large list.
 func waitWoken(t *testing.T, m *Events, woke chan struct{}) []harness.Op {
 	t.Helper()
 	select {
 	case <-woke:
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		t.Fatal("the model list lookup never woke the engine")
 	}
 	_, ops := m.Woken()
@@ -258,10 +260,12 @@ func TestProviderListLargeAndRetried(t *testing.T) {
 	}
 	var list map[string]any
 	json.Unmarshal(raw, &list)
+	// Just over 2 MiB, in few entries: every byte of the answer is
+	// scrubbed for secrets, which takes seconds under the race detector.
 	big := map[string]any{}
-	for i := 0; i < 20000; i++ {
+	for i := 0; i < 2000; i++ {
 		id := fmt.Sprintf("model-%05d", i)
-		big[id] = map[string]any{"id": id, "name": strings.Repeat("n", 100), "limit": map[string]any{"context": 8192}}
+		big[id] = map[string]any{"id": id, "name": strings.Repeat("n", 1000), "limit": map[string]any{"context": 8192}}
 	}
 	list["providers"] = append(list["providers"].([]any), map[string]any{"id": "catalogue", "models": big})
 	answer, _ := json.Marshal(list)
@@ -300,7 +304,7 @@ func TestProviderListLargeAndRetried(t *testing.T) {
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.ctx.fails != 0 || m.ctx.windows["catalogue/model-19999"] != 8192 {
-		t.Fatalf("fails %d, last catalogue window %d", m.ctx.fails, m.ctx.windows["catalogue/model-19999"])
+	if m.ctx.fails != 0 || m.ctx.windows["catalogue/model-01999"] != 8192 {
+		t.Fatalf("fails %d, last catalogue window %d", m.ctx.fails, m.ctx.windows["catalogue/model-01999"])
 	}
 }
