@@ -67,6 +67,10 @@ group:
 	}
 	s.mu.Lock()
 	s.relaunchedAt = time.Now()
+	// The run the relaunch killed is gone: anything it left open ends,
+	// and the new run's records may go on with it.
+	s.endRunLocked(s.relaunchedAt)
+	s.runningAgainLocked()
 	for _, m := range s.mappers {
 		if r, ok := m.(harness.Relauncher); ok {
 			if ops := r.Relaunched(argv, s.relaunchedAt); len(ops) > 0 {

@@ -336,7 +336,8 @@ func TestAgentExitedClosesItsApprovalsButNotAsks(t *testing.T) {
 	ask, _ := st.OpenAsk(context.Background(), wire.AskParams{SessionID: &sid, Title: "Deploy?", Options: []string{"yes", "no"}})
 	kept := st.OpenFromHook(context.Background(), other, wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
 
-	st.AgentExited(context.Background(), sid)
+	exited := time.Now().Add(time.Second)
+	st.AgentExited(context.Background(), sid, exited)
 
 	if got := pub.closed(); !reflect.DeepEqual(got, []string{wire.ResolutionGone}) {
 		t.Fatalf("closed events = %v, want [gone]", got)
@@ -351,6 +352,12 @@ func TestAgentExitedClosesItsApprovalsButNotAsks(t *testing.T) {
 	again := st.OpenFromHook(context.Background(), sid, wire.HookEvent{Agent: "claude", Data: wire.HookData{Tool: "Bash"}})
 	if !slices.ContainsFunc(st.Pending(sid), func(a wire.Approval) bool { return a.RequestID == again.RequestID }) {
 		t.Fatal("the relaunched agent's approval did not open")
+	}
+	// Closing the dead agent's approvals late, once the relaunched agent
+	// asked, leaves the new one open.
+	st.AgentExited(context.Background(), sid, again.CreatedAt)
+	if !slices.ContainsFunc(st.Pending(sid), func(a wire.Approval) bool { return a.RequestID == again.RequestID }) {
+		t.Fatal("the relaunched agent's approval was closed with the dead agent's")
 	}
 }
 

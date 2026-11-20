@@ -87,6 +87,7 @@ func (s *sess) publishLocked(items []harness.Item, ops []harness.Op) {
 		s.missionDeltaLocked(d)
 	}
 	s.relinkLocked()
+	s.afterKeepLocked()
 }
 
 // decorateStatusLocked fills the status block's mode, effort and actions

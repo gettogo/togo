@@ -100,8 +100,15 @@ type sess struct {
 	failedHold bool
 	// relaunchedAt is when an action last restarted the agent.
 	relaunchedAt time.Time
-	// exit is what the agent's last exit ended (see exit.go).
-	exit *exitFence
+	// exit is what the agent's last exit ended (see exit.go); revive and
+	// lateDone are what a batch owes once published (exit_keep.go).
+	exit     *exitFence
+	revive   []harness.Item
+	lateDone bool
+	// goneAt is when the hub was first seen saying the agent is gone, zero
+	// while it runs; liveAt is when a live record was last mapped.
+	goneAt time.Time
+	liveAt time.Time
 	// statusModelFromState is the status block's model when the session's
 	// state filled it in (no status line named one), so a later switch
 	// replaces it.
@@ -273,6 +280,23 @@ func (s *sess) start() {
 		s.e.cfg.OnSummary(s.id)
 	}
 	s.e.startBuiltins(s)
+	// An exit the hub reported while the session was not yet served has
+	// had no event since; one it never saw shows in the pane's process.
+	// (No exit notice: the chat told of it when it happened.)
+	s.mu.Lock()
+	gone := agentGone(s.hubStatus())
+	if gone {
+		s.goneAt = s.e.cfg.Now()
+		s.agentExitedLocked()
+		s.setWorkingLocked(s.stateLocked()["working"] == "true")
+	}
+	at := s.goneAt
+	s.mu.Unlock()
+	if !gone {
+		go s.checkRunStart()
+	} else if c, ok := s.e.cfg.Approvals.(exitedApprovals); ok {
+		c.AgentExited(s.ctx, s.id, at)
+	}
 }
 
 func (s *sess) stop() {
@@ -640,7 +664,8 @@ func (s *sess) recordLocked(mapper string, rec harness.Record) {
 		s.followedLocked() // before publishing: the record's items are the new conversation's
 	}
 	s.keepHookLocked(rec, pre, replayMark(m))
-	s.liftMaskLocked(mapper, m)
+	s.liveAt = s.e.cfg.Now()
+	s.liftMaskLocked(mapper, m, items)
 	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {
@@ -692,59 +717,6 @@ func (s *sess) afterRecordLocked() {
 	s.refreshStatusLocked()
 }
 
-// statusChanged re-reads whether a turn runs once the hub's status moved.
-// Working ORs in the hub, so a turn's last record can arrive while the hub
-// still says working; without this the flag would stay set until the next
-// record, showing Working, Interrupt and Queue on an idle session.
-func (s *sess) statusChanged() {
-	select {
-	case <-s.ready:
-	default:
-		return
-	}
-	if s.statusChangedLocked() {
-		// Away from the session's lock: the store waits on an answer
-		// being typed into the pane.
-		if c, ok := s.e.cfg.Approvals.(exitedApprovals); ok {
-			c.AgentExited(s.ctx, s.id)
-		}
-	}
-}
-
-// exitedApprovals is an approvals store that can close the approvals of
-// an agent that exited (approval.Store).
-type exitedApprovals interface {
-	AgentExited(ctx context.Context, sessionID string)
-}
-
-// statusChangedLocked is statusChanged under the lock; it reports whether
-// the agent is gone.
-func (s *sess) statusChangedLocked() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.gateOK {
-		return false
-	}
-	// A feed whose path comes from state (omp's session folder, found
-	// once omp makes it) re-renders here too: waiting on a folder that
-	// does not exist, it reads no record that would do it.
-	s.syncFeedsLocked()
-	gone := agentGone(s.hubStatus())
-	if gone {
-		// Before the working flag falls: what the agent left open ends
-		// interrupted, not as a turn that finished.
-		s.agentExitedLocked()
-	}
-	s.setWorkingLocked(s.stateLocked()["working"] == "true")
-	if gone {
-		s.exitNoticeLocked()
-	} else {
-		s.checkStuckTurnLocked()
-		s.exitNoticed = false
-	}
-	return gone
-}
-
 // feedTrust is how long a turn end the feed reported outweighs the hub's
 // lingering "working" (the pane settles 6-10 s after a turn ends).
 const feedTrust = 20 * time.Second
@@ -778,7 +750,16 @@ func (s *sess) afterTurnLocked() {
 // An adapter's hook feed alone is not enough: Codex 0.167 runs hooks only
 // once the user trusts them, and hooks may not be installed at all.
 func (s *sess) doneLocked() {
-	if s.e.cfg.Done == nil || agentGone(s.hubStatus()) || s.needsOpenLocked() {
+	if agentGone(s.hubStatus()) {
+		return
+	}
+	s.finishedLocked()
+}
+
+// finishedLocked sends the done push; doneLocked decides whether the turn
+// finished, or keepEndedLocked for a turn whose end came after the exit.
+func (s *sess) finishedLocked() {
+	if s.e.cfg.Done == nil || s.needsOpenLocked() {
 		// A turn that "ended" while a question or approval waits is
 		// waiting on the user, not done.
 		return

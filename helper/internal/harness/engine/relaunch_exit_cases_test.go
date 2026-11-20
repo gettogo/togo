@@ -202,7 +202,7 @@ type approvalsSpy struct{ exited atomic.Int32 }
 func (a *approvalsSpy) Pending(string) []wire.Approval                       { return nil }
 func (a *approvalsSpy) Answer(context.Context, string, string, string) error { return nil }
 
-func (a *approvalsSpy) AgentExited(context.Context, string) { a.exited.Add(1) }
+func (a *approvalsSpy) AgentExited(context.Context, string, time.Time) { a.exited.Add(1) }
 
 // The approvals the dead agent asked for are closed in the store, which
 // withdraws them from the phone; the store is called away from the
