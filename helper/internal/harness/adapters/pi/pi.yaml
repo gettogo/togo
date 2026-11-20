@@ -16,7 +16,9 @@ feeds:
   session:
     # exclusive: follow only a file this session's own agent process holds open (a /new moves it,
     # the old file is dropped); a file another process holds is never taken; with no evidence the
-    # session keeps its file.
+    # session keeps its file. A /resume at the desk only reads the file (0.73.1:
+    # SessionManager.setSessionFile, no write, no file kept open), so the session moves
+    # there when the next prompt is appended, and reads it from its start.
     jsonl: { glob: '~/.pi/agent/sessions/-{{.cwd | replace "/" "-" | replace "[" "[[]" | replace "*" "[*]" | replace "?" "[?]"}}--/*.jsonl', follow: true, exclusive: true }   # every session of a cwd shares the folder
     mapper: pi.session
     stability: documented
