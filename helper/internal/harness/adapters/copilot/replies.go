@@ -89,8 +89,9 @@ func repliesUpTo(env harness.Env, session string, offset, limit int64) ([]hookst
 			continue
 		}
 		var ev struct {
-			Type string `json:"type"`
-			Data struct {
+			Type    string `json:"type"`
+			AgentID string `json:"agentId"`
+			Data    struct {
 				Content          string `json:"content"`
 				Source           string `json:"source"`
 				InteractionID    string `json:"interactionId"`
@@ -107,7 +108,12 @@ func repliesUpTo(env harness.Env, session string, offset, limit int64) ([]hookst
 		// of its own (Copilot CLI 1.0.114, testdata/subagent.events.jsonl):
 		// its prompt is a user.message from "agent-<parent id>" and its
 		// turn starts with the task call's id as parentToolCallId. Its
-		// messages carry neither, only that interaction's id.
+		// messages carry neither, only that interaction's id, and, like
+		// every record of a subagent, its own agentId beside the type
+		// (testdata/subagent-reply.events.jsonl). That id is what keeps a
+		// message out when the read before this one took in the prompt
+		// and the turn start: the interactions seen are not kept between
+		// reads.
 		switch ev.Type {
 		case "user.message":
 			if strings.HasPrefix(ev.Data.Source, "agent-") && ev.Data.InteractionID != "" {
@@ -123,7 +129,7 @@ func repliesUpTo(env harness.Env, session string, offset, limit int64) ([]hookst
 		default:
 			continue
 		}
-		if ev.Data.ParentToolCallID != "" || sub[ev.Data.InteractionID] {
+		if (ev.AgentID != "" && ev.AgentID != session) || ev.Data.ParentToolCallID != "" || sub[ev.Data.InteractionID] {
 			continue
 		}
 		r := hookstyle.Reply{Text: ev.Data.Content}

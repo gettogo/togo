@@ -23,13 +23,30 @@ const subMain = "00575c31-adb0-4c0b-be0a-c3500095f354"
 // order, the last version of each by id, and the mapper.
 func subagentRun(t *testing.T) ([]harness.Item, map[string]harness.Item, harness.Mapper) {
 	t.Helper()
+	all, last, m, _ := capturedRun(t, capture{main: subMain, hooks: "subagent-hooks.jsonl", events: "subagent.events.jsonl"})
+	return all, last, m
+}
+
+// capture is a recorded Copilot run: its hooks and its own log.
+type capture struct {
+	main, hooks, events string
+	// readAt gives the time (ms) the log had been written up to when the
+	// hook for event, stamped ms, was read; nil, or a zero return, is ms.
+	readAt func(event string, ms int64) int64
+}
+
+// capturedRun feeds a capture through the mapper as subagentRun does. It
+// also returns a replay: the same hook records, with the marks kept when
+// they were first mapped, through a new mapper, as after a helper restart.
+func capturedRun(t *testing.T, c capture) ([]harness.Item, map[string]harness.Item, harness.Mapper, func() []harness.Item) {
+	t.Helper()
 	home := t.TempDir()
-	dir := filepath.Join(home, ".copilot", "session-state", subMain)
+	dir := filepath.Join(home, ".copilot", "session-state", c.main)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	log := filepath.Join(dir, "events.jsonl")
-	events := hookLines(t, "subagent.events.jsonl")
+	events := hookLines(t, c.events)
 	written := 0
 	writeUpTo := func(ms int64) {
 		for ; written < len(events); written++ {
@@ -46,38 +63,61 @@ func subagentRun(t *testing.T) ([]harness.Item, map[string]harness.Item, harness
 		}
 	}
 	newMapper, _ := harness.LookupMapper(MapperHooks)
-	m := newMapper(harness.Env{SessionID: "s_sub", Vars: map[string]string{source.VarHome: home}})
+	env := harness.Env{SessionID: "s_sub", Vars: map[string]string{source.VarHome: home}}
+	m := newMapper(env)
 	d, _ := hookstyle.For("copilot")
+	mk := m.(harness.ReplayMarker)
 	var all []harness.Item
+	var recs []marked
 	last := map[string]harness.Item{}
-	for i, l := range hookLines(t, "subagent-hooks.jsonl") {
-		var c struct {
+	for i, l := range hookLines(t, c.hooks) {
+		var h struct {
 			Event   string          `json:"event"`
 			Payload json.RawMessage `json:"payload"`
 		}
-		if err := json.Unmarshal(l, &c); err != nil {
+		if err := json.Unmarshal(l, &h); err != nil {
 			t.Fatal(err)
 		}
-		if c.Event == "sessionEnd" {
+		if h.Event == "sessionEnd" {
 			continue // the user's exit, not part of the turn
 		}
 		var p struct {
 			SessionID string `json:"sessionId"`
 			Timestamp int64  `json:"timestamp"`
 		}
-		_ = json.Unmarshal(c.Payload, &p)
-		writeUpTo(p.Timestamp)
-		_, norm, err := hookstyle.Normalize(d, c.Event, c.Payload)
+		_ = json.Unmarshal(h.Payload, &p)
+		upTo := p.Timestamp
+		if c.readAt != nil {
+			if ms := c.readAt(h.Event, p.Timestamp); ms != 0 {
+				upTo = ms
+			}
+		}
+		writeUpTo(upTo)
+		_, norm, err := hookstyle.Normalize(d, h.Event, h.Payload)
 		if err != nil {
 			t.Fatalf("line %d: %v", i+1, err)
 		}
-		items, _ := m.Map(harness.Record{Source: "hooks", At: time.UnixMilli(p.Timestamp), Data: norm})
+		rec := harness.Record{Source: "hooks", At: time.UnixMilli(p.Timestamp), Data: norm}
+		pre := mk.ReplayMark()
+		items, _ := m.Map(rec)
+		recs = append(recs, marked{rec, pre, mk.ReplayMark()})
 		all = append(all, items...)
 		for _, x := range items {
 			last[x.ID] = x
 		}
 	}
-	return all, last, m
+	replay := func() []harness.Item {
+		r := newMapper(env)
+		rk := r.(harness.ReplayMarker)
+		var again []harness.Item
+		for _, x := range recs {
+			rk.Replaying(x.pre, x.post)
+			items, _ := r.Map(x.rec)
+			again = append(again, items...)
+		}
+		return again
+	}
+	return all, last, m, replay
 }
 
 // A Copilot subagent fires its own userPromptSubmitted and agentStop under
