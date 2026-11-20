@@ -120,6 +120,7 @@ type Rig struct {
 	Term *Terminal
 	phoneState
 	lifeState
+	orderState
 
 	bin string
 	api *APIServer
@@ -342,7 +343,9 @@ func (a approvals) Answer(ctx context.Context, requestID, raw, by string) error 
 }
 
 func (a approvals) OpenAsk(ctx context.Context, p wire.AskParams) (wire.Approval, <-chan string) {
-	return a.store().OpenAsk(ctx, p)
+	ap, ch := a.store().OpenAsk(ctx, p)
+	a.r.waitAskGate()
+	return ap, ch
 }
 
 func (a approvals) CloseDesk(requestID string) { a.store().CloseDesk(requestID) }

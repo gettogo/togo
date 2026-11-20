@@ -35,8 +35,12 @@ type publisher struct{ r *Rig }
 
 func (p publisher) Publish(kind string, id *string, payload any) {
 	p.r.note(Event{Kind: kind, Payload: payload})
+	ev := wire.Event{Kind: kind, SessionID: id, Payload: payload}
+	if p.r.holdEvent(ev) {
+		return
+	}
 	if e := p.r.engine(); e != nil {
-		e.Observe(wire.Event{Kind: kind, SessionID: id, Payload: payload})
+		e.Observe(ev)
 	}
 }
 

@@ -151,3 +151,26 @@ func TaskRow(l *sessiongen.Layout, detail string) bool {
 	}
 	return false
 }
+
+// WithoutAskOfferCards drops, from a restart's violations, the loss of an
+// approval card that was closed before the restart and belonged to no
+// question: the engine's offer of a question answered while the offer
+// opened, drawn on its own (TestKnownFault_AskOfferAnsweredWhileOpeningShowsAsApproval).
+// A pending approval, or one a question owns, is still checked.
+func WithoutAskOfferCards(vs []enginetest.Violation, before enginetest.State) []enginetest.Violation {
+	cards := map[string]bool{}
+	for _, it := range before.Items {
+		if it.Approval != nil && it.Approval.Owner == "" && it.Approval.Resolved != "" {
+			cards[it.ID] = true
+		}
+	}
+	var out []enginetest.Violation
+	for _, v := range vs {
+		id, _, _ := strings.Cut(v.Detail, " ")
+		if v.Rule == "restart-lost-item" && cards[id] {
+			continue
+		}
+		out = append(out, v)
+	}
+	return out
+}

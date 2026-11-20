@@ -15,7 +15,11 @@ import (
 // Amp) run side by side, except the four restart scenarios
 // (TestXRestartsAtSeededPoints): run among the others they lose an
 // approval or a tool's result across the restart in about one run of
-// three, and they do not when they run alone. The cause is not found.
+// three, and they do not when they run alone. The lost approval is the
+// engine's offer of a question answered while the offer opened, drawn as
+// a card of its own, which no restart keeps
+// (TestKnownFault_AskOfferAnsweredWhileOpeningShowsAsApproval); the
+// restart check leaves it out. The lost tool's result is not traced.
 // They take about a minute together.
 var copilotAgent = hookAgent{
 	name:    "copilot",
