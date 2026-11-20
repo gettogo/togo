@@ -167,7 +167,15 @@ func (c *Copilot) Turn(g *Gen, t Turn) error {
 				g.call(c.session, "subagentStop", c.base(g, map[string]any{"agentName": "explore"}))
 			}
 		}
-		g.L.Truth.Agents = append(g.L.Truth.Agents, AgentTruth{Task: "explore", Settled: !t.Agents.Background})
+		// The hooks name only the agent type, so the agents of one batch
+		// are told apart by order: "explore", "explore#2", and so on.
+		for i := 0; i < t.Agents.Size; i++ {
+			task := "explore"
+			if i > 0 {
+				task = fmt.Sprintf("explore#%d", i+1)
+			}
+			g.L.Truth.Agents = append(g.L.Truth.Agents, AgentTruth{Task: task, Settled: !t.Agents.Background})
+		}
 	}
 	if a := h.Ask; a != nil {
 		if err := c.ask(g, a, h.Pending); err != nil {

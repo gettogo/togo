@@ -102,11 +102,19 @@ func TestPiResumeToLeftConversation(t *testing.T) {
 // Pi killed mid-turn leaves a prompt and a tool call with no end. When
 // the hub reports the agent exited, the turn and tool end interrupted and
 // the summary stops working; relaunched on the same file it carries on.
+// The unfinished turn is written after the pane's process started, as a
+// live agent's is: a running turn older than the pane's process is one a
+// dead run left, and the engine ends it on its own (engine/exit_run.go).
 func TestPiExitAndRelaunch(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "generated", "pi/lifecycle/agent_exits", "pi/lifecycle/relaunch")
-	_, l, r := piStart(t, map[int]sessiongen.PiTurn{2: {Unfinished: true}}, sessiongen.Turn{Say: 20, Tools: 1, Output: 20}, sessiongen.Turn{Tools: 1, Output: 20})
+	_, l, r := piStart(t, map[int]sessiongen.PiTurn{2: {Unfinished: true}}, sessiongen.Turn{Say: 20, Tools: 1, Output: 20})
+	support.SettleUntil(r, 1)
 	r.Hub("working")
+	support.Now(l)
+	if err := l.Append(sessiongen.Turn{Tools: 1, Output: 20}); err != nil {
+		t.Fatal(err)
+	}
 	st := support.SettleUntil(r, 2)
 	if !st.Mission.Summary.Working || len(support.TurnsIn(st, harness.StateRunning)) != 1 {
 		t.Fatalf("before the exit: working %v, %d running turns, want a running turn", st.Mission.Summary.Working, len(support.TurnsIn(st, harness.StateRunning)))

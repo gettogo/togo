@@ -2,7 +2,6 @@ package support
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -72,11 +71,13 @@ func hookStep(t testing.TB, r *enginetest.Rig, d hookstyle.Dialect, agent string
 	// to happen.
 	if len(c.Writes) == 0 {
 		r.DeliverAt(f.Hook, f.Payload, c.At)
-		// Only the events that open or close a session matter to the next
-		// call's lines: a tool's result changes no log offset.
-		if strings.Contains(strings.ToLower(c.Event), "session") {
-			*pending = true
-		}
+		// The next call that writes lines waits for the engine to draw
+		// something new. An item this call draws after that wait began
+		// (a tool's end, a subagent's item) would end it before the next
+		// call was read, and the lines written after it would be read
+		// with the wrong call. So the next writing call first waits for
+		// this one to be read.
+		*pending = true
 		return nil
 	}
 	before := r.Cursor()
