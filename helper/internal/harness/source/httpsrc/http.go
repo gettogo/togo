@@ -170,6 +170,12 @@ func (HTTP) Fetch(ctx context.Context, s harness.SourceSpec, env harness.Env) (j
 
 // Do runs one request against the session's endpoint.
 func Do(ctx context.Context, env harness.Env, b spec.HTTP) (json.RawMessage, error) {
+	return DoLimit(ctx, env, b, MaxBody)
+}
+
+// DoLimit is Do for an answer that may be larger than MaxBody, such as a
+// model list with several providers: it is refused past limit bytes.
+func DoLimit(ctx context.Context, env harness.Env, b spec.HTTP, limit int) (json.RawMessage, error) {
 	method := strings.ToUpper(b.Method)
 	if method == "" {
 		method = "GET"
@@ -208,11 +214,11 @@ func Do(ctx context.Context, env harness.Env, b spec.HTTP) (json.RawMessage, err
 		return nil, err
 	}
 	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, MaxBody+1))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, int64(limit)+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) > MaxBody {
+	if len(raw) > limit {
 		return nil, ErrTooLarge
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {

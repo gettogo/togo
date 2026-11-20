@@ -147,3 +147,20 @@ func TestFetchRefusesRemoteEndpoint(t *testing.T) {
 		t.Fatalf("dial control loopback: %v", err)
 	}
 }
+
+// A caller that expects a large answer reads it with its own bound, and
+// is still refused past that bound.
+func TestDoLimit(t *testing.T) {
+	big := `{"a":"` + strings.Repeat("x", MaxBody) + `"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, big) }))
+	defer srv.Close()
+	if _, err := Do(context.Background(), envFor(srv), spec.HTTP{Path: "/big"}); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("over the default cap: %v", err)
+	}
+	if out, err := DoLimit(context.Background(), envFor(srv), spec.HTTP{Path: "/big"}, 2*MaxBody); err != nil || len(out) < MaxBody {
+		t.Fatalf("under its own bound: %d bytes, %v", len(out), err)
+	}
+	if _, err := DoLimit(context.Background(), envFor(srv), spec.HTTP{Path: "/big"}, MaxBody/2); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("over its own bound: %v", err)
+	}
+}

@@ -115,6 +115,10 @@ func (s *sess) mapperStateRawLocked() (map[string]string, []map[string]string) {
 // the block shown now: Claude's transcript reports only the model and the
 // context, its status line also the meters and cost.
 func (s *sess) mergeStatusLocked(st *harness.StatusBlock) {
+	if p := st.ContextPercent; p != nil && *p < 0 {
+		// harness.ContextUnknown: the percent shown is cleared, not kept.
+		defer func() { st.ContextPercent = nil }()
+	}
 	sec := s.mission.section(harness.SectionStatus)
 	if sec == nil || sec.Status == nil {
 		return
@@ -126,6 +130,7 @@ func (s *sess) mergeStatusLocked(st *harness.StatusBlock) {
 	if st.ContextPercent == nil {
 		st.ContextPercent = cur.ContextPercent
 	}
+
 	if st.CostUSD == nil {
 		st.CostUSD = cur.CostUSD
 	}
