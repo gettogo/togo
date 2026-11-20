@@ -24,14 +24,14 @@ func TestParseFormReadsTheFocusedField(t *testing.T) {
 	}{
 		{"open", Form{Stop: FormOption, Prompt: "Which color should the button be?", Options: opts(colors), Cursor: 0}},
 		{"moved", Form{Stop: FormOption, Prompt: "Which color should the button be?", Options: opts(colors), Cursor: 1}},
-		{"text-empty", Form{Stop: FormText, Prompt: "Button text", Cursor: -1}},
-		{"text-typed", Form{Stop: FormText, Prompt: "Button text", Value: "/Ship it — ñ 100%! (a|b)*", Cursor: -1}},
+		{"text-empty", Form{Stop: FormText, Prompt: "Button text", Cursor: -1, Rows: 1}},
+		{"text-typed", Form{Stop: FormText, Prompt: "Button text", Value: "/Ship it — ñ 100%! (a|b)*", Cursor: -1, Rows: 1}},
 		{"submit", Form{Stop: FormSubmit, Cursor: -1}},
 		{"checkbox", Form{Stop: FormOption, Prompt: "Which platforms?", Options: opts("iOS,macOS,Linux", "iOS"), Multi: true, Cursor: 0}},
 		{"checkbox-toggled", Form{Stop: FormOption, Prompt: "Which platforms?", Options: opts("iOS,macOS,Linux", "iOS", "macOS"), Multi: true, Cursor: 1}},
 		{"select", Form{Stop: FormSelect, Prompt: "Region", Value: "Europe", Cursor: -1}},
 		{"select-changed", Form{Stop: FormSelect, Prompt: "Region", Value: "United States", Cursor: -1}},
-		{"textarea-typed", Form{Stop: FormText, Prompt: "Notes", Value: "two words", Cursor: -1}},
+		{"textarea-typed", Form{Stop: FormText, Prompt: "Notes", Value: "two words", Cursor: -1, Rows: 4}},
 	} {
 		raw, err := os.ReadFile("testdata/omp/real-form-" + c.file + ".txt")
 		if err != nil {
@@ -104,7 +104,7 @@ func TestParseFormPresetsAndShapes(t *testing.T) {
 		rows = append(rows, "Line "+strings.Repeat("x", i)+strings.Repeat(" ", 40)+"█")
 	}
 	rows = append(rows, "❯ Name *"+strings.Repeat(" ", 40)+"│", "  │ ada"+strings.Repeat(" ", 40)+"│", "", "  Submit"+strings.Repeat(" ", 40)+"│")
-	if f, ok := ParseForm(box(rows...)); !ok || f.Stop != FormText || f.Prompt != "Name" || f.Value != "ada" {
+	if f, ok := ParseForm(box(rows...)); !ok || f.Stop != FormText || f.Prompt != "Name" || f.Value != "ada" || !f.Scrolled {
 		t.Errorf("scrollbar: %+v %v", f, ok)
 	}
 	// Not the form: omp 18.16's ask dialog, and a transcript that quotes one.

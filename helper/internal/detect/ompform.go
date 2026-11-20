@@ -52,8 +52,13 @@ type Form struct {
 	// Value is the dropdown's value, the text field's text (its rows
 	// joined by a space), or the Other row's typed text.
 	Value string
-	// Lines is the dialog's body, unboxed.
-	Lines []string
+	// Rows is how many rows a text field draws: 1 for an input, more for
+	// a text area.
+	Rows int
+	// Lines is the dialog's body, unboxed; Scrolled says it is a window
+	// on a longer form.
+	Lines    []string
+	Scrolled bool
 }
 
 var (
@@ -92,7 +97,7 @@ func boxMark(m string) bool {
 
 // formBody returns the lines inside the last omp form dialog on screen,
 // unboxed, blank lines kept, or false.
-func formBody(screen string) ([]string, bool) {
+func formBody(screen string) ([]string, bool, bool) {
 	if len(screen) > maxScreenBytes {
 		screen = screen[len(screen)-maxScreenBytes:]
 	}
@@ -110,23 +115,24 @@ func formBody(screen string) ([]string, bool) {
 		}
 	}
 	if top < 0 || end-top < 2 {
-		return nil, false
+		return nil, false, false
 	}
 	var body []string
 	for _, l := range all[top+1 : end] {
 		l = strings.TrimRight(stripControls(l), " ")
 		u := unbox(l)
 		if u == l {
-			return nil, false // a line out of the box: not one dialog
+			return nil, false, false // a line out of the box: not one dialog
 		}
 		body = append(body, strings.TrimPrefix(u, " "))
 	}
-	return dropScrollbar(body), true
+	body, scrolled := dropScrollbar(body)
+	return body, scrolled, true
 }
 
 // dropScrollbar removes the track or thumb a long form draws in its last
 // column, when one is there.
-func dropScrollbar(body []string) []string {
+func dropScrollbar(body []string) ([]string, bool) {
 	n := 0
 	for _, l := range body {
 		if tail := []rune(l); len(tail) > 8 && strings.ContainsRune("│█", tail[len(tail)-1]) && tail[len(tail)-2] == ' ' {
@@ -134,7 +140,7 @@ func dropScrollbar(body []string) []string {
 		}
 	}
 	if n < 3 {
-		return body
+		return body, false
 	}
 	out := make([]string, len(body))
 	for i, l := range body {
@@ -143,19 +149,19 @@ func dropScrollbar(body []string) []string {
 		}
 		out[i] = l
 	}
-	return out
+	return out, true
 }
 
 // ParseForm reads omp's form dialog at the bottom of screen.
 func ParseForm(screen string) (Form, bool) {
-	body, ok := formBody(screen)
+	body, scrolled, ok := formBody(screen)
 	if !ok {
 		return Form{}, false
 	}
-	f := Form{Lines: body, Cursor: -1}
+	f := Form{Lines: body, Scrolled: scrolled, Cursor: -1}
 	focus, submit := -1, false
 	for i, l := range body {
-		if t := strings.TrimSpace(l); t == "Submit" || formCursor.FindStringSubmatch(l) != nil && formCursor.FindStringSubmatch(l)[1] == "Submit" {
+		if m := formCursor.FindStringSubmatch(l); strings.TrimSpace(l) == "Submit" || m != nil && m[1] == "Submit" {
 			submit = true
 		}
 		if formCursor.MatchString(l) && focus < 0 {
@@ -197,7 +203,7 @@ func ParseForm(screen string) (Form, bool) {
 		f.Stop, f.Value = FormSelect, strings.TrimSpace(m[1])
 		return f, true
 	}
-	f.Stop = FormText
+	f.Stop, f.Rows = FormText, len(rows)
 	var parts []string
 	for _, r := range rows {
 		if r != "" {

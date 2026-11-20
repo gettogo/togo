@@ -21,7 +21,17 @@ import (
 // something else. The pane lock is held throughout, so the prompt watcher
 // and other answers wait. omp's ask tool (18.16) is driven this way; any
 // agent whose dialog ParseChoice reads is too.
+//
+// omp's form dialog (18.20 on) is not such a list: when the screen shows
+// one, answerForm drives it instead.
 func (s *Store) AnswerChoice(ctx context.Context, sessionID string, answers []AskAnswer) error {
+	mu := s.lockFor(sessionID)
+	mu.Lock()
+	defer mu.Unlock()
+	d := choiceDriver{s: s, ctx: ctx, target: target(sessionID)}
+	if d.form() {
+		return s.answerForm(ctx, sessionID, answers)
+	}
 	for _, a := range answers {
 		if strings.ContainsAny(a.Text, "\n\r") {
 			return &AskError{"A typed answer with a line break can only be sent from the terminal"}
@@ -30,10 +40,6 @@ func (s *Store) AnswerChoice(ctx context.Context, sessionID string, answers []As
 			return &AskError{"Type that answer in the terminal: a typed answer to a pick-any question can't be sent"}
 		}
 	}
-	mu := s.lockFor(sessionID)
-	mu.Lock()
-	defer mu.Unlock()
-	d := choiceDriver{s: s, ctx: ctx, target: target(sessionID)}
 	for i, a := range answers {
 		cur, ok := d.settled(func(c detect.Choice) bool { return !c.Review && samePrompt(c.Prompt, a.Prompt) })
 		if !ok {
@@ -81,6 +87,26 @@ type choiceDriver struct {
 	s      *Store
 	ctx    context.Context
 	target string
+}
+
+// form waits up to askWait for a dialog and reports whether it is omp's
+// form rather than a selection list.
+func (d choiceDriver) form() bool {
+	deadline := time.Now().Add(askWait)
+	for {
+		if screen, err := d.s.cfg.Tmux.CapturePane(d.ctx, d.target); err == nil {
+			if _, ok := detect.ParseChoice(screen); ok {
+				return false
+			}
+			if _, ok := detect.ParseForm(screen); ok {
+				return true
+			}
+		}
+		if time.Now().After(deadline) || d.ctx.Err() != nil {
+			return false
+		}
+		time.Sleep(askPoll)
+	}
 }
 
 func (d choiceDriver) read() (detect.Choice, bool) {
