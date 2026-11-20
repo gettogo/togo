@@ -32,6 +32,9 @@ func TestParseFormReadsTheFocusedField(t *testing.T) {
 		{"select", Form{Stop: FormSelect, Prompt: "Region", Value: "Europe", Cursor: -1}},
 		{"select-changed", Form{Stop: FormSelect, Prompt: "Region", Value: "United States", Cursor: -1}},
 		{"textarea-typed", Form{Stop: FormText, Prompt: "Notes", Value: "two words", Cursor: -1, Rows: 4}},
+		// Typed into the Other row by the phone's answer (live, through the helper).
+		{"other-typed", Form{Stop: FormOther, Prompt: "Which color should the button be?", Value: "Teal (not listed)", Cursor: 3,
+			Options: append(opts(colors)[:3], ChoiceOption{Label: "Other", Detail: "Teal (not listed)", Checked: true, Text: true})}},
 	} {
 		raw, err := os.ReadFile("testdata/omp/real-form-" + c.file + ".txt")
 		if err != nil {

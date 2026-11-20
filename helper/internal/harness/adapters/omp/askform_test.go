@@ -116,3 +116,24 @@ func TestFormsThePhoneCannotFill(t *testing.T) {
 		t.Errorf("own Other row: %+v drivable %v", qs, drivable)
 	}
 }
+
+// ask-form-19-phone.jsonl is a real omp 19.0.1 session (scrubbed as
+// above) whose form was answered from the phone through the helper: the
+// radio group with typed words in its Other row, the text field with
+// words that end in a semicolon. omp recorded both as sent.
+func TestRealFormAnsweredFromThePhone(t *testing.T) {
+	s := newSession(env())
+	var last harness.Item
+	for _, r := range records(t, "ask-form-19-phone.jsonl", "session") {
+		items, _ := s.Map(r)
+		for _, it := range items {
+			if it.Kind == harness.KindQuestion {
+				last = it
+			}
+		}
+	}
+	want := map[string][]string{"color": {"Other: Teal (not listed)"}, "label": {"/Ship it — ñ 100%! (a|b)* [x];"}}
+	if last.Question == nil || last.Question.Answerable != nil || !reflect.DeepEqual(last.Question.Answered, want) {
+		t.Fatalf("question %+v", last.Question)
+	}
+}
