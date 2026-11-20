@@ -23,6 +23,11 @@ type hooks struct {
 	// ended is set when the followed session's SessionEnd came: the next
 	// session to start in the pane is the agent's own (a relaunch).
 	ended bool
+	// held is a startup of another session waiting on whether the pane's
+	// agent is gone (startcheck.go); wake tells the engine it ended.
+	held     *heldStart
+	accepted string // a session the check let in
+	wake     func()
 }
 
 func newHooks(env harness.Env) *hooks {
@@ -64,6 +69,15 @@ func (h *hooks) Map(rec harness.Record) ([]harness.Item, []harness.Op) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.holdLocked(p, rec) {
+		return nil, nil
+	}
+	return h.mapLocked(p, rec)
+}
+
+// mapLocked maps one decoded payload; held payloads come here when the
+// check they waited on accepts them.
+func (h *hooks) mapLocked(p map[string]any, rec harness.Record) ([]harness.Item, []harness.Op) {
 	if h.nested(p) {
 		return nil, nil
 	}

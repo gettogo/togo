@@ -1,7 +1,6 @@
 package claude
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -166,36 +165,5 @@ func TestRelaunchUpdatesTheRememberedTranscript(t *testing.T) {
 	h.Relaunched([]string{"claude", "--resume", "--dangerously-skip-permissions"}, time.Now())
 	if got := source.LoadFollowed(e, followName); got != "" {
 		t.Fatalf("a flag as the resume id was remembered: %q", got)
-	}
-}
-
-// countProcs is a process view that counts n Claude Code processes in
-// the session's tree.
-type countProcs struct{ n int }
-
-func (countProcs) Tree(context.Context) []int { return []int{1} }
-func (countProcs) Holders(context.Context, []string) (map[string][]int, error) {
-	return nil, nil
-}
-func (countProcs) Others(context.Context, []string, string) (bool, error) { return false, nil }
-func (c countProcs) Within(context.Context, []string) (int, error)        { return c.n, nil }
-
-// The agent died with no SessionEnd (killed, or it exited while the
-// helper was down) and the helper restarted. A Claude Code the user then
-// starts in the pane is the session's own when it is the only one there;
-// with the followed one still running below it, the start is a nested run.
-func TestStartAfterAnUnendedDeath(t *testing.T) {
-	e, first, second := followSetup(t)
-	sessionStart(t, newHooks(e), "startup", first)
-	for _, c := range []struct {
-		running int
-		want    string
-	}{{2, first}, {1, second}} {
-		e.Procs = countProcs{c.running}
-		after := newHooks(e)
-		sessionStart(t, after, "startup", second)
-		if got := after.State()["transcript_path"]; got != c.want {
-			t.Errorf("%d Claude Code running: followed %q, want %q", c.running, got, c.want)
-		}
 	}
 }
