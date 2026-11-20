@@ -31,7 +31,12 @@ type oc2 struct {
 
 func oc2Start(t *testing.T, seed int64, mod func(*enginetest.Options), turns ...sessiongen.Turn) *oc2 {
 	t.Helper()
-	e := support.NewEnv(t, 10*time.Minute)
+	return oc2StartIn(t, support.NewEnv(t, 10*time.Minute), seed, mod, turns...)
+}
+
+// oc2StartIn is oc2Start in a folder the test has prepared.
+func oc2StartIn(t *testing.T, e support.Env, seed int64, mod func(*enginetest.Options), turns ...sessiongen.Turn) *oc2 {
+	t.Helper()
 	p := &sessiongen.OpenCode2{}
 	l, err := sessiongen.Write(e.Home, p, sessiongen.Script{Seed: seed, Start: time.Now().UTC(), Gap: time.Millisecond, Cwd: e.Cwd, Turns: turns})
 	if err != nil {

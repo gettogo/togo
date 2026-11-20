@@ -100,16 +100,13 @@ var ChangesAfter = map[string]string{"e0.go": "modified", "d0.go": "deleted", "a
 // ends.
 func ChangesScenario(t *testing.T, r *enginetest.Rig, cwd string, next func() func(enginetest.State) bool) enginetest.State {
 	t.Helper()
-	st := r.SettleUntil(FileLimit, ChangesAre(ChangesAtStart))
-	if !ChangesAre(ChangesAtStart)(st) {
-		t.Fatalf("changes at the start: %+v, want %v", Rows(st, harness.SectionChanges), ChangesAtStart)
-	}
+	WaitFor(t, r, "the changes at the start", ChangesAre(ChangesAtStart))
 	if err := os.Remove(filepath.Join(cwd, "e1.go")); err != nil {
 		t.Fatal(err)
 	}
 	put(t, cwd, "e2.go", "package e\n")
 	seen := next()
-	st = r.SettleUntil(FileLimit, seen)
+	st := WaitFor(t, r, "the turn", seen)
 	// The turn has ended. Its end refreshes the section within moments; the
 	// 30 second refresh is far enough off that waiting for it fails.
 	deadline := time.Now().Add(turnRefresh)
@@ -170,24 +167,15 @@ func PortsScenario(t *testing.T, r *enginetest.Rig, extra map[string]string, the
 		return func(st enginetest.State) bool { return PortsAre(want)(st) && (then == nil || then(st)) }
 	}
 	both := with(map[string]string{"3000": "node", "5173": "vite"})
-	st := r.SettleUntil(FileLimit, ok(both))
-	if !PortsAre(both)(st) {
-		t.Fatalf("ports at the start: %+v, want %v", Rows(st, harness.SectionPorts), both)
-	}
+	WaitFor(t, r, "both ports", ok(both))
 	r.SetListeners(Dev[0])
 	r.Restart()
 	one := with(map[string]string{"3000": "node"})
-	st = r.SettleUntil(FileLimit, ok(one))
-	if !PortsAre(one)(st) {
-		t.Fatalf("ports after the server stopped: %+v, want %v", Rows(st, harness.SectionPorts), one)
-	}
+	WaitFor(t, r, "the port of the server that stopped to leave", ok(one))
 	r.SetListeners(Dev[0], ports.Listener{Port: 8080, Address: "127.0.0.1", PID: 4103, Command: "python"})
 	r.Restart()
 	later := with(map[string]string{"3000": "node", "8080": "python"})
-	st = r.SettleUntil(FileLimit, ok(later))
-	if !PortsAre(later)(st) {
-		t.Fatalf("ports after a server started: %+v, want %v", Rows(st, harness.SectionPorts), later)
-	}
+	WaitFor(t, r, "the port of the server that started", ok(later))
 }
 
 // turnRefresh is how long after a turn's end the Changes section may take

@@ -72,13 +72,18 @@ func (r *Rig) launchAPI(eng interface {
 }
 
 // apiPorts is the engine's Config.Ports: the session's listening ports,
-// which for an API agent is its server, held by this process.
-func (r *Rig) apiPorts(context.Context, string) ([]ports.Listener, error) {
-	s := r.API()
-	if s == nil || s.Port() == 0 {
-		return nil, nil
+// which for an API agent is its server, held by this process, and the ones
+// a test scripted (Options.Ports).
+func (r *Rig) apiPorts(ctx context.Context, id string) ([]ports.Listener, error) {
+	var out []ports.Listener
+	if s := r.API(); s != nil && s.Port() != 0 {
+		out = append(out, ports.Listener{Port: s.Port(), Address: "127.0.0.1", PID: os.Getpid(), Command: r.Opt.Agent})
 	}
-	return []ports.Listener{{Port: s.Port(), Address: "127.0.0.1", PID: os.Getpid(), Command: r.Opt.Agent}}, nil
+	if r.Opt.Ports {
+		more, _ := r.scriptedPorts(ctx, id)
+		out = append(out, more...)
+	}
+	return out, nil
 }
 
 // setupAPI makes the server of an API agent, once per rig, and wires
