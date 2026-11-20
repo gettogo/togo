@@ -122,7 +122,7 @@ func New(cfg Config) *Engine {
 	}
 	e.adapters = loadAdapters(cfg.AdapterDir, cfg.Logf)
 	sweepHookStores(cfg.TogoHome, cfg.Now())
-	go e.sweepFollows(context.Background())
+	go sweepFollows(context.Background(), cfg.Sessions, cfg.TogoHome, cfg.Now)
 	return e
 }
 

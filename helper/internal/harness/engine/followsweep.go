@@ -16,20 +16,22 @@ const followGrace = time.Minute
 // sweepFollows deletes what is remembered under run/follow-<session>.*
 // for sessions that no longer exist: ones removed while the helper was
 // not running (Forget removes the rest). Only a definite "not found"
-// counts; a session list that cannot be read keeps everything.
-func (e *Engine) sweepFollows(ctx context.Context) {
-	if e.cfg.Sessions == nil || e.cfg.TogoHome == "" {
+// counts; a session list that cannot be read keeps everything. It runs in
+// its own goroutine from New, so it is given the values it needs rather
+// than reading the engine's config.
+func sweepFollows(ctx context.Context, sessions Sessions, togoHome string, now func() time.Time) {
+	if sessions == nil || togoHome == "" {
 		return
 	}
-	for id, at := range source.FollowSessions(e.cfg.TogoHome) {
-		if e.cfg.Now().Sub(at) < followGrace {
+	for id, at := range source.FollowSessions(togoHome) {
+		if now().Sub(at) < followGrace {
 			continue
 		}
 		rctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		_, err := e.cfg.Sessions.Resolve(rctx, id)
+		_, err := sessions.Resolve(rctx, id)
 		cancel()
 		if errors.Is(err, session.ErrNotFound) {
-			source.RemoveFollows(e.cfg.TogoHome, id)
+			source.RemoveFollows(togoHome, id)
 		}
 	}
 }

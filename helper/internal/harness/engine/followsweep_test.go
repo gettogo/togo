@@ -29,9 +29,7 @@ func TestSweepFollowsRemovesUnknownSessions(t *testing.T) {
 	save("s_livelive01", time.Hour)
 	save("s_gonegone01", time.Hour)
 	save("s_newnewn01", 0)
-	e := &Engine{cfg: Config{TogoHome: home, Now: time.Now,
-		Sessions: fakeSessions{"s_livelive01": session.Session{ID: "s_livelive01"}}}}
-	e.sweepFollows(context.Background())
+	sweepFollows(context.Background(), fakeSessions{"s_livelive01": session.Session{ID: "s_livelive01"}}, home, time.Now)
 	got := source.FollowSessions(home)
 	if _, ok := got["s_gonegone01"]; ok || len(got) != 2 {
 		t.Fatalf("after the sweep: %v", got)
