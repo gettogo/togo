@@ -145,7 +145,7 @@ func restartScenario(t *testing.T, a hookAgent) []string {
 		if len(before.Items) == 0 {
 			t.Fatalf("restart %s at %d: nothing was drawn before it", c.kind, c.at)
 		}
-		support.Fail(t, "restart "+c.kind, support.WithoutAskOfferCards(enginetest.Restarted(before, after), before), l)
+		support.Fail(t, "restart "+c.kind, enginetest.Restarted(before, after), l)
 		checkHook(t, "restart "+c.kind, a, after, l, false)
 		kinds = append(kinds, c.kind)
 	}

@@ -68,13 +68,6 @@ func TestSameScenarioSameTape(t *testing.T) {
 					tapes[i] = tp
 				}
 				a, b := tapes[0].Bytes(), tapes[1].Bytes()
-				if !bytes.Equal(a, b) && sc.ID == "send-while-working" && bytes.Equal(withoutNoReply(tapes[0].Lines), withoutNoReply(tapes[1].Lines)) {
-					// Whether the queued prompt gets a "no reply" notice
-					// depends on how long typing it took:
-					// TestKnownFault_QueuedPromptJudgedByThePreviousTurnsEnd (e2e/generic).
-					t.Logf("the tapes differ only in the no-reply notice of the known fault")
-					a = b
-				}
 				if !bytes.Equal(a, b) {
 					t.Errorf("two exports differ (%d and %d bytes): first difference at line %d:\n%s", len(a), len(b), firstDiff(tapes[0].Lines, tapes[1].Lines), around(tapes[0].Lines, tapes[1].Lines))
 				}
@@ -93,18 +86,6 @@ func deterministicAgents() []string {
 		return sessiongen.Names()
 	}
 	return []string{"omp", "crush", "opencode", "opencode2", "codex"}
-}
-
-// withoutNoReply is the tape without the lines that carry the engine's
-// "ended the turn without a reply" notice.
-func withoutNoReply(lines [][]byte) []byte {
-	var out [][]byte
-	for _, l := range lines {
-		if !bytes.Contains(l, []byte(`"id":"noreply-`)) {
-			out = append(out, l)
-		}
-	}
-	return bytes.Join(out, []byte("\n"))
 }
 
 func firstDiff(a, b [][]byte) int {
