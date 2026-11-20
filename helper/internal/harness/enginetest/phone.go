@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
@@ -171,6 +172,10 @@ func (r *Rig) Hook(f wire.HookForward) error {
 // detector recognises is reported once, and its leaving is reported. A
 // prompt the phone itself opened is not (daemon/compose.go ownScreens).
 func (r *Rig) Look() {
+	// One look at a time: two that read the old prompt would both report
+	// what they saw.
+	r.look.Lock()
+	defer r.look.Unlock()
 	ctx := context.Background()
 	p, ok := detect.Detect(r.Term.Text())
 	r.mu.Lock()
@@ -225,4 +230,5 @@ type phoneState struct {
 	methods   map[string]api.Method
 	events    []Event
 	prompt    string
+	look      sync.Mutex
 }

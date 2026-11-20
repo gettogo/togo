@@ -430,7 +430,17 @@ func (lv *live) approvalClosed(res ...string) {
 	if lv.approval == "" {
 		return
 	}
-	eventually(lv.t, 3*time.Second, "the approval to close", func() bool { return len(lv.r.Pending()) == 0 })
+	// The pane watcher reads the screen again and again; the rig reads it
+	// each time round, because an agent's API takes its interrupt on its
+	// own goroutine and the prompt leaves the screen some time after the
+	// call returned.
+	eventually(lv.t, 3*time.Second, "the approval to close", func() bool {
+		if len(lv.r.Pending()) == 0 {
+			return true
+		}
+		lv.r.Look()
+		return len(lv.r.Pending()) == 0
+	})
 	if got := lv.r.Closed()[lv.approval]; !slices.Contains(res, got) {
 		lv.t.Errorf("the approval closed as %q, want one of %v", got, res)
 	}
