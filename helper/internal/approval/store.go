@@ -161,6 +161,12 @@ func (s *Store) PromptSeen(ctx context.Context, sessionID string, p detect.Promp
 	mu.Lock()
 	defer mu.Unlock()
 	s.mu.Lock()
+	if p.Ask && s.questionWaitingLocked(sessionID) {
+		// Claude's question dialog while its AskUserQuestion hook waits
+		// for the phone: the same request, answered through the hook.
+		s.mu.Unlock()
+		return
+	}
 	cur := s.pendingForSession(sessionID)
 	switch {
 	case cur != nil && cur.fingerprint == p.Fingerprint:

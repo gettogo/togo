@@ -481,7 +481,9 @@ type ownScreens struct {
 }
 
 func (o ownScreens) PromptSeen(ctx context.Context, sessionID string, p detect.Prompt) {
-	if o.c.Harness != nil && o.c.Harness.PhoneDriving(sessionID) {
+	if o.c.Harness != nil && (o.c.Harness.PhoneDriving(sessionID) || o.c.Harness.QuestionDialog(sessionID, p)) {
+		// The phone's own list, or a step of a question dialog whose
+		// question item the phone already shows.
 		return
 	}
 	o.Store.PromptSeen(ctx, sessionID, p)
