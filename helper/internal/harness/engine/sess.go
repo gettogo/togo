@@ -100,6 +100,11 @@ type sess struct {
 	failedHold bool
 	// relaunchedAt is when an action last restarted the agent.
 	relaunchedAt time.Time
+	// suggestion is the text the input line kept through a clear, with the
+	// cursor before it: drawn by the harness, not typed (spec.Input
+	// Suggestion). The next clear replaces it; it counts only while the
+	// line reads exactly it with the cursor before it.
+	suggestion string
 	// statusModelFromState is the status block's model when the session's
 	// state filled it in (no status line named one), so a later switch
 	// replaces it.
