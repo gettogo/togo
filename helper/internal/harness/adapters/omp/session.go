@@ -195,6 +195,13 @@ func (s *session) mapEntry(rec harness.Record, e map[string]any) ([]harness.Item
 		if parent == "" {
 			return s.compaction(e, at)
 		}
+	case "model_usage":
+		// A request beside the turn (19.0.1: the composer's next-message
+		// prediction). omp's own spend counts it; so does the status.
+		if c, ok := num(obj(obj(e["usage"])["cost"])["total"]); ok && main && parent == "" && c > 0 {
+			s.cost += c
+			return nil, []harness.Op{s.status()}
+		}
 	case "custom":
 		// /todo in the terminal edits the list by hand and saves the whole
 		// list (seen on 18.20: "/todo done" wrote user_todo_edit and the
@@ -401,8 +408,8 @@ func (s *session) assistant(id, parent string, m map[string]any, at time.Time) (
 func joinText(parts []string) string {
 	out := ""
 	for _, p := range parts {
-		if p == "" {
-			continue
+		if strings.TrimSpace(p) == "" {
+			continue // some models open a tool call with a bare "\n\n"
 		}
 		if out != "" {
 			out += "\n\n"

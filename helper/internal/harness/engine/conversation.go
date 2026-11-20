@@ -147,6 +147,7 @@ func (c *convCarry) take(id string) string {
 // is bound to the conversation it was admitted in by convGen: its sender
 // checks the count again before it publishes or records anything.
 func (s *sess) startOverLocked(mapper string) harness.Mapper {
+	s.forgetSuggestionLocked()
 	var held []string
 	for _, q := range s.queue {
 		if q.item.User != nil {

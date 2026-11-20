@@ -11,7 +11,7 @@ import (
 )
 
 func TestCompanionVersionGateLeavesOlderAndUnknownLaunchesAlone(t *testing.T) {
-	for _, output := range []string{"omp/18.16.0", "omp/18.19.9", "omp/19.0.0", "unexpected version", "omp/18.20.0 trailing text"} {
+	for _, output := range []string{"omp/18.16.0", "omp/18.19.9", "omp/20.0.0", "unexpected version", "omp/18.20.0 trailing text"} {
 		t.Run(output, func(t *testing.T) {
 			c := testCompanions(t)
 			c.probeVersion = func(context.Context, session.Launch) (string, error) { return output, nil }
@@ -26,7 +26,7 @@ func TestCompanionVersionGateLeavesOlderAndUnknownLaunchesAlone(t *testing.T) {
 			}
 		})
 	}
-	for _, output := range []string{"omp/18.20.0\n", "omp/18.20.1", "omp/18.21.0", "omp/18.20.0-beta.1"} {
+	for _, output := range []string{"omp/18.20.0\n", "omp/18.20.1", "omp/18.21.0", "omp/18.20.0-beta.1", "omp/19.0.1"} {
 		if !supportedOMPVersion(output) {
 			t.Fatal("supported CLI version rejected", output)
 		}

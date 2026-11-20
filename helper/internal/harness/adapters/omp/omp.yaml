@@ -1,12 +1,12 @@
 # omp (oh-my-pi). rpc mode is a separate process, so the live TUI is read
 # through its session JSONL and the CLI's JSON output, and changed by typing
 # its documented slash commands, or with `omp config set` for new sessions.
-# Checked against omp 18.16.0.
+# Checked against omp 18.16.0 and 19.0.1.
 adapter: omp
 name: omp
 revision: 1
 match: { agents: [omp], commands: [omp] }
-harness: { version: [omp, --version], pattern: 'omp/(\S+)', range: ">=18.10 <19" }
+harness: { version: [omp, --version], pattern: 'omp/(\S+)', range: ">=18.10 <20" }
 capabilities: [chat, chat.anchors, chat.history, send.queue, interrupt, commands, files, model, effort,
   agents, background, plan, changes, ports, status, compact, settings, needs.questions]
 images: { insert: together }   # how image paths are pasted into the input
@@ -22,10 +22,15 @@ mentions:
 # effort hint at its right end when it is empty. C-u empties it; a slash
 # command's completion popup closes with Escape and keeps the text (seen on
 # 18.16.0, where the popup once took the Enter of a typed /login).
+# From 19.0 omp predicts the next message after a turn and draws it after
+# the cursor in a muted theme colour (composer.predictions, on by default).
+# No key removes it and Enter does not send it; End then C-u removes any
+# draft, wherever its cursor is, so text they leave is the suggestion.
 input:
   line: '^╰─(?: (.*?))?(?:\s{2,}⇧⇥ to change thinking effort)?\s*$'
-  clear: [C-u]
+  clear: [End, C-u]
   dismiss: [Escape]
+  suggestion: true
 feeds:
   # omp_agent is omp's agent folder: ~/.omp/agent unless PI_CONFIG_DIR, PI_CODING_AGENT_DIR
   # or a profile moved it; omp_sessions is <agent>/sessions unless omp's XDG layout moved
@@ -90,12 +95,17 @@ sources:
     cache: 1m
     timeout: 8s
     stability: documented
-  # `omp ps` respawns its broker when it is gone, which can take ~10 s. A
-  # global service's row id is global:<scope>:<name>, so Stop can name its
-  # scope; a project's is the process name `omp ps stop` takes.
+  # `omp ps` respawns its broker when it is gone, which can take ~10 s.
+  # Before 19 it printed an array of brokers with their daemons: a global
+  # service's row id is global:<scope>:<name>, so Stop can name its scope;
+  # a project's is the process name `omp ps stop` takes. From 19 one daemon
+  # per user prints {daemon, reports: [{scope, units}]}; a unit's id is what
+  # `omp ps stop` takes, and the "predict" unit is omp's own word completion,
+  # not work the agent started (seen on 19.0.1). A unit that is not an
+  # object or has no string id is skipped, not the whole list.
   jobs:
     cli: { argv: [omp, ps, --json] }
-    select: '[.[] | . as $p | .daemons[]? | . + {rowId: (if $p.kind == "global" then "global:" + (($p.scope // $p.name // "") | tostring) + ":" + .name else .name end)}]'
+    select: 'if type == "array" then [.[] | . as $p | .daemons[]? | . + {rowId: (if $p.kind == "global" then "global:" + (($p.scope // $p.name // "") | tostring) + ":" + .name else .name end)}] else [.reports[]? | objects | .units[]? | objects | select((.id | type) == "string" and .kind != "predict") | . + {rowId: .id, name: (.label // .key // .id)}] end'
     cache: 5s
     timeout: 15s
     stability: documented
@@ -242,7 +252,10 @@ actions:
   # A resume restarts omp on the chosen conversation with the options the session was
   # started with (its profile, model, tools, folders, approval mode). Options that pick
   # a conversation or run once (--resume, --continue, --fork, --print, a prompt) are
-  # never carried.
+  # never carried. --smol and --slow are bare flags on 18 (checked on 18.16)
+  # and name a model from 19 ("--smol <model>"): carried as flags there, a
+  # relaunch on 19.0.1 read the next option as the model and sent a path as
+  # a prompt.
   resume:
     relaunch:
       argv: [omp, --resume, '{{.id}}']
@@ -254,6 +267,7 @@ actions:
         flags: [--smol, --slow, --allow-home, --no-tools, --no-lsp, --no-pty, --hide-thinking,
           --external-thinking, --prewalk, --no-prewalk, --no-extensions, --no-skills, --no-rules,
           --no-context-files, --no-title, --auto-approve, --yolo]
+        from: { range: ">=19", values: [--smol, --slow] }
     stability: documented
   # The ask tool's dialog (❯ ○ rows, ☐ boxes for a multi-select, "Other
   # (type your own)", a Review page for a batch; seen on 18.16.0) is driven

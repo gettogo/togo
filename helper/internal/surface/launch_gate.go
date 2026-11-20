@@ -16,14 +16,21 @@ import (
 var ompVersionLine = regexp.MustCompile(`^omp/([0-9]+)\.([0-9]+)\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?\s*$`)
 
 // Older OMP keeps its existing chat/terminal launch. This optional integration
-// uses the original TSP and query APIs checked against the 18.20 release.
+// uses the original TSP and query APIs checked against the 18.20 release, and
+// again on 19.0.1, where the companion reported itself available.
 func supportedOMPVersion(output string) bool {
 	parts := ompVersionLine.FindStringSubmatch(strings.TrimSpace(output))
 	if len(parts) != 3 {
 		return false
 	}
 	major, err := strconv.Atoi(parts[1])
-	if err != nil || major != 18 {
+	if err != nil {
+		return false
+	}
+	if major == 19 {
+		return true
+	}
+	if major != 18 {
 		return false
 	}
 	minor, err := strconv.Atoi(parts[2])

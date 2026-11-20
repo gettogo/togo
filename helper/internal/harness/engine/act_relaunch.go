@@ -39,7 +39,12 @@ group:
 		}
 		argv = append(argv, vals...)
 	}
-	argv = append(argv, carried(s.env.Argv, r.Carry, argv)...)
+	s.mu.Lock()
+	version := s.version
+	s.mu.Unlock()
+	argv = append(argv, carried(s.env.Argv, r.Carry.ForVersion(func(rng string) bool {
+		return version != "" && judgeVersion(version, "", rng).ok
+	}), argv)...)
 	if !sameProgram(argv[0], s.info.Command, s.info.Agent) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "Only the session's own agent can be restarted"}, nil
 	}
@@ -67,6 +72,7 @@ group:
 	}
 	s.mu.Lock()
 	s.relaunchedAt = time.Now()
+	s.forgetSuggestionLocked()
 	for _, m := range s.mappers {
 		if r, ok := m.(harness.Relauncher); ok {
 			if ops := r.Relaunched(argv, s.relaunchedAt); len(ops) > 0 {

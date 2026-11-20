@@ -267,7 +267,12 @@ func (e *Engine) typePrompt(ctx context.Context, s *sess, text string, images []
 			case <-time.After(insertGap):
 			}
 		}
-		if err := e.cfg.Typist.Type(ctx, s.id, step.Text, step.Submit, false); err != nil {
+		if step.Submit && s.ad.Input != nil && s.ad.Input.Suggestion && e.cfg.Screen != nil {
+			// Enter only once the line shows the prompt, not the suggestion.
+			if err := e.typeOverSuggestion(ctx, s, step.Text); err != nil {
+				return err
+			}
+		} else if err := e.cfg.Typist.Type(ctx, s.id, step.Text, step.Submit, false); err != nil {
 			return err
 		}
 		if step.Submit {
