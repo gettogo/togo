@@ -210,7 +210,9 @@ func (m *Mapper) mapRecord(rec harness.Record) ([]harness.Item, []harness.Op) {
 	if m.isSub(p) {
 		return m.subHook(p, at, draw), nil
 	}
-	m.learn(p)
+	if !m.fromSub(p) {
+		m.learn(p)
+	}
 	switch p.Event {
 	case SessionStart:
 		m.idle(at)

@@ -25,8 +25,10 @@ func Reduce(d Dialect, event string, payload []byte, env map[string]string) (wir
 	}
 	ev, _, err := claudehook.Map(canon, norm, env)
 	if err == nil && subagentOwn(canon, norm) {
-		// A subagent's own prompt, stop or session event is not the
-		// session's: the summary would take it for the main turn's end.
+		// A subagent's own prompt, tools, stop or session event is not
+		// the session's: the summary would take its stop for the main
+		// turn's end, and a background subagent's tools after the main
+		// turn ended would set the session working again for good.
 		err = claudehook.ErrUnsupported
 	}
 	switch {
@@ -49,12 +51,12 @@ func Reduce(d Dialect, event string, payload []byte, env map[string]string) (wir
 }
 
 // subagentOwn reports whether a normalized payload is a subagent's own
-// turn or session event: it names a parent agent other than its session
-// (Copilot's parentAgentId). Its tool and permission hooks still count:
-// the session works and may wait on an approval while a subagent runs.
+// hook: it names a parent agent other than its session (Copilot's
+// parentAgentId). Only its permission requests and notifications reach
+// the summary: the user is needed whoever asks.
 func subagentOwn(canon string, norm json.RawMessage) bool {
 	switch canon {
-	case PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Notification:
+	case PermissionRequest, Notification:
 		return false
 	}
 	var p struct {

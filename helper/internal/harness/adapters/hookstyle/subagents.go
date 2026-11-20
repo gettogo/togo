@@ -24,9 +24,18 @@ import (
 // maxSubs bounds the subagent ids kept for one session.
 const maxSubs = 256
 
-// isSub reports whether p is a subagent's own hook.
+// isSub reports whether p is a subagent's own hook. A subagent's own
+// subagentStart and subagentStop (a nested subagent) are read as agent
+// rows, not here.
 func (m *Mapper) isSub(p payload) bool {
-	if p.SessionID == "" || p.Event == SubagentStart || p.Event == SubagentStop {
+	return p.Event != SubagentStart && p.Event != SubagentStop && m.fromSub(p)
+}
+
+// fromSub reports whether p comes from a subagent: it names a parent other
+// than its own session, or its session is an announced subagent. The
+// session's state (its id, model, mode) is never learnt from one.
+func (m *Mapper) fromSub(p payload) bool {
+	if p.SessionID == "" {
 		return false
 	}
 	if p.ParentAgentID != "" && p.ParentAgentID != p.SessionID {
@@ -81,8 +90,9 @@ func (m *Mapper) subHook(p payload, at time.Time, draw bool) []harness.Item {
 		if p.Prompt == "" {
 			break
 		}
-		m.n++
-		items = append(items, harness.Item{ID: parent + ":prompt-" + strconv.Itoa(m.n), TurnID: m.turn, Parent: parent,
+		// Keyed by the record itself, not a count, so a replay names it
+		// the same whatever was cut before it.
+		items = append(items, harness.Item{ID: parent + ":prompt-" + strconv.FormatInt(at.UnixMilli(), 10), TurnID: m.turn, Parent: parent,
 			Kind: harness.KindUser, At: at, User: &harness.UserBody{Text: Clip(p.Prompt), Source: "unknown"}})
 	case PreToolUse:
 		if m.turn == "" {

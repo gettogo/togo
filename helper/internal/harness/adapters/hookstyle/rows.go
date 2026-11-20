@@ -42,6 +42,10 @@ func (m *Mapper) agentOps(p payload, at time.Time) ([]harness.Item, []harness.Op
 		id = freeAgentID(p.AgentID, open)
 	}
 	a = m.newAgent(id, p.AgentType, at)
+	if up := m.agents[p.SessionID]; p.SessionID != p.AgentID && len(up) > 0 && m.fromSub(p) {
+		// A subagent's own subagent: drawn in its conversation.
+		a.item.Parent = up[0].item.ID
+	}
 	m.agents[p.AgentID] = append(open, a)
 	if p.AgentID != p.SessionID {
 		m.noteSub(p.AgentID)
