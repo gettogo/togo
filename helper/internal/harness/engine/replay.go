@@ -61,6 +61,14 @@ func (s *sess) restoreLocked(ctx context.Context, mapper string, rec harness.Rec
 	}
 	s.warnPlanLocked(m)
 	s.restoring = false
+	// The agent's files read again: a turn left open by an exit the hub
+	// reported before they were, or one it never saw, ends now.
+	if agentGone(s.hubStatus()) {
+		s.agentExitedLocked()
+		s.setWorkingLocked(s.stateLocked()["working"] == "true")
+	} else {
+		go s.checkRunStart()
+	}
 	s.storeSummaryLocked()
 	s.summaryChangedLocked()
 	if run := s.feeds[rec.Source]; run != nil {

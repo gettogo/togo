@@ -108,6 +108,15 @@ type sess struct {
 	failedHold bool
 	// relaunchedAt is when an action last restarted the agent.
 	relaunchedAt time.Time
+	// exit is what the agent's last exit ended (see exit.go); revive and
+	// lateDone are what a batch owes once published (exit_keep.go).
+	exit     *exitFence
+	revive   []harness.Item
+	lateDone bool
+	// goneAt is when the hub was first seen saying the agent is gone, zero
+	// while it runs; liveAt is when a live record was last mapped.
+	goneAt time.Time
+	liveAt time.Time
 	// suggestion is the text the input line kept through a clear, with the
 	// cursor before it: drawn by the harness, not typed (spec.Input
 	// Suggestion). The next clear replaces it; it counts only while the
@@ -249,7 +258,9 @@ func (s *sess) checkGate() gateResult {
 func (s *sess) start() {
 	defer close(s.ready)
 	r := s.checkGate()
+	fence := s.e.loadExitFence(s.id)
 	s.mu.Lock()
+	s.exit = fence
 	s.version, s.gateOK, s.gateWhy = r.version, r.ok, r.reason
 	if !r.ok {
 		for _, c := range s.ad.Capabilities {
@@ -285,6 +296,23 @@ func (s *sess) start() {
 		s.e.cfg.OnSummary(s.id)
 	}
 	s.e.startBuiltins(s)
+	// An exit the hub reported while the session was not yet served has
+	// had no event since; one it never saw shows in the pane's process.
+	// (No exit notice: the chat told of it when it happened.)
+	s.mu.Lock()
+	gone := agentGone(s.hubStatus())
+	if gone {
+		s.goneAt = s.e.cfg.Now()
+		s.agentExitedLocked()
+		s.setWorkingLocked(s.stateLocked()["working"] == "true")
+	}
+	at := s.goneAt
+	s.mu.Unlock()
+	if !gone {
+		go s.checkRunStart()
+	} else if c, ok := s.e.cfg.Approvals.(exitedApprovals); ok {
+		c.AgentExited(s.ctx, s.id, at)
+	}
 }
 
 func (s *sess) stop() {
@@ -443,7 +471,7 @@ func (s *sess) mapperStateLocked() (map[string]string, []map[string]string) {
 		if m == nil {
 			continue
 		}
-		st := m.State()
+		st := s.maskedLocked(mname, m.State())
 		states = append(states, st)
 		for k, v := range st {
 			if k == "working" || k == harness.StateWorkingAt {
@@ -652,6 +680,8 @@ func (s *sess) recordLocked(mapper string, rec harness.Record) {
 		s.followedLocked() // before publishing: the record's items are the new conversation's
 	}
 	s.keepHookLocked(rec, pre, replayMark(m))
+	s.liveAt = s.e.cfg.Now()
+	s.liftMaskLocked(mapper, m, items)
 	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {
@@ -706,43 +736,6 @@ func (s *sess) afterRecordLocked() {
 	s.refreshStatusLocked()
 }
 
-// statusChanged re-reads whether a turn runs once the hub's status moved.
-// Working ORs in the hub, so a turn's last record can arrive while the hub
-// still says working; without this the flag would stay set until the next
-// record, showing Working, Interrupt and Queue on an idle session.
-func (s *sess) statusChanged() {
-	select {
-	case <-s.ready:
-	default:
-		return
-	}
-	gone := agentGone(s.hubStatus())
-	if gone {
-		s.paneGone.Store(true)
-	} else if s.paneGone.CompareAndSwap(true, false) && !s.relaunching.Load() {
-		// The agent runs again after it exited: session.relaunch
-		// respawned its pane, most often on a new terminal device.
-		s.e.paneMoved(s, true)
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.gateOK {
-		return
-	}
-	// A feed whose path comes from state (omp's session folder, found
-	// once omp makes it) re-renders here too: waiting on a folder that
-	// does not exist, it reads no record that would do it.
-	s.syncFeedsLocked()
-	s.setWorkingLocked(s.stateLocked()["working"] == "true")
-	if agentGone(s.hubStatus()) {
-		s.agentExitedLocked()
-		s.exitNoticeLocked()
-	} else {
-		s.checkStuckTurnLocked()
-		s.exitNoticed = false
-	}
-}
-
 // feedTrust is how long a turn end the feed reported outweighs the hub's
 // lingering "working" (the pane settles 6-10 s after a turn ends).
 const feedTrust = 20 * time.Second
@@ -776,7 +769,16 @@ func (s *sess) afterTurnLocked() {
 // An adapter's hook feed alone is not enough: Codex 0.167 runs hooks only
 // once the user trusts them, and hooks may not be installed at all.
 func (s *sess) doneLocked() {
-	if s.e.cfg.Done == nil || agentGone(s.hubStatus()) || s.needsOpenLocked() {
+	if agentGone(s.hubStatus()) {
+		return
+	}
+	s.finishedLocked()
+}
+
+// finishedLocked sends the done push; doneLocked decides whether the turn
+// finished, or keepEndedLocked for a turn whose end came after the exit.
+func (s *sess) finishedLocked() {
+	if s.e.cfg.Done == nil || s.needsOpenLocked() {
 		// A turn that "ended" while a question or approval waits is
 		// waiting on the user, not done.
 		return
@@ -837,70 +839,6 @@ func agentGone(status string) bool {
 	return status == wire.StatusEnded || status == wire.StatusFailed || status == "exited"
 }
 
-// agentExitedLocked closes what the dead agent left open: running turns,
-// tools, subagents and background jobs end as interrupted, and prompts
-// queued behind them are withdrawn, since nothing will ever drain them.
-func (s *sess) agentExitedLocked() {
-	recent, _, _ := s.e.log.Since(s.id, 0, 200)
-	now := s.e.cfg.Now()
-	var ended []harness.Item
-	for _, it := range recent {
-		switch {
-		case it.Kind == harness.KindTurn && it.Turn != nil && it.Turn.State == harness.StateRunning:
-			t := *it.Turn
-			t.State, t.Ended = harness.StateInterrupted, &now
-			it.Turn = &t
-		case it.Kind == harness.KindTool && it.Tool != nil && it.Tool.State == harness.StateRunning:
-			t := *it.Tool
-			t.State, t.Ended = harness.StateInterrupted, &now
-			it.Tool = &t
-		case it.Kind == harness.KindAgent && it.Agent != nil && it.Agent.State == harness.StateRunning:
-			a := *it.Agent
-			a.State, a.Ended = harness.StateInterrupted, &now
-			it.Agent = &a
-		case it.Kind == harness.KindBackground && it.Background != nil && it.Background.State == harness.StateRunning:
-			b := *it.Background
-			b.State, b.Ended = harness.StateInterrupted, &now
-			it.Background = &b
-		default:
-			continue
-		}
-		it.Seq = 0
-		ended = append(ended, it)
-	}
-	rows := s.mission.stopRunning()
-	for _, q := range s.queue {
-		if q.item.User == nil {
-			continue
-		}
-		it := q.item
-		u := *it.User
-		u.Queued, u.Withdrawn = false, true
-		it.User = &u
-		ended = append(ended, it)
-	}
-	s.queue = nil
-	asked := s.unansweredLocked()
-	ended = append(ended, asked...)
-	if len(ended) > 0 || len(rows) > 0 {
-		s.publishLocked(ended, rows)
-	}
-	s.forgetQuestionsLocked()
-}
-
-// closeIdleLocked publishes what IdleCloser mappers close once the session
-// went idle.
-func (s *sess) closeIdleLocked() {
-	now := s.e.cfg.Now()
-	for _, m := range s.mappers {
-		if c, ok := m.(harness.IdleCloser); ok {
-			if items := c.CloseIdle(now); len(items) > 0 {
-				s.publishLocked(items, nil)
-			}
-		}
-	}
-}
-
 func (s *sess) setWorkingLocked(w bool) {
 	was := s.working
 	s.working = w
@@ -909,7 +847,10 @@ func (s *sess) setWorkingLocked(w bool) {
 	}
 	if was && !w && !s.restoring {
 		s.closeIdleLocked()
-		s.afterTurnLocked()
+		if !agentGone(s.hubStatus()) {
+			// An agent that exited did not finish: no done push.
+			s.afterTurnLocked()
+		}
 		s.e.turnEnded(s)
 		s.drainLocked()
 		go s.seedFromScreen(seedSettle)
