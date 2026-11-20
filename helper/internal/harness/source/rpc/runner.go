@@ -251,7 +251,11 @@ func (r *Runner) watchOnce(ctx context.Context, name string, b spec.RPC, env har
 	if err := Initialize(ctx, c); err != nil {
 		return false, err
 	}
-	go r.attach(ctx, c, b, env, push)
+	var tr *threads
+	if b.Method == MethodResume && params(b.Params)["threadId"] == "" {
+		tr = newThreads()
+	}
+	go r.attach(ctx, c, b, env, tr, push)
 	for {
 		select {
 		case <-ctx.Done():
@@ -278,7 +282,13 @@ func (r *Runner) watchOnce(ctx context.Context, name string, b spec.RPC, env har
 			if m.Method == MethodResume && m.IsNotification() {
 				rec.Replay = []json.RawMessage{rec.Data}
 			}
+			// Asked before the record is mapped, which may name the thread
+			// as the one followed.
+			again := r.again(tr, m, env)
 			emit(rec)
+			if again != "" {
+				go r.resume(ctx, c, again, false, tr, push)
+			}
 		}
 	}
 }

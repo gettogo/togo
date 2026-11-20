@@ -97,3 +97,13 @@ func (a *AppServer) otherConversation(id, up string) bool {
 	t := a.threads[top]
 	return t != nil && t.top && a.main != "" && top != a.main
 }
+
+// resumedAtDesk marks the main thread, loaded by the server after the feed
+// first asked, as fresh as of its resume: the conversation the desk left,
+// listed again after a reconnect, does not take the chat back.
+func (a *AppServer) resumedAtDesk(at time.Time) {
+	a.follow = ""
+	if at.After(a.mainFresh) {
+		a.mainFresh = at
+	}
+}
