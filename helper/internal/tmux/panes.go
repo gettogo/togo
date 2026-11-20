@@ -75,17 +75,32 @@ func (c *Client) TapCommands(ctx context.Context) (map[string]string, error) {
 	return cmds, nil
 }
 
-// PaneTTY returns the terminal device of the session's first pane, such as
-// /dev/ttys011, or "" when the session has no pane.
-func (c *Client) PaneTTY(ctx context.Context, session string) (string, error) {
-	out, err := c.run(ctx, "list-panes", "-s", "-t", "="+escapeArg(session)+":", "-F", "#{pane_tty}")
+// Pane is the active pane of a session's current window: the one
+// respawn-pane restarts the agent in.
+type Pane struct {
+	TTY string // its terminal device, such as /dev/ttys011
+	PID int    // the process tmux started in it
+	// StartCommand is the command it was started or respawned with, as
+	// tmux prints it.
+	StartCommand string
+}
+
+// AgentPane returns the active pane of the session's current window, the
+// pane RespawnPane targets. list-panes is used rather than display-message,
+// which prints empty fields for a target that does not exist.
+func (c *Client) AgentPane(ctx context.Context, session string) (Pane, error) {
+	out, err := c.run(ctx, "list-panes", "-t", "="+escapeArg(session)+":", "-F",
+		"#{pane_active}"+fieldSep+"#{pane_tty}"+fieldSep+"#{pane_pid}"+fieldSep+"#{pane_start_command}"+recSep)
 	if err != nil {
-		return "", err
+		return Pane{}, noSession(err)
 	}
-	for _, line := range strings.Fields(out) {
-		if strings.HasPrefix(line, "/dev/") {
-			return line, nil
+	for _, rec := range strings.Split(out, recSep) {
+		f := strings.SplitN(strings.TrimPrefix(rec, "\n"), fieldSep, 4)
+		if len(f) != 4 || f[0] != "1" || !strings.HasPrefix(f[1], "/dev/") {
+			continue
 		}
+		pid, _ := strconv.Atoi(f[2])
+		return Pane{TTY: f[1], PID: pid, StartCommand: f[3]}, nil
 	}
-	return "", nil
+	return Pane{}, nil
 }

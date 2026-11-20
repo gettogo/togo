@@ -203,6 +203,15 @@ func (e *Engine) waitInputLine(ctx context.Context, s *sess) {
 func (e *Engine) inputNow(ctx context.Context, s *sess) (string, bool) {
 	// With its colours when they can be had: a dim suggestion in an empty
 	// line is told from typed text only by how it is drawn.
+	text, ok := e.inputRaw(ctx, s)
+	if ok && e.shownSuggestion(ctx, s, text) {
+		return "", true
+	}
+	return text, ok
+}
+
+// inputRaw reads the session's input line as drawn.
+func (e *Engine) inputRaw(ctx context.Context, s *sess) (string, bool) {
 	if e.cfg.StyledScreen != nil {
 		if screen, err := e.cfg.StyledScreen(ctx, s.id); err == nil {
 			return s.ad.readInput(screen)
@@ -222,7 +231,12 @@ func (e *Engine) clearInput(ctx context.Context, s *sess) error {
 	if in == nil || e.cfg.Screen == nil {
 		return nil
 	}
-	cur, ok := e.inputNow(ctx, s)
+	// Raw: a remembered suggestion proves nothing before the clear keys
+	// went out; a draft can read the same.
+	cur, ok := e.inputRaw(ctx, s)
+	if ok {
+		s.lineBeforeTyping(cur)
+	}
 	if !ok || cur == "" {
 		return nil
 	}
@@ -230,13 +244,14 @@ func (e *Engine) clearInput(ctx context.Context, s *sess) error {
 		if err := e.cfg.Typist.Keys(ctx, s.id, in.Clear...); err != nil {
 			return err
 		}
-		if !e.pause(ctx) {
-			return ctx.Err()
+		if cur, ok = e.repainted(ctx, s, cur); !ok || cur == "" {
+			return nil
 		}
-		if cur, ok = e.inputNow(ctx, s); !ok || cur == "" {
+		if e.shownSuggestion(ctx, s, cur) {
 			return nil
 		}
 	}
+	kept := cur
 	n := min(utf8.RuneCountInString(cur)+8, maxBackspaces)
 	keys := make([]string, n)
 	for i := range keys {
@@ -249,6 +264,9 @@ func (e *Engine) clearInput(ctx context.Context, s *sess) error {
 		return ctx.Err()
 	}
 	if cur, ok = e.inputNow(ctx, s); !ok || cur == "" {
+		return nil
+	}
+	if e.keptSuggestion(ctx, s, kept, cur) {
 		return nil
 	}
 	return &harness.FallbackError{Reason: "source",

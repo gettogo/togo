@@ -3,6 +3,8 @@ package approval
 import (
 	"context"
 	"slices"
+
+	"github.com/gettogo/togo/helper/internal/wire"
 )
 
 // questionWait is a blocking AskUserQuestion hook holding Claude's question
@@ -76,4 +78,24 @@ func (s *Store) questionWaitingLocked(sessionID string) bool {
 		}
 	}
 	return false
+}
+
+// CloseScreenPrompts closes, as answered at the desk, the pending requests
+// the watcher opened for a session's screen: the screen now shows a step
+// of a dialog another request stands for (Claude's question dialog, whose
+// question item the phone shows), so one opened for an earlier step would
+// linger, not answerable.
+func (s *Store) CloseScreenPrompts(_ context.Context, sessionID string) {
+	mu := s.lockFor(sessionID)
+	mu.Lock()
+	defer mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closeScreenLocked(sessionID)
+}
+
+func (s *Store) closeScreenLocked(sessionID string) {
+	for cur := s.pendingForSession(sessionID); cur != nil && cur.a.Source == wire.SourceScreen; cur = s.pendingForSession(sessionID) {
+		s.closeLocked(cur, wire.ResolutionDesk)
+	}
 }

@@ -15,6 +15,13 @@ func (s *sess) statusChanged() {
 	default:
 		return
 	}
+	if agentGone(s.hubStatus()) {
+		s.paneGone.Store(true)
+	} else if s.paneGone.CompareAndSwap(true, false) && !s.relaunching.Load() {
+		// The agent runs again after it exited: session.relaunch
+		// respawned its pane, most often on a new terminal device.
+		s.e.paneMoved(s, true)
+	}
 	s.applyStatus()
 }
 

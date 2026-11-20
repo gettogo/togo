@@ -1,0 +1,40 @@
+               Tip: `/shake` rips heavy tool results out of context to reclaim tokens
+                    without a full /compact — `/shake images` drops just images
+
+
+
+
+ Use your ask tool once to ask me one form with exactly two fields: a radio group named "color"
+ inside a fieldset with legend "Which color should the button be?" and options Red, Green, Blue
+ (none checked), and a required text input named "label" with the label "Button text". Use no other
+ tool. After I answer, reply with only the word done.
+
+
+ The user wants me to use the ask tool once with a specific form. No other tool. Let me construct
+ the HTML form exactly as specified.
+
+ - radio group named "color" inside a fieldset with legend "Which color should the button be?" and
+   options Red, Green, Blue (none checked)
+ - required text input named "label" with label "Button text"
+
+ Note: none checked means I must not preselect. The instructions say preselect recommendation, but
+ user explicitly says none checked — follow user.
+
+ No script/style/other tools.
+╭─ Ask · 1 of 2 answered ──────────────────────────────────────────────────────────────────────────╮
+│ Which color should the button be?                                                                │
+│   ○ Red                                                                                          │
+│   ○ Green                                                                                        │
+│   ○ Blue                                                                                         │
+│ ❯ ◉ Other: Teal (not listed)                                                                     │
+│                                                                                                  │
+│ ○ Button text                                                                                    │
+│   type your answer                                                                               │
+│                                                                                                  │
+│   Submit                                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+  ⎋ Collecting button color and text                         🎨 ASK: Ask form for button color label
+ ❓ 20s > ◒ DeepSeek V3.2 > 🗑 ~/code/demo > ⑂ main > $0.00 ▶─11%╎┃164K─
+╰─ 

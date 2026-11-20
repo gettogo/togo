@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/api"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/wire"
@@ -316,5 +317,54 @@ func TestSendTextConcurrentRepliesSubmitSeparately(t *testing.T) {
 	got := fileText(t, out)
 	if got != "first reply\nsecond reply\n" && got != "second reply\nfirst reply\n" {
 		t.Fatalf("agent read %q, want two separate lines", got)
+	}
+}
+
+// A prompt waits for the pane's one lock, which an answer typing keys into
+// a dialog holds (approval's form driver): their keys never interleave.
+func TestSendTextWaitsForThePaneLock(t *testing.T) {
+	s := replyService(t)
+	sess, out := teeSession(t, s)
+	mu := panelock.For(sess.ID)
+	mu.Lock()
+	done := make(chan error, 1)
+	go func() { done <- s.SendText(context.Background(), sess.ID, "the prompt", true, "done", nil) }()
+	select {
+	case err := <-done:
+		mu.Unlock()
+		t.Fatalf("SendText ran while the pane was taken: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	if got := fileText(t, out); got != "" {
+		mu.Unlock()
+		t.Fatalf("the pane got %q while another path held it", got)
+	}
+	mu.Unlock()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the prompt", func() bool { return fileText(t, out) == "the prompt\n" })
+}
+
+// A prompt whose request ends while another write holds the pane is not
+// typed at all, then or later: the app's retry must not send it twice.
+func TestSendTextAbandonedWhileWaitingNeverTypes(t *testing.T) {
+	s := replyService(t)
+	sess, out := teeSession(t, s)
+	mu := panelock.For(sess.ID)
+	mu.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err := s.SendText(ctx, sess.ID, "too late", true, "done", nil)
+	mu.Unlock()
+	if !errors.Is(err, panelock.ErrBusy) {
+		t.Fatalf("err = %v, want ErrBusy", err)
+	}
+	if err := s.SendText(context.Background(), sess.ID, "next", true, "done", nil); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "the next prompt", func() bool { return strings.Contains(fileText(t, out), "next") })
+	if got := fileText(t, out); got != "next\n" {
+		t.Fatalf("the agent read %q: the abandoned prompt was typed", got)
 	}
 }

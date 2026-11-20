@@ -19,6 +19,19 @@ const VarTogoHome = "togo_home"
 // the helper knows it.
 const VarTTY = "tty"
 
+// VarPaneStarted is when the process in the session's pane started (RFC
+// 3339). Restarting the agent respawns the pane, often on a device another
+// terminal used: a file named after the device that is older than this is
+// a previous occupant's.
+const VarPaneStarted = "pane_started"
+
+// VarPaneCommand is the command the session's pane was started or last
+// respawned with, as tmux prints it: the agent's arguments are in it.
+const VarPaneCommand = "pane_command"
+
+// VarPanePID is the process tmux started in the session's pane.
+const VarPanePID = "pane_pid"
+
 // followFile is where a session's followed file is remembered, "" when the
 // environment has no folder or the id is not a plain name.
 func followFile(env harness.Env) string {
@@ -62,6 +75,7 @@ func loadFollow(env harness.Env) string {
 		Path string `json:"path"`
 	}
 	if json.Unmarshal(b, &v) != nil {
+		_ = os.Remove(p) // torn or not ours: forgotten
 		return ""
 	}
 	return v.Path
@@ -99,7 +113,8 @@ func LoadFollowed(env harness.Env, name string) string {
 	if p == "" || name == "" || name != filepath.Base(name) {
 		return ""
 	}
-	b, err := os.ReadFile(strings.TrimSuffix(p, ".json") + "." + name + ".json")
+	p = strings.TrimSuffix(p, ".json") + "." + name + ".json"
+	b, err := os.ReadFile(p)
 	if err != nil {
 		return ""
 	}
@@ -107,9 +122,35 @@ func LoadFollowed(env harness.Env, name string) string {
 		ID string `json:"id"`
 	}
 	if json.Unmarshal(b, &v) != nil {
+		_ = os.Remove(p) // torn or not ours: forgotten
 		return ""
 	}
 	return v.ID
+}
+
+// FollowSessions lists the sessions that have something remembered under
+// togoHome's run folder, with when it was last written.
+func FollowSessions(togoHome string) map[string]time.Time {
+	ents, err := os.ReadDir(filepath.Join(togoHome, "run"))
+	if togoHome == "" || err != nil {
+		return nil
+	}
+	out := map[string]time.Time{}
+	for _, e := range ents {
+		rest, ok := strings.CutPrefix(e.Name(), "follow-")
+		if !ok || !strings.HasSuffix(rest, ".json") {
+			continue
+		}
+		id, _, _ := strings.Cut(strings.TrimSuffix(rest, ".json"), ".")
+		info, err := e.Info()
+		if id == "" || err != nil {
+			continue
+		}
+		if t := info.ModTime(); t.After(out[id]) {
+			out[id] = t
+		}
+	}
+	return out
 }
 
 // RemoveFollows forgets everything a removed session followed.

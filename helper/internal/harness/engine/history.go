@@ -127,7 +127,7 @@ func (e *Engine) hydrate(s *sess, mapper, feed, conv string, gen uint64) {
 	if err == nil && !moved {
 		if len(events) > 0 {
 			floor := e.log.RetentionFloor(s.id)
-			s.mappers[mapper] = e.mapperFor(mapper, s.env)
+			s.mappers[mapper] = e.mapperFor(mapper, s.mapperEnvLocked())
 			s.restoreLocked(s.ctx, mapper, harness.Record{Source: feed, At: e.cfg.Now(), Replay: events})
 			// Not all was read (a bound, a later page that failed), or the
 			// replay itself was more than a session keeps and the oldest

@@ -1,0 +1,40 @@
+
+╭─── ? Ask ────────────────────────────────────────────────────────────────────────────────────────╮
+│  Which color should the button be?                                                               │
+│  ✔ Green                                                                                         │
+│  Button text                                                                                     │
+│  ✔ /Ship it — ñ 100%! (a|b)*                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ The user responded. I'll reply with just the single word "done".
+
+ done
+
+
+ Now use your ask tool once more with one form of three fields: a checkbox group named "targets"
+ with legend "Which platforms?" and options iOS (checked), macOS, Linux; a select named "region"
+ with label "Region" and options Europe, United States; and a textarea named "notes" with label
+ "Notes". Use no other tool. After I answer, reply with only the word done.
+
+
+ I need to look into this further. Let me check the details.
+╭─ Ask · 2 of 3 answered ──────────────────────────────────────────────────────────────────────────╮
+│ Which platforms?                                                                                 │
+│ ❯ ☑ iOS                                                                                          │
+│   ☐ macOS                                                                                        │
+│   ☐ Linux                                                                                        │
+│   ☐ Other: type your own                                                                         │
+│                                                                                                  │
+│ ✓ Region                                                                                         │
+│    ✓ Europe   United States                                                                      │
+│                                                                                                  │
+│ ○ Notes                                                                                          │
+│   type your answer                                                                               │
+│                                                                                                  │
+│   Submit                                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+  ⎋ Collecting platforms, region, notes                               🎛️ FORM: Ask button color form
+ ❓ 1m > ◒ DeepSeek V3.2 > 🗑 ~/code/demo > ⑂ main > $0.01 ▶─11%─╎┃164K─
+╰─

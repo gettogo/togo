@@ -1,0 +1,40 @@
+               [3m[38;2;212;192;144mTip: [38;2;156;163;176m`/shake` rips heavy tool results out of context to reclaim tokens[0m
+                    [3m[38;2;156;163;176mwithout a full /compact — `/shake images` drops just images[0m
+
+
+
+[48;2;15;18;22m
+ [38;2;229;229;231mUse your ask tool once to ask me one form with exactly two fields: a radio group named "color"
+[39m [38;2;229;229;231minside a fieldset with legend "Which color should the button be?" and options Red, Green, Blue
+[39m [38;2;229;229;231m(none checked), and a required text input named "label" with the label "Button text". Use no other
+[39m [38;2;229;229;231mtool. After I answer, reply with only the word done.[39m
+
+
+[49m [3m[38;2;156;163;176mThe user wants me to use the ask tool once with a specific form. No other tool. Let me construct
+[0m [3m[38;2;156;163;176mthe HTML form exactly as specified.[0m
+
+ [38;2;0;180;255m- [3m[38;2;156;163;176mradio group named "color" inside a fieldset with legend "Which color should the button be?" and
+[0m   [3m[38;2;156;163;176moptions Red, Green, Blue (none checked)[0m
+ [38;2;0;180;255m- [3m[38;2;156;163;176mrequired text input named "label" with label "Button text"[0m
+
+ [3m[38;2;156;163;176mNote: none checked means I must not preselect. The instructions say preselect recommendation, but
+[0m [3m[38;2;156;163;176muser explicitly says none checked — follow user.[0m
+
+ [3m[38;2;156;163;176mNo script/style/other tools.[0m
+[38;2;42;48;56m╭─[1m[38;2;0;180;255m Ask · 1 of 2 answered [0m[38;2;42;48;56m──────────────────────────────────────────────────────────────────────────╮
+│[39m [1mWhich color should the button be?[0m                                                                [38;2;42;48;56m│
+│[39m   [38;2;107;114;128m○[39m Red                                                                                          [38;2;42;48;56m│
+│[39m   [38;2;107;114;128m○[39m Green                                                                                        [38;2;42;48;56m│
+│[39m   [38;2;107;114;128m○[39m Blue                                                                                         [38;2;42;48;56m│
+│[39m [38;2;0;180;255m❯ [38;2;0;255;136m◉[39m [38;2;0;180;255mOther: [39mTeal (not listed)                                                                     [38;2;42;48;56m│
+│[39m                                                                                                  [38;2;42;48;56m│
+│[39m [38;2;107;114;128m○[39m Button text                                                                                    [38;2;42;48;56m│
+│[39m   [38;2;107;114;128mtype your answer[39m                                                                               [38;2;42;48;56m│
+│[39m                                                                                                  [38;2;42;48;56m│
+│[39m [38;2;156;163;176m  Submit[39m                                                                                         [38;2;42;48;56m│
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+[39m [38;2;121;161;109m ⎋[39m [38;2;107;114;128mCollecting button color an[38;2;136;247;102md [1mtext[0m                         [2;3m🎨 ASK: Ask form for button color label
+[0;2m[48;2;15;18;22m [38;2;136;247;102m❓ 20s[39m [38;2;42;48;56m>[39m [38;2;136;247;102m◒ DeepSeek V3.2[39m [38;2;42;48;56m>[39m [38;2;232;236;244m🗑 ~/code/demo[39m [38;2;42;48;56m>[39m [38;2;0;255;136m⑂ main[39m [38;2;42;48;56m>[39m [38;2;212;192;144m$0.00[39m [38;2;15;18;22m[49m▶[38;2;136;247;102m─11%[38;2;156;163;176m╎[38;2;127;185;109m┃164K[38;2;42;48;56m─
+[38;2;136;247;102m╰─ [39m

@@ -62,6 +62,12 @@ type Input struct {
 	// Dismiss are the keys that close a completion popup that took Enter
 	// without submitting; Enter follows them.
 	Dismiss []string `yaml:"dismiss"`
+	// Suggestion says the harness may draw a suggestion in its empty line
+	// that no key removes (omp 19 predicts the next message after a turn
+	// and draws it in a theme colour, not dim). Text that the Clear keys
+	// and backspaces leave exactly as it was, with the cursor before it,
+	// is that suggestion and the line counts as empty.
+	Suggestion bool `yaml:"suggestion"`
 }
 
 // InputKeys are the keys an Input block may name.
@@ -511,6 +517,16 @@ type Relaunch struct {
 type Carry struct {
 	Values []string `yaml:"values"`
 	Flags  []string `yaml:"flags"`
+	// From lists options that take a value only in the harness versions
+	// its range holds; elsewhere they stay in Flags (omp's --smol is a bare
+	// flag on 18 and names a model on 19).
+	From *CarryFrom `yaml:"from"`
+}
+
+// CarryFrom is a set of value options for a range of harness versions.
+type CarryFrom struct {
+	Range  string   `yaml:"range"`
+	Values []string `yaml:"values"`
 }
 
 // Write sets a key in a harness config file (json or toml), atomically.

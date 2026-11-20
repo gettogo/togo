@@ -484,5 +484,11 @@ func (o ownScreens) PromptSeen(ctx context.Context, sessionID string, p detect.P
 	if o.c.Harness != nil && o.c.Harness.PhoneDriving(sessionID) {
 		return
 	}
+	if o.c.Harness != nil && o.c.Harness.QuestionDialog(sessionID, p) {
+		// A step of a question dialog whose question item the phone
+		// already shows; a request opened for an earlier step goes.
+		o.Store.CloseScreenPrompts(ctx, sessionID)
+		return
+	}
 	o.Store.PromptSeen(ctx, sessionID, p)
 }

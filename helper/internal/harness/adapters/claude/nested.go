@@ -13,7 +13,8 @@ import (
 //
 // The pane's own agent moves to another session only by /clear or
 // /resume (SessionStart source "clear" or "resume", a resume from the
-// phone included) or by starting again after its session ended. Until a
+// phone included) or by starting again after its session ended, or
+// after it died with no SessionEnd (startcheck.go). Until a
 // session is known, the first one seen is taken. Every other payload of
 // another session is dropped, so a nested run's prompts, tools and stop
 // do not change this session's state.
@@ -30,8 +31,8 @@ func (h *hooks) nested(p map[string]any) bool {
 	}
 	if str(p, "hook_event_name") == "SessionStart" {
 		switch src := str(p, "source"); {
-		case src == "clear", src == "resume", h.ended:
-			h.ended = false
+		case src == "clear", src == "resume", h.ended, src == "startup" && id == h.accepted:
+			h.markEnded(false)
 			return false
 		}
 	}

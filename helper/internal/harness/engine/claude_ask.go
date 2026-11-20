@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/gettogo/togo/helper/internal/approval"
 	"github.com/gettogo/togo/helper/internal/harness"
@@ -69,11 +70,39 @@ func (e *Engine) answerScreenQuestion(ctx context.Context, s *sess, target strin
 	if err != nil {
 		return harness.ActionResult{}, err
 	}
+	// Still open once the pane is ours: an answer that waited behind
+	// another device's is not typed into a follow-up asking the same.
+	open := func() bool {
+		s.mu.Lock()
+		it, ok := e.log.Get(s.id, target)
+		s.mu.Unlock()
+		return ok && it.Question != nil && len(it.Question.Answered) == 0
+	}
+	if k, ok := e.cfg.Approvals.(openChoiceKeyer); ok {
+		// One answer per question at a time: the driver gives the pane
+		// back while omp records a form's answer, and a second device's
+		// answer must not drive the dialog that follows meanwhile.
+		key := s.id + "\x00" + target
+		if _, busy := answersInFlight.LoadOrStore(key, true); busy {
+			return harness.ActionResult{Result: harness.ResultFailed, Message: "Another answer to this question is being sent"}, nil
+		}
+		defer answersInFlight.Delete(key)
+		return keyedResult(k.AnswerChoiceOpen(ctx, s.id, keyed, open))
+	}
 	k, ok := e.cfg.Approvals.(choiceKeyer)
 	if !ok {
 		return harness.ActionResult{Result: harness.ResultFallback}, nil
 	}
 	return keyedResult(k.AnswerChoice(ctx, s.id, keyed))
+}
+
+// answersInFlight holds the questions an answer is being sent to.
+var answersInFlight sync.Map
+
+// openChoiceKeyer is a choiceKeyer that checks the question is still open
+// once it holds the pane, and confirms a form's answer by its closing.
+type openChoiceKeyer interface {
+	AnswerChoiceOpen(ctx context.Context, sessionID string, answers []approval.AskAnswer, open func() bool) error
 }
 
 // takesText reports an AskUserQuestion item: every question of one takes
@@ -95,6 +124,12 @@ func keyedAnswers(q *harness.QuestionBody, answers map[string][]string) (keyed [
 	texts = map[string]string{}
 	for _, qu := range q.Questions {
 		vals := nonEmpty(answers[qu.ID])
+		if len(vals) == 0 && qu.Required != nil && !*qu.Required {
+			// An optional question left unanswered keeps what the dialog
+			// holds (only omp's form says which are optional).
+			keyed = append(keyed, approval.AskAnswer{Prompt: qu.Prompt, Multi: qu.Multi, Keep: true})
+			continue
+		}
 		if len(vals) == 0 {
 			return nil, nil, nil, invalidArgs("answer every question")
 		}

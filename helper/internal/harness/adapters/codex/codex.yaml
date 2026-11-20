@@ -40,7 +40,9 @@ feeds:
       # TUI's, its subagents', a /new or /resume) and the mapper picks the
       # top-level one. A threadId from state would hold the feed back until
       # Codex's SessionStart hook ran, and 0.167 runs hooks only once the
-      # user trusts them.
+      # user trusts them. A thread the server loads after the feed first asked
+      # (a /resume or /new at the desk) is joined marked late and moves the chat
+      # at once; one it kept loaded is joined again when its next turn starts.
       method: thread/resume
       notifications: [thread/status/changed, thread/settings/updated, thread/tokenUsage/updated,
         thread/compacted, turn/started, turn/completed, turn/plan/updated, turn/diff/updated,

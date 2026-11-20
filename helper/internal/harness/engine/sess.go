@@ -94,6 +94,14 @@ type sess struct {
 	// exitNoticed is set once the chat was told the agent exited, until
 	// it runs again.
 	exitNoticed bool
+	// paneGone is set while the hub says the agent exited, so its next run
+	// (in a respawned pane) is noticed once (see paneMoved).
+	paneGone atomic.Bool
+	// pane is the session's pane as last read after the agent may have
+	// restarted in it (pane_moved.go); nil until then. Guarded by mu.
+	pane map[string]string
+	// relaunching is set while an action restarts the agent in its pane.
+	relaunching atomic.Bool
 	// failedTurn is the turn the screen ended as failed while its hooks
 	// still said it ran (see hookfail.go); failedHold is set while it holds.
 	failedTurn string
@@ -109,6 +117,11 @@ type sess struct {
 	// while it runs; liveAt is when a live record was last mapped.
 	goneAt time.Time
 	liveAt time.Time
+	// suggestion is the text the input line kept through a clear, with the
+	// cursor before it: drawn by the harness, not typed (spec.Input
+	// Suggestion). The next clear replaces it; it counts only while the
+	// line reads exactly it with the cursor before it.
+	suggestion string
 	// statusModelFromState is the status block's model when the session's
 	// state filled it in (no status line named one), so a later switch
 	// replaces it.
@@ -267,8 +280,11 @@ func (s *sess) start() {
 	for _, name := range s.ad.feedOrder {
 		mname := s.ad.Feeds[name].Mapper
 		if _, ok := s.mappers[mname]; !ok {
-			s.mappers[mname] = s.e.mapperFor(mname, s.env)
+			s.mappers[mname] = s.e.mapperFor(mname, s.mapperEnvLocked())
 		}
+	}
+	if s.hasPaneMoverLocked() {
+		go s.watchPane()
 	}
 	s.storeSummaryLocked()
 	s.syncFeedsLocked()
@@ -711,6 +727,9 @@ func (s *sess) afterRecordLocked() {
 	st := s.stateLocked()
 	s.followedLocked()
 	if t := st["turn"]; t != "" {
+		if t != s.turn {
+			s.forgetSuggestionLocked() // a new turn brings a new prediction
+		}
 		s.turn = t
 	}
 	s.setWorkingLocked(st["working"] == "true")

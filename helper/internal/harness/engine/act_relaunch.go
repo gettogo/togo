@@ -39,7 +39,12 @@ group:
 		}
 		argv = append(argv, vals...)
 	}
-	argv = append(argv, carried(s.env.Argv, r.Carry, argv)...)
+	s.mu.Lock()
+	version := s.version
+	s.mu.Unlock()
+	argv = append(argv, carried(s.env.Argv, r.Carry.ForVersion(func(rng string) bool {
+		return version != "" && judgeVersion(version, "", rng).ok
+	}), argv)...)
 	if !sameProgram(argv[0], s.info.Command, s.info.Agent) {
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "Only the session's own agent can be restarted"}, nil
 	}
@@ -56,6 +61,8 @@ group:
 	// The restarted agent may open another conversation: the one this
 	// session showed is no longer what a helper restart should load.
 	e.forgetConversation(s.id)
+	s.relaunching.Store(true)
+	defer s.relaunching.Store(false)
 	if err := e.cfg.Relaunch(ctx, s.id, argv); err != nil {
 		e.dropRelaunch(s.id)
 		if had {
@@ -65,12 +72,15 @@ group:
 		e.cfg.Logf("harness: %s relaunch: %v", s.ad.Adapter.Adapter, err)
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "The agent could not be restarted"}, nil
 	}
+	// The pane was respawned, most often on a new terminal device.
+	e.paneMoved(s, false)
 	s.mu.Lock()
 	s.relaunchedAt = time.Now()
 	// The run the relaunch killed is gone: anything it left open ends,
 	// and the new run's records may go on with it.
 	s.endRunLocked(s.relaunchedAt)
 	s.runningAgainLocked()
+	s.forgetSuggestionLocked()
 	for _, m := range s.mappers {
 		if r, ok := m.(harness.Relauncher); ok {
 			if ops := r.Relaunched(argv, s.relaunchedAt); len(ops) > 0 {
