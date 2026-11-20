@@ -43,6 +43,7 @@ func apiNewAndResume(t *testing.T, agent string) {
 	support.SettleUntil(s.r, 3)
 	s.sendGoesTo(t, "After the new conversation", second)
 	s.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return !st.Mission.Summary.Working })
+	before := s.r.Read().Epoch
 	res, err := s.r.Act("resume", "", map[string]any{"id": first})
 	if err != nil || !confirmedAct(res) {
 		t.Fatalf("resume: %+v %v", res, err)
@@ -51,9 +52,11 @@ func apiNewAndResume(t *testing.T, agent string) {
 	if !strings.Contains(c.Body, first) {
 		t.Errorf("resume selected %s, want %s", c.Body, first)
 	}
-	// The agent's stream says the terminal shows the first one now.
-	s.r.SettleUntil(support.Quick, func(enginetest.State) bool { return true })
-	time.Sleep(200 * time.Millisecond)
+	// The agent's stream says the terminal shows the first one now: the
+	// chat starts over on it. Until then the helper does not know, and a
+	// prompt sent in the gap goes to the conversation it last knew (or is
+	// refused, if the move arrives while it travels).
+	s.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return st.Epoch != before })
 	s.sendGoesTo(t, "After the resume", first)
 }
 
