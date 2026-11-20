@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -16,10 +15,6 @@ const partialEvery = 250 * time.Millisecond
 
 // summaryEvery debounces summary change callbacks.
 const summaryEvery = time.Second
-
-// phoneWindow is how long a prompt typed from the phone waits to be matched
-// with the agent's record of it.
-const phoneWindow = 2 * time.Minute
 
 // publishLocked prepares items (limits, redaction, anchors), stores them,
 // applies ops and notifies subscribers.
@@ -290,7 +285,10 @@ func (s *sess) prepareLocked(it *harness.Item, mark func() (harness.Anchor, bool
 			if u.Source == "" {
 				u.Source = "unknown"
 			}
-			if !u.Queued {
+			// The phone's own items are not the agent's record of one:
+			// matched against the notes, a second "yes" would take the
+			// first one's place.
+			if !u.Queued && u.Source != "phone" {
 				if id, ok := s.phoneAlias[it.ID]; ok {
 					// The agent's record of a prompt the phone sent, seen
 					// again (its conversation's past was loaded): the same
@@ -408,50 +406,6 @@ func (s *sess) batchMark() func() (harness.Anchor, bool) {
 		}
 		return a, ok
 	}
-}
-
-// notePhoneLocked remembers a prompt the helper typed.
-func (s *sess) notePhoneLocked(id, text string, images []harness.ImageRef) {
-	now := s.e.cfg.Now()
-	keep := s.phone[:0]
-	for _, p := range s.phone {
-		if now.Sub(p.at) < phoneWindow {
-			keep = append(keep, p)
-		}
-	}
-	s.phone = append(keep, phoneText{id: id, text: strings.TrimSpace(text), images: images, at: now})
-}
-
-// imagePlaceholder is how an agent writes a pasted picture into the prompt
-// text: "[Image #1]" (Claude Code) or "[Image 1]" (OpenCode 2).
-var imagePlaceholder = regexp.MustCompile(`\[Image #?\d+\]`)
-
-// matchPhoneLocked finds the phone prompt the agent's record of text is.
-// A prompt sent with pictures matches once the pasted paths and the
-// agent's [Image #n] placeholders are taken out.
-func (s *sess) matchPhoneLocked(self, text string) (phoneText, bool) {
-	text = strings.TrimSpace(text)
-	for i, p := range s.phone {
-		if p.id == self {
-			return phoneText{}, false
-		}
-		if p.text == text || (len(p.images) > 0 && strings.Join(strings.Fields(p.text), " ") == withoutImages(text, p.images)) {
-			s.phone = append(s.phone[:i], s.phone[i+1:]...)
-			return p, true
-		}
-	}
-	return phoneText{}, false
-}
-
-func withoutImages(text string, images []harness.ImageRef) string {
-	for _, r := range images {
-		if r.Path != "" {
-			text = strings.ReplaceAll(text, harness.QuotePath(r.Path), "")
-			text = strings.ReplaceAll(text, r.Path, "")
-		}
-	}
-	text = imagePlaceholder.ReplaceAllString(text, "")
-	return strings.Join(strings.Fields(text), " ")
 }
 
 // currentModeLocked is the mode id from the modes source, else state.

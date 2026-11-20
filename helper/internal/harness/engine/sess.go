@@ -134,15 +134,6 @@ type queued struct {
 	item harness.Item
 }
 
-// phoneText is a prompt typed from the phone, waiting for the agent's own
-// record of it.
-type phoneText struct {
-	id     string
-	text   string
-	images []harness.ImageRef
-	at     time.Time
-}
-
 type feedRun struct {
 	name     string
 	rendered string
