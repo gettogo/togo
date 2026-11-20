@@ -33,6 +33,9 @@ func (s *Store) AnswerChoice(ctx context.Context, sessionID string, answers []As
 		return s.answerForm(ctx, sessionID, answers)
 	}
 	for _, a := range answers {
+		if a.Keep {
+			return &AskError{"Answer every question"}
+		}
 		if strings.ContainsAny(a.Text, "\n\r") {
 			return &AskError{"A typed answer with a line break can only be sent from the terminal"}
 		}

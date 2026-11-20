@@ -17,6 +17,9 @@ type AskAnswer struct {
 	Multi  bool
 	Labels []string
 	Text   string
+	// Keep leaves an optional question as the dialog holds it: only omp's
+	// form takes it (answerForm); the other drivers refuse it.
+	Keep bool
 }
 
 // AskError says why the key driver stopped; Msg is shown to the user.
@@ -44,6 +47,11 @@ var (
 // nothing is sent once the screen shows something else. The pane lock is
 // held throughout, so the prompt watcher and other answers wait.
 func (s *Store) AnswerAsk(ctx context.Context, sessionID string, answers []AskAnswer) error {
+	for _, a := range answers {
+		if a.Keep {
+			return &AskError{"Answer every question"}
+		}
+	}
 	for _, a := range answers {
 		if strings.ContainsAny(a.Text, "\n\r") {
 			return &AskError{"A typed answer with a line break can only be sent from the terminal"}

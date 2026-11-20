@@ -58,6 +58,9 @@ func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskA
 	}
 	var err error
 	for _, a := range answers {
+		if a.Keep {
+			continue // Tab passes it on the way to the next one
+		}
 		if cur, err = d.seek(cur, func(f detect.Form) bool {
 			return f.Stop != detect.FormSubmit && strings.EqualFold(normalise(f.Prompt), normalise(a.Prompt))
 		}); err != nil {

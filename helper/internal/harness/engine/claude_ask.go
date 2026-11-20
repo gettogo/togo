@@ -95,6 +95,12 @@ func keyedAnswers(q *harness.QuestionBody, answers map[string][]string) (keyed [
 	texts = map[string]string{}
 	for _, qu := range q.Questions {
 		vals := nonEmpty(answers[qu.ID])
+		if len(vals) == 0 && qu.Required != nil && !*qu.Required {
+			// An optional question left unanswered keeps what the dialog
+			// holds (only omp's form says which are optional).
+			keyed = append(keyed, approval.AskAnswer{Prompt: qu.Prompt, Multi: qu.Multi, Keep: true})
+			continue
+		}
 		if len(vals) == 0 {
 			return nil, nil, nil, invalidArgs("answer every question")
 		}

@@ -18,22 +18,28 @@ import (
 // with isError and no details. The dialog itself is driven from the phone
 // with keys (the screen_answer builtin over detect.ParseChoice), so the
 // option ids sent back are the labels the rows show, and every question
-// takes typed words through its "Other (type your own)" row.
+// takes typed words through its "Other (type your own)" row. From 18.20
+// the call is one HTML form instead (askform.go), drawn as a different
+// dialog that the same action drives (approval's formkeys.go).
 
 // askQuestion turns an ask call into a question item, or nil when the
 // call asks nothing.
 func askQuestion(callID, tid, parent string, at time.Time, args map[string]any) *harness.Item {
 	if src := str(args, "html"); src != "" {
-		// 18.20's form (askform.go). Its dialog is not the one the key
-		// driver reads, so it shows as a question that is answered in the
-		// terminal until a way to answer it from the phone exists.
-		qs := formQuestions(src)
+		// 18.20's form (askform.go), answered from the phone with keys by
+		// the same screen_answer action, which finds omp's form dialog on
+		// screen. A form whose fields the keys cannot find or fill is
+		// answered at the terminal.
+		qs, drivable := formQuestions(src)
 		if len(qs) == 0 {
 			return nil
 		}
-		no := false
-		return &harness.Item{ID: "ask-" + callID, TurnID: tid, Parent: parent, Kind: harness.KindQuestion, At: at,
-			Question: &harness.QuestionBody{Questions: qs, Answerable: &no}}
+		body := &harness.QuestionBody{Questions: qs}
+		if !drivable {
+			no := false
+			body.Answerable = &no
+		}
+		return &harness.Item{ID: "ask-" + callID, TurnID: tid, Parent: parent, Kind: harness.KindQuestion, At: at, Question: body}
 	}
 	var qs []harness.Question
 	for i, el := range asList(args["questions"]) {

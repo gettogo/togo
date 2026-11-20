@@ -285,7 +285,7 @@ func TestAnswerFormCheckBoxesDropdownOtherAndSkippedField(t *testing.T) {
 	err := st.AnswerChoice(context.Background(), sess, []AskAnswer{
 		{Prompt: "Which platforms?", Multi: true, Labels: []string{"Linux"}, Text: "watchOS"},
 		{Prompt: "Region", Labels: []string{"United States"}},
-		// Notes is optional and left as it is.
+		{Prompt: "Notes", Keep: true}, // optional, left as it is
 		{Prompt: "Which database?", Text: "CockroachDB, 3 nodes"},
 	})
 	if err != nil {
@@ -377,5 +377,17 @@ func TestAnswerFormGoesBackToAnEarlierField(t *testing.T) {
 	})
 	if err != nil || !sim.closed || sim.released || sim.fields[1].value != "new words" {
 		t.Fatalf("err %v closed %v released %v value %q keys %v", err, sim.closed, sim.released, sim.fields[1].value, sim.sent)
+	}
+}
+
+// Only the form leaves a question as it is.
+func TestAnswerChoiceRefusesAKeptQuestion(t *testing.T) {
+	fastAsk(t)
+	sim := newChoiceSim(simQ{"Which color?", false, []string{"Red", "Blue"}})
+	st := New(Config{Tmux: sim, Pub: &fakePub{}})
+	err := st.AnswerChoice(context.Background(), sess, []AskAnswer{{Prompt: "Which color?", Keep: true}})
+	var ae *AskError
+	if !asAskError(err, &ae) || len(sim.sent) != 0 {
+		t.Fatalf("err %v, keys %v", err, sim.sent)
 	}
 }

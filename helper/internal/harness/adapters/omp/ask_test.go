@@ -133,8 +133,8 @@ func TestFormAskBecomesAQuestion(t *testing.T) {
 	if q.ID != "color" || q.Prompt != "Audit color" || q.Multi || len(q.Options) != 2 || q.Options[0].Label != "Red" || q.Options[1].Label != "Yellow" {
 		t.Fatalf("question = %+v", q)
 	}
-	if it.Question.Answerable == nil || *it.Question.Answerable {
-		t.Error("the form is offered as answerable from the phone, which nothing can do yet")
+	if it.Question.Answerable != nil {
+		t.Error("the form is not offered as answerable from the phone")
 	}
 	var result map[string]any
 	if err := json.Unmarshal([]byte(`{"role":"toolResult","toolName":"ask","details":{"answers":[{"name":"color","question":"Audit color","answer":"Red"}]},"isError":false}`), &result); err != nil {
@@ -153,7 +153,7 @@ func TestFormAskBecomesAQuestion(t *testing.T) {
 }
 
 func TestFormFieldsOfEveryKind(t *testing.T) {
-	qs := formQuestions(`<form>
+	qs, drivable := formQuestions(`<form>
 	  <label>Project name <input type="text" name="name" placeholder="my-app"></label>
 	  <fieldset><legend>Targets &amp; platforms</legend>
 	    <label><input type="checkbox" name="targets" value="ios">iOS</label>
@@ -167,14 +167,17 @@ func TestFormFieldsOfEveryKind(t *testing.T) {
 	}
 	want := []string{
 		"name|Project name|multi=false|text=true|0",
-		"targets|Targets & platforms|multi=true|text=false|2",
+		"targets|Targets & platforms|multi=true|text=true|2",
 		"region|Region|multi=false|text=false|2",
 		"notes|Notes|multi=false|text=true|0",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("fields:\n got %q\nwant %q", got, want)
 	}
-	if qs := formQuestions("not a form <<<"); len(qs) != 0 {
+	if !drivable {
+		t.Error("a form of labelled fields is not offered to the phone")
+	}
+	if qs, _ := formQuestions("not a form <<<"); len(qs) != 0 {
 		t.Errorf("unreadable form gave %d questions", len(qs))
 	}
 }
