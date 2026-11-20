@@ -151,6 +151,7 @@ var keyAliases = map[string]string{
 	"workingDirectory":     "cwd",
 	"agentName":            "agent_type",
 	"agentDisplayName":     "agent_type",
+	"parentAgentId":        "parent_agent_id",
 }
 
 // ErrPayload is returned for a payload that is not a JSON object. It never
