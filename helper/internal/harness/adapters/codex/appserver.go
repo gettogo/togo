@@ -184,6 +184,7 @@ type resumeResult struct {
 		AgentNickname  *string `json:"agentNickname"`
 		AgentRole      *string `json:"agentRole"`
 		Name           *string `json:"name"`
+		Ephemeral      bool    `json:"ephemeral"`
 		Status         struct {
 			Type string `json:"type"`
 		} `json:"status"`
@@ -209,6 +210,9 @@ type turnPayload struct {
 func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Item, []harness.Op) {
 	var p struct {
 		Result resumeResult `json:"result"`
+		// Late says the server loaded the thread after the feed first
+		// asked: the desk resumed it (rpc.threads).
+		Late bool `json:"late"`
 	}
 	if json.Unmarshal(params, &p) != nil || p.Result.Thread.ID == "" {
 		return nil, nil
@@ -220,7 +224,8 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 	var ops []harness.Op
 	if r.Thread.ParentThreadID == nil || *r.Thread.ParentThreadID == "" {
 		a.threads[id] = &threadInfo{top: true}
-		if !a.takesMain(r) {
+		moved := p.Late && !r.Thread.Ephemeral && id != a.main
+		if !moved && !a.takesMain(r) {
 			// Another conversation the server has loaded (the one the
 			// desk left by /new or /resume): its history is not this
 			// chat's. A turn of its own makes it main (turnStarted).
@@ -228,6 +233,9 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 		}
 		a.setMain(id)
 		a.mainFresh = freshness(r)
+		if p.Late {
+			a.resumedAtDesk(at)
+		}
 		if r.Cwd != "" {
 			a.cwd = r.Cwd
 		}
