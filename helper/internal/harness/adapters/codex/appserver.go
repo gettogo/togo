@@ -26,9 +26,13 @@ type AppServer struct {
 	main  string
 	// mainFresh is the activity time takesMain compares a newly joined thread to.
 	mainFresh time.Time
-	threads   map[string]*threadInfo
-	turns     map[string]*turnInfo
-	streams   map[string]*stream
+	// follow is the main thread before a helper restart, preferred
+	// until a turn moves the chat; saved is the one last remembered
+	// (follow.go).
+	follow, saved string
+	threads       map[string]*threadInfo
+	turns         map[string]*turnInfo
+	streams       map[string]*stream
 	// retries counts a turn's retried errors, for the attempt shown.
 	retries map[string]int
 	// erred marks turns whose final error is already a notice.
@@ -66,6 +70,8 @@ type stream struct {
 func NewAppServer(env harness.Env) *AppServer {
 	return &AppServer{
 		env:     env,
+		follow:  remembered(env),
+		saved:   remembered(env),
 		state:   map[string]string{"working": "false", "idle": "true"},
 		threads: map[string]*threadInfo{},
 		turns:   map[string]*turnInfo{},
@@ -166,6 +172,7 @@ func (a *AppServer) setMain(thread string) {
 	a.main = thread
 	a.state["harness_session"] = thread
 	a.state[harness.StateConversation] = thread
+	a.remember(thread)
 }
 
 type resumeResult struct {
@@ -212,15 +219,19 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 	var ops []harness.Op
 	if r.Thread.ParentThreadID == nil || *r.Thread.ParentThreadID == "" {
 		a.threads[id] = &threadInfo{top: true}
-		if a.takesMain(r) {
-			a.setMain(id)
-			a.mainFresh = freshness(r)
-			if r.Cwd != "" {
-				a.cwd = r.Cwd
-			}
-			a.applySettings(r.Model, r.ReasoningEffort, r.ApprovalPolicy)
-			ops = append(ops, a.statusOp())
+		if !a.takesMain(r) {
+			// Another conversation the server has loaded (the one the
+			// desk left by /new or /resume): its history is not this
+			// chat's. A turn of its own makes it main (turnStarted).
+			return nil, nil
 		}
+		a.setMain(id)
+		a.mainFresh = freshness(r)
+		if r.Cwd != "" {
+			a.cwd = r.Cwd
+		}
+		a.applySettings(r.Model, r.ReasoningEffort, r.ApprovalPolicy)
+		ops = append(ops, a.statusOp())
 	} else {
 		x := a.resumedAgent(r, at)
 		items = append(items, x)
@@ -232,32 +243,6 @@ func (a *AppServer) resumed(params json.RawMessage, at time.Time) ([]harness.Ite
 		ops = append(ops, historyOps...)
 	}
 	return items, ops
-}
-
-// takesMain says whether a top-level thread joined from the server's list
-// becomes the main thread. After /new or /resume at the desk several are
-// loaded and the TUI is on one of them: the first stays unless a later one
-// is active, or the current one is idle and the later one saw more recent
-// activity. A thread that starts a turn takes over in turnStarted.
-func (a *AppServer) takesMain(r resumeResult) bool {
-	if a.main == "" || a.main == r.Thread.ID {
-		return true
-	}
-	if r.Thread.Status.Type == "active" {
-		return true
-	}
-	return a.state["working"] != "true" && freshness(r).After(a.mainFresh)
-}
-
-// freshness is the start of a thread's latest turn, else its creation.
-func freshness(r resumeResult) time.Time {
-	t := secs(r.Thread.CreatedAt)
-	for _, turn := range r.Thread.Turns {
-		if s := secs(turn.StartedAt); s.After(t) {
-			t = s
-		}
-	}
-	return t
 }
 
 // history replays one finished or running turn from a resume result.
@@ -373,6 +358,7 @@ func (a *AppServer) turnStarted(params json.RawMessage, at time.Time) ([]harness
 		// A top-level thread the server listed started a turn: the desk
 		// ran /new or /resume, so it is now the main thread.
 		a.setMain(p.ThreadID)
+		a.follow = ""
 		// Fresh as of this turn: an older thread the server loads again
 		// does not take the chat back.
 		a.mainFresh = orNow(secs(p.Turn.StartedAt), at)
