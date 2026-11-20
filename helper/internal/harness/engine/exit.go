@@ -28,8 +28,8 @@ import (
 // agent's files again and its mappers find the dead turn open once more.
 //
 // Set: agentExitedLocked (the hub says the agent exited or failed).
-// Cleared: a mapper's mask when that mapper reports a new turn or a turn
-// end (maskedLocked); the whole fence when the session is removed
+// Cleared: a mapper's mask when a live record shows it on another turn or
+// at a turn end (liftMaskLocked); the whole fence when the session is removed
 // (Forget). A relaunch keeps it: the dead turn stays dead.
 type exitFence struct {
 	At time.Time `json:"at"`
@@ -52,32 +52,41 @@ func turnMark(st map[string]string) string {
 	return "at:" + st[harness.StateWorkingAt]
 }
 
-// maskedLocked returns the mapper's state with working taken back when it
-// is the dead turn's, and lifts the mask once the mapper has moved on. A
-// mapper being replayed (a helper restart, or before its first record)
-// keeps the mask: it passes through older turns on the way to the newest.
+// maskedLocked returns the mapper's state with working taken back while it
+// is the dead turn's.
 func (s *sess) maskedLocked(mapper string, st map[string]string) map[string]string {
 	f := s.exit
 	if f == nil {
 		return st
 	}
 	mark, ok := f.Masks[mapper]
-	if !ok {
+	if !ok || st["working"] != "true" || turnMark(st) != mark {
 		return st
 	}
-	w, known := st["working"]
-	if w == "true" && turnMark(st) == mark {
-		out := make(map[string]string, len(st))
-		for k, v := range st {
-			out[k] = v
-		}
-		out["working"], out["idle"] = "false", "true"
-		return out
+	out := make(map[string]string, len(st))
+	for k, v := range st {
+		out[k] = v
 	}
-	if known && !s.restoring {
+	out["working"], out["idle"] = "false", "true"
+	return out
+}
+
+// liftMaskLocked believes the mapper again once a live record moved it
+// on: to another turn, or to a turn end. Only a live record does: a
+// mapper being replayed after a helper restart, or not yet replayed,
+// passes through other states on its way back to the dead turn.
+func (s *sess) liftMaskLocked(mapper string, m harness.Mapper) {
+	f := s.exit
+	if f == nil {
+		return
+	}
+	mark, ok := f.Masks[mapper]
+	if !ok {
+		return
+	}
+	if st := m.State(); st["working"] != "true" || turnMark(st) != mark {
 		delete(f.Masks, mapper)
 	}
-	return st
 }
 
 // keepEndedLocked holds an item the exit ended at interrupted: a mapper

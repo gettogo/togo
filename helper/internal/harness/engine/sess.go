@@ -640,6 +640,7 @@ func (s *sess) recordLocked(mapper string, rec harness.Record) {
 		s.followedLocked() // before publishing: the record's items are the new conversation's
 	}
 	s.keepHookLocked(rec, pre, replayMark(m))
+	s.liftMaskLocked(mapper, m)
 	s.warnPlanLocked(m)
 	s.publishLocked(items, ops)
 	if s.needs.hint {
@@ -701,10 +702,28 @@ func (s *sess) statusChanged() {
 	default:
 		return
 	}
+	if s.statusChangedLocked() {
+		// Away from the session's lock: the store waits on an answer
+		// being typed into the pane.
+		if c, ok := s.e.cfg.Approvals.(exitedApprovals); ok {
+			c.AgentExited(s.ctx, s.id)
+		}
+	}
+}
+
+// exitedApprovals is an approvals store that can close the approvals of
+// an agent that exited (approval.Store).
+type exitedApprovals interface {
+	AgentExited(ctx context.Context, sessionID string)
+}
+
+// statusChangedLocked is statusChanged under the lock; it reports whether
+// the agent is gone.
+func (s *sess) statusChangedLocked() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.gateOK {
-		return
+		return false
 	}
 	// A feed whose path comes from state (omp's session folder, found
 	// once omp makes it) re-renders here too: waiting on a folder that
@@ -723,6 +742,7 @@ func (s *sess) statusChanged() {
 		s.checkStuckTurnLocked()
 		s.exitNoticed = false
 	}
+	return gone
 }
 
 // feedTrust is how long a turn end the feed reported outweighs the hub's

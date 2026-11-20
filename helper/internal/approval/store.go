@@ -238,6 +238,21 @@ func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	delete(s.paneLocks, sessionID)
 }
 
+// AgentExited closes the pending approvals of a session whose agent
+// process exited: the prompt they stand for died with it, including a
+// hook approval whose prompt was never drawn. The session stays, and so
+// do asks, whose caller is not the agent's pane.
+func (s *Store) AgentExited(_ context.Context, sessionID string) {
+	mu := s.lockFor(sessionID)
+	mu.Lock()
+	defer mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for cur := s.pendingForSession(sessionID); cur != nil; cur = s.pendingForSession(sessionID) {
+		s.closeLocked(cur, wire.ResolutionGone)
+	}
+}
+
 // OpenFromHook opens an approval for an agent permission hook. The title
 // and detail come from the hook; the options come from the screen when a
 // prompt is already visible, otherwise from the prompt the watcher reports

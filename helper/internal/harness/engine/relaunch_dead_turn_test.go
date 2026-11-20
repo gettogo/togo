@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -157,8 +158,14 @@ func (c deadTurnCase) split(t *testing.T, recs []harness.Record) (mid int, rest 
 // from a single feed, the hub's status read from status.
 func deadTurnEngine(t *testing.T, c deadTurnCase, id string, status *atomic.Value, done func(string, string, string)) (*Engine, *sess) {
 	t.Helper()
+	return deadTurnEngineWith(t, c, id, status, func(cfg *Config) { cfg.Done = done })
+}
+
+func deadTurnEngineWith(t *testing.T, c deadTurnCase, id string, status *atomic.Value, opts ...func(*Config)) (*Engine, *sess) {
+	t.Helper()
 	agent := "exit" + c.name
-	harness.RegisterAdapterFile(agent, []byte(`
+	if _, done := deadTurnAdapters.LoadOrStore(agent, true); !done {
+		harness.RegisterAdapterFile(agent, []byte(`
 adapter: `+agent+`
 name: Exit `+c.name+`
 revision: 1
@@ -167,13 +174,16 @@ capabilities: [chat, agents, background]
 feeds:
   events: { hook: { events: [Event] }, mapper: `+c.mapper+`, stability: documented }
 `))
+	}
 	e := statusEngine(t, id, &seqPane{mode: "a"}, status, func(cfg *Config) {
 		cwd := cfg.Home
 		if c.cwd != "" {
 			cwd = c.cwd
 		}
 		cfg.Sessions = fakeSessions{id: {ID: id, Agent: agent, Managed: true, Cwd: cwd, Command: []string{agent}}}
-		cfg.Done = done
+		for _, o := range opts {
+			o(cfg)
+		}
 	})
 	s, err := e.served(context.Background(), id)
 	if err != nil {
@@ -182,6 +192,9 @@ feeds:
 	s.waitReady(context.Background())
 	return e, s
 }
+
+// deadTurnAdapters are the test adapters registered so far.
+var deadTurnAdapters sync.Map
 
 func feedRecords(s *sess, mapper string, recs []harness.Record) {
 	for _, rec := range recs {
