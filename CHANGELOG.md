@@ -42,7 +42,7 @@ The helper and the app are versioned separately. A newer helper always works wit
 - In OMP, a subagent's row could show another subagent's steps, appear twice, or turn into a background job that vanished, and this changed between restarts. Each subagent now has one row with its own steps.
 - In OMP, a long session could lose its conversation after a helper restart. It now keeps it.
 - In OpenCode 2.x, after resuming a conversation from the phone, picking another conversation in the terminal left the chat empty. The chat now shows that conversation.
-- In Claude Code, every send was refused with "input line already holds text" while Claude showed a suggested next prompt. Sends now go through.
+- In Claude Code, every send was refused with "input line already holds text" while it showed a suggested next prompt. Sends now go through.
 - A chat on a long session with busy subagents opened nearly empty, because subagent steps used up the page. A page now holds the asked number of messages from the main conversation.
 
 ### 1.1.0 (2026-11-17)
