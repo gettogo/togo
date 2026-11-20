@@ -13,6 +13,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/fsx"
 	"github.com/gettogo/togo/helper/internal/harness"
+	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
 )
 
@@ -50,7 +51,7 @@ func readLimits(ctx context.Context, c *Conn, push func(Message)) {
 }
 
 // attach runs the feed's call on a fresh connection.
-func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, push func(Message)) {
+func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, env harness.Env, push func(Message)) {
 	p := params(b.Params)
 	if b.Method != MethodResume {
 		res, err := c.Call(ctx, b.Method, p)
@@ -72,8 +73,12 @@ func (r *Runner) attach(ctx context.Context, c *Conn, b spec.RPC, push func(Mess
 		return
 	}
 	joined := map[string]bool{}
+	// The thread the chat followed before a helper restart is joined
+	// first, whatever order the server lists threads in: the chat names
+	// it at once and does not start over when it comes later.
+	followed := source.LoadFollowed(env, FollowedThread)
 	for {
-		for _, id := range loaded(ctx, c) {
+		for _, id := range followedFirst(loaded(ctx, c), followed) {
 			if !joined[id] && r.resume(ctx, c, id, push) {
 				joined[id] = true
 			}
@@ -106,6 +111,20 @@ func (r *Runner) resume(ctx context.Context, c *Conn, id string, push func(Messa
 	}
 	push(callRecord(MethodResume, res))
 	return true
+}
+
+// FollowedThread names the main thread a mapper keeps under the run
+// folder (source.SaveFollowed): the Codex mapper writes it.
+const FollowedThread = "codex"
+
+// followedFirst moves id to the front of ids when it is there.
+func followedFirst(ids []string, id string) []string {
+	i := slices.Index(ids, id)
+	if id == "" || i <= 0 {
+		return ids
+	}
+	out := append([]string{id}, ids[:i]...)
+	return append(out, ids[i+1:]...)
 }
 
 func loaded(ctx context.Context, c *Conn) []string {

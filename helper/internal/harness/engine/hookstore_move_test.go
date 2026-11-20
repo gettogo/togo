@@ -37,6 +37,10 @@ func TestHookStoreSpanningAMoveRestoresOnlyTheLastConversation(t *testing.T) {
 	}
 	var notes atomic.Int32
 	e := storeEngine(t, home, togoHome, &notes, id)
+	// The hook bus is the process's: its backlog for this session would
+	// hand this run's records to the next run of the test (-count), whose
+	// feed would then move to C before its own records came.
+	t.Cleanup(func() { e.Forget(id) })
 	res, err := e.Open(ctx, &fakeSub{done: make(chan struct{})}, id, 0, 500)
 	if err != nil {
 		t.Fatal(err)

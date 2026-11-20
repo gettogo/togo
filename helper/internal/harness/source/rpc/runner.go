@@ -251,7 +251,7 @@ func (r *Runner) watchOnce(ctx context.Context, name string, b spec.RPC, env har
 	if err := Initialize(ctx, c); err != nil {
 		return false, err
 	}
-	go r.attach(ctx, c, b, push)
+	go r.attach(ctx, c, b, env, push)
 	for {
 		select {
 		case <-ctx.Done():
