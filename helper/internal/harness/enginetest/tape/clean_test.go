@@ -1,11 +1,13 @@
 package tape
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func lines(s ...string) [][]byte {
@@ -185,5 +187,35 @@ func TestServerEventIdsAreNormalised(t *testing.T) {
 	all := string(join(out))
 	if strings.Contains(all, "18e9638") || strings.Count(all, "evt_00000000000000001") != 2 || !strings.Contains(all, "evt_00000000000000002") {
 		t.Errorf("%s (%v)", all, used)
+	}
+}
+
+// Two things stamped in the same microsecond by one run and in different
+// microseconds by another are the same tape: the stand-in for a time is
+// per owner, not per instant. The tape of a run on a clock that ticks in
+// microseconds (macOS) differed from the next run's whenever two records
+// read back to back got one stamp.
+func TestWallTimesDoNotDependOnCoincidence(t *testing.T) {
+	from, to := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+	frame := func(a, b string) []any {
+		return []any{map[string]any{"method": "harness", "params": map[string]any{"items": []any{
+			map[string]any{"id": "one", "at": a},
+			map[string]any{"id": "two", "at": b},
+			map[string]any{"id": "three", "at": "2026-11-20T04:41:09.938Z"},
+		}}}}
+	}
+	same := frame("2026-11-20T04:41:07.437843Z", "2026-11-20T04:41:07.437843Z")
+	apart := frame("2026-11-20T04:41:07.437843Z", "2026-11-20T04:41:07.437901Z")
+	normalise(same, from, to, nil)
+	normalise(apart, from, to, nil)
+	if a, b := fmt.Sprint(same), fmt.Sprint(apart); a != b {
+		t.Errorf("a coincidence changed the tape:\n%s\n%s", a, b)
+	}
+	// What one item shows twice is still one time.
+	again := []any{map[string]any{"id": "one", "at": "2026-11-20T04:41:07.437843Z", "turn": map[string]any{"startedAt": "2026-11-20T04:41:07.437843Z"}}}
+	normalise(again, from, to, nil)
+	item := again[0].(map[string]any)
+	if item["at"] != item["turn"].(map[string]any)["startedAt"] {
+		t.Errorf("one item's own times differ: %v", item)
 	}
 }

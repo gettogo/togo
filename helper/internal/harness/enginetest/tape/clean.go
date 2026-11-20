@@ -246,6 +246,7 @@ func normalise(frames []any, from, to time.Time, ports []int) []string {
 			continue
 		}
 		note := m["method"] == "harness"
+		n.owner = "frame-" + strconv.Itoa(i)
 		n.walk(m, note, i)
 	}
 	var out []string
@@ -257,6 +258,13 @@ func normalise(frames []any, from, to time.Time, ports []int) []string {
 }
 
 type normaliser struct {
+	// owner names what the strings being walked belong to (the id of the
+	// item, or the frame's line): a wall time is the same stand-in only
+	// within its owner. Two things the engine stamped in the same
+	// microsecond (a clock that ticks in microseconds, as macOS's does,
+	// gives equal stamps to records read back to back) are two times, not
+	// one, however close a run happened to put them.
+	owner                      string
 	epochs, phone, reqs, times map[string]string
 	used                       map[string]bool
 	from, to                   time.Time
@@ -275,6 +283,11 @@ func (n *normaliser) canon(m map[string]string, v string, name func(i int) strin
 func (n *normaliser) walk(v any, note bool, line int) {
 	switch x := v.(type) {
 	case map[string]any:
+		if id, ok := x["id"].(string); ok && id != "" {
+			// An item (or a response): its times are its own.
+			defer func(prev string) { n.owner = prev }(n.owner)
+			n.owner = id
+		}
 		for _, k := range sortedKeys(x) {
 			e := x[k]
 			if s, ok := e.(string); ok {
@@ -306,7 +319,7 @@ func (n *normaliser) rewrite(key, s string, parent map[string]any, note bool) st
 		n.mark(NormEpoch, r != s)
 		return r
 	case key == "ts" && note:
-		r := n.canon(n.times, "t:"+instant(s), n.synthetic)
+		r := n.canon(n.times, "t:"+instant(s)+"|"+n.owner, n.synthetic)
 		n.mark(NormNoteTime, true)
 		return r
 	}
@@ -336,7 +349,7 @@ var milli = regexp.MustCompile(`(^|[^0-9])(1[0-9]{12})([^0-9]|$)`)
 func (n *normaliser) text(s string) string {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil && n.inRun(t) {
 		n.mark(NormWallTime, true)
-		return n.canon(n.times, "t:"+instant(s), n.synthetic)
+		return n.canon(n.times, "t:"+instant(s)+"|"+n.owner, n.synthetic)
 	}
 	for _, p := range n.ports {
 		re := regexp.MustCompile(`(^|[^0-9])` + strconv.Itoa(p) + `([^0-9]|$)`)
