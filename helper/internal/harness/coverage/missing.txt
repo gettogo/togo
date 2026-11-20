@@ -2,12 +2,10 @@ claude/lifecycle/relaunch
 cline/lifecycle/resume
 cursor/lifecycle/fork
 droid/capability/agents
-kilo/capability/mcp
 kilo/capability/status.context
 kilo/lifecycle/helper_restart
 kimi/capability/agents
 omp/lifecycle/relaunch
 opencode/capability/chat.anchors
-opencode/capability/mcp
 opencode/capability/status.context
 opencode/lifecycle/helper_restart

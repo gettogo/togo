@@ -107,6 +107,11 @@ func (s *APIServer) route(method, path string, body []byte) (int, []byte) {
 	switch {
 	case method == http.MethodGet && path == "/path":
 		return http.StatusOK, nil
+	case method == http.MethodGet && path == "/mcp":
+		// The server's MCP servers by name, each with its status, as the
+		// documented route answers (OpenCode's SDK: McpStatus, and Kilo
+		// Code's, which serves the same route).
+		return http.StatusOK, []byte(`{"broken_tools":{"status":"failed","error":"spawn failed"},"fixture_tools":{"status":"connected"},"off_tools":{"status":"disabled"}}`)
 	case method == http.MethodGet && path == "/config/providers" && len(s.providers) > 0:
 		return http.StatusOK, s.providers
 	case method == http.MethodGet && path == "/session":
