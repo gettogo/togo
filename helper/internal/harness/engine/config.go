@@ -59,10 +59,11 @@ type Config struct {
 	// PanePIDs lists the pane processes of a session's tmux session; with
 	// it a source can tell which files the session's own agent holds.
 	PanePIDs func(ctx context.Context, id string) ([]int, error)
-	// PaneTTY is the terminal device of a session's pane (/dev/ttys011);
-	// adapters whose agent records its session per terminal read it as
-	// the "tty" variable.
-	PaneTTY func(ctx context.Context, id string) (string, error)
+	// Pane is the pane of a session that the agent runs in (the one a
+	// relaunch respawns): its terminal device, process and start command.
+	// Adapters whose agent records its session per terminal read them as
+	// the "tty", "pane_started" and "pane_command" variables.
+	Pane func(ctx context.Context, id string) (PaneInfo, error)
 	// LoginPath is the PATH programs are looked up in.
 	LoginPath func(ctx context.Context) string
 	// LoginEnv is the login shell's environment; nil keeps the helper's.

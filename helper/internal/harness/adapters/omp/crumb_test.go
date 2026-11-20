@@ -149,7 +149,7 @@ func TestPaneMovedReadsTheNewDevicesRecordOnly(t *testing.T) {
 		moved.Vars[k] = v
 	}
 	moved.Vars[source.VarTTY] = "/dev/ttys012"
-	moved.Vars[source.VarRelaunched] = time.Now().Add(-5 * time.Second).UTC().Format(time.RFC3339Nano)
+	moved.Vars[source.VarPaneStarted] = time.Now().Add(-5 * time.Second).UTC().Format(time.RFC3339Nano)
 	s.PaneMoved(moved)
 	if got := s.State()["session_rel"]; got == "-project/before.jsonl" || got == "-project/other-terminal.jsonl" {
 		t.Fatalf("after the resume, before omp wrote its record: session_rel = %q", got)
@@ -178,7 +178,7 @@ func TestPaneMovedLeavesAnotherSessionInTheFolder(t *testing.T) {
 	writeCrumb(t, home, "ttys020", env.Cwd+"\n"+filepath.Join(root, "theirs.jsonl"))
 	mine, theirs := newSession(env), newSession(other)
 	moved := harness.Env{Cwd: env.Cwd, Vars: map[string]string{source.VarHome: home, source.VarTTY: "/dev/ttys021",
-		source.VarRelaunched: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}}
+		source.VarPaneStarted: time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)}}
 	mine.PaneMoved(moved)
 	writeCrumb(t, home, "ttys021", env.Cwd+"\n"+filepath.Join(root, "resumed.jsonl"))
 	if got := mine.State()["session_rel"]; got != "-project/resumed.jsonl" {
@@ -186,5 +186,61 @@ func TestPaneMovedLeavesAnotherSessionInTheFolder(t *testing.T) {
 	}
 	if got := theirs.State()["session_rel"]; got != "-project/theirs.jsonl" {
 		t.Fatalf("other session: session_rel = %q", got)
+	}
+}
+
+// omp leaves a record that already holds the same text as it is (seen on
+// 19.0.1). Resume A, then B, then A again on A's old device: the record
+// still names A with its old time. It is taken because the pane's command
+// resumes A; the same old record is not taken for another resume.
+func TestReusedDeviceWithUnchangedRecordFollowsTheResume(t *testing.T) {
+	env, home := crumbEnv(t)
+	env.Vars["created"] = time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	env.Vars[source.VarPaneStarted] = time.Now().UTC().Format(time.RFC3339Nano)
+	root := filepath.Join(home, ".omp", "agent", "sessions", "-project")
+	a := filepath.Join(root, "2026-11-20T05-11-59-204Z_01a1f75e-5de4-76d4-9e74-77fe60668008.jsonl")
+	writeCrumb(t, home, "ttys011", env.Cwd+"\n"+a+"\ncwdstat 1 2")
+	earlier := time.Now().Add(-10 * time.Minute)
+	if err := os.Chtimes(filepath.Join(home, ".omp", "agent", "terminal-sessions", "ttys011"), earlier, earlier); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		command string
+		want    string
+	}{
+		{`/bin/zsh -lic "togo wrapper" togo /usr/local/bin/togo omp --resume 01a1f75e-5de4-76d4-9e74-77fe60668008`, "-project/" + filepath.Base(a)},
+		{`/bin/zsh -lic "togo wrapper" togo /usr/local/bin/togo omp -r 01a1f75e`, "-project/" + filepath.Base(a)},
+		{`/bin/zsh -lic "togo wrapper" togo /usr/local/bin/togo omp --resume=` + a, "-project/" + filepath.Base(a)},
+		{`/bin/zsh -lic "togo wrapper" togo /usr/local/bin/togo omp --resume 01a1f75e-6bcc-7617-943a-cafaf10a7276`, ""},
+		{`/bin/zsh -lic "togo wrapper" togo /usr/local/bin/togo omp`, ""},
+		{`/bin/zsh -lic "togo wrapper" togo /usr/local/bin/togo omp --model "--resume 01a1f75e"`, ""},
+	} {
+		env.Vars[source.VarPaneCommand] = c.command
+		if got := terminalSession(env); got != c.want {
+			t.Errorf("%s: terminalSession = %q, want %q", c.command, got, c.want)
+		}
+	}
+}
+
+// A helper restart after a resume omp did not complete (it exited, or shows
+// its chooser): the pane's device holds a record left by another terminal
+// or an earlier run, written after the session started but before the
+// pane's process. The pane's start is read again from the process, so the
+// leftover is not followed.
+func TestHelperRestartIgnoresALeftoverRecordAfterAFailedResume(t *testing.T) {
+	env, home := crumbEnv(t)
+	created := time.Now().Add(-time.Hour)
+	root := filepath.Join(home, ".omp", "agent", "sessions", "-project")
+	writeCrumb(t, home, "ttys011", env.Cwd+"\n"+filepath.Join(root, "2026-11-20T05-00-00-000Z_leftover.jsonl")+"\ncwdstat 1 2")
+	left := created.Add(30 * time.Minute)
+	if err := os.Chtimes(filepath.Join(home, ".omp", "agent", "terminal-sessions", "ttys011"), left, left); err != nil {
+		t.Fatal(err)
+	}
+	restarted := harness.Env{Cwd: env.Cwd, Vars: map[string]string{source.VarHome: home, source.VarTTY: "/dev/ttys011",
+		"created":             created.UTC().Format(time.RFC3339),
+		source.VarPaneStarted: time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano),
+		source.VarPaneCommand: "/bin/zsh -lic w togo /usr/local/bin/togo omp --resume 01a1f75e-6bcc"}}
+	if got := newSession(restarted).State()["session_rel"]; got == "-project/2026-11-20T05-00-00-000Z_leftover.jsonl" {
+		t.Fatal("followed a record older than the pane's process")
 	}
 }

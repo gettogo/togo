@@ -34,11 +34,14 @@ func terminalSession(env harness.Env) string {
 	if err != nil || !info.Mode().IsRegular() {
 		return ""
 	}
-	// A tty can be reused before the new agent updates its record. The
-	// record must belong to this session's lifetime, not the old occupant.
-	if since := recordSince(env); !since.IsZero() && info.ModTime().Before(since) {
-		return ""
-	}
+	// A tty can be reused before the new agent updates its record: one
+	// older than the pane's process is the old occupant's, unless it names
+	// the conversation the pane's command resumes. omp leaves a record
+	// that already holds the same text as it is (seen on 19.0.1: resume A,
+	// then B, then A again on A's old device, and the record keeps its
+	// time), so its time alone would refuse it for good.
+	since := recordSince(env)
+	stale := !since.IsZero() && info.ModTime().Before(since)
 	b, err := io.ReadAll(record)
 	if err != nil {
 		return ""
@@ -52,12 +55,15 @@ func terminalSession(env harness.Env) string {
 	if err != nil || !filepath.IsLocal(rel) || filepath.Ext(rel) != ".jsonl" || strings.ContainsAny(rel, "*?[") {
 		return ""
 	}
+	if stale && !resumes(env.Vars[source.VarPaneCommand], file) {
+		return ""
+	}
 	return filepath.ToSlash(rel)
 }
 
 // PaneMoved takes the session's environment after omp was restarted in its
-// pane (a resume): the record to read is the one omp writes for the pane's
-// new device, and the old device's, which still names the conversation
+// pane (a resume, or a respawn by hand): the record to read is the new
+// device's, and the old device's, which still names the conversation
 // before the restart, is not read again. It is read at once.
 func (s *session) PaneMoved(env harness.Env) {
 	s.mu.Lock()
@@ -66,14 +72,15 @@ func (s *session) PaneMoved(env harness.Env) {
 	s.crumbAt, s.crumb = time.Time{}, ""
 }
 
-// recordSince is the time a record for the pane's device must be written
-// at or after: the session's start, or the last restart of omp in its pane,
-// which tmux respawns on a device another terminal may have used (seen on
-// macOS: ttys002, ttys008, then ttys002 again). The restart is cut to the
-// second, as created is, for file systems that keep coarse times.
+// recordSince is the time a record for the pane's device is written at or
+// after when the agent in the pane wrote it: the session's start, or when
+// the pane's process started, which tmux restarts on a device another
+// terminal may have used (seen on macOS: ttys002, ttys008, then ttys002
+// again). Both are read again after a helper restart. The process start is
+// cut to the second, as created is, for file systems with coarse times.
 func recordSince(env harness.Env) time.Time {
 	since, _ := time.Parse(time.RFC3339, env.Vars["created"])
-	if r, err := time.Parse(time.RFC3339Nano, env.Vars[source.VarRelaunched]); err == nil && r.After(since) {
+	if r, err := time.Parse(time.RFC3339Nano, env.Vars[source.VarPaneStarted]); err == nil && r.After(since) {
 		since = r.Truncate(time.Second)
 	}
 	return since

@@ -38,6 +38,9 @@ type ompRig struct {
 
 	mu       sync.Mutex
 	tty      string
+	pid      int
+	started  time.Time
+	command  string
 	next     []string // devices the next respawns get
 	argv     [][]string
 	onRelaun func(argv []string, tty string)
@@ -60,7 +63,9 @@ func newOmpRig(t *testing.T, id string) *ompRig {
 	t.Helper()
 	home := t.TempDir()
 	cwd := filepath.Join(home, "proj")
+	created := time.Now().Add(-time.Hour)
 	r := &ompRig{t: t, id: id, home: home, cwd: cwd, tty: "/dev/ttys011", status: "idle",
+		pid: 1000, started: created, command: "/bin/zsh -lic togo-wrapper togo /usr/local/bin/togo omp",
 		records: filepath.Join(home, ".omp", "agent", "terminal-sessions")}
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
 		t.Fatal(err)
@@ -81,13 +86,13 @@ func newOmpRig(t *testing.T, id string) *ompRig {
 	pane := &fakePane{mode: "a"}
 	r.e = New(Config{
 		Sessions: fakeSessions{id: {ID: id, Agent: "omp", Managed: true, Cwd: cwd, Command: []string{"omp"},
-			CreatedAt: time.Now().Add(-time.Hour)}},
+			CreatedAt: created}},
 		Typist: pane, Marker: &fakeMarker{}, Screen: pane.Screen, Home: home,
 		LoginPath: func(context.Context) string { return bin + ":/bin:/usr/bin" },
-		PaneTTY: func(context.Context, string) (string, error) {
+		Pane: func(context.Context, string) (PaneInfo, error) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
-			return r.tty, nil
+			return PaneInfo{TTY: r.tty, PID: r.pid, Started: r.started, Command: r.command}, nil
 		},
 		Status: func(string) string {
 			r.mu.Lock()
@@ -137,14 +142,17 @@ func (r *ompRig) writeConversation(as string, b []byte) {
 	}
 }
 
-// respawn plays tmux respawn-pane: the pane gets the next free device,
-// and the agent that starts there runs onRelaun.
+// respawn plays tmux respawn-pane: the pane gets the next free device and
+// a new process, and the agent that starts there runs onRelaun.
 func (r *ompRig) respawn(argv []string) {
 	r.mu.Lock()
 	r.argv = append(r.argv, argv)
 	if len(r.next) > 0 {
 		r.tty, r.next = r.next[0], r.next[1:]
 	}
+	r.pid++
+	r.started = time.Now()
+	r.command = "/bin/zsh -lic togo-wrapper togo /usr/local/bin/togo " + strings.Join(argv, " ")
 	tty, f := r.tty, r.onRelaun
 	r.mu.Unlock()
 	if f != nil {
@@ -157,7 +165,13 @@ func (r *ompRig) record(tty, file string) {
 	r.t.Helper()
 	name := strings.ReplaceAll(strings.TrimPrefix(tty, "/dev/"), "/", "-")
 	body := r.cwd + "\n" + filepath.Join(r.dir, file) + "\ncwdstat 1 2\n"
-	if err := os.WriteFile(filepath.Join(r.records, name), []byte(body), 0o644); err != nil {
+	path := filepath.Join(r.records, name)
+	// As omp does (seen on 19.0.1), a record that already holds the same
+	// text is left as it is, its time too.
+	if old, err := os.ReadFile(path); err == nil && string(old) == body {
+		return
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		r.t.Fatal(err)
 	}
 }
@@ -248,7 +262,7 @@ func TestOmpResumeOfTheShownConversationKeepsTheChat(t *testing.T) {
 	}
 	// Settled once the session reads the new device's record.
 	waitFor(t, func() bool {
-		return r.e.stateOf(r.id)["session_rel"] == filepath.Base(r.dir)+"/"+ompConvAFile && r.relaunchedVar() != ""
+		return r.e.stateOf(r.id)["session_rel"] == filepath.Base(r.dir)+"/"+ompConvAFile && r.paneVar("pane_pid") == "1001"
 	})
 	r.waitShowsOnly(ompConvAText, ompConvBText)
 	if got := r.e.log.Epoch(r.id); got != epoch {
@@ -281,13 +295,13 @@ func TestOmpResumeNotCompletedThenPickedAtTheDesk(t *testing.T) {
 	r.waitShowsOnly(ompConvBText, ompConvAText)
 }
 
-func (r *ompRig) relaunchedVar() string {
+func (r *ompRig) paneVar(name string) string {
 	r.e.mu.Lock()
 	s := r.e.sessions[r.id]
 	r.e.mu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.mapperEnvLocked().Vars["relaunched"]
+	return s.mapperEnvLocked().Vars[name]
 }
 
 func (e *Engine) stateOf(id string) map[string]string {

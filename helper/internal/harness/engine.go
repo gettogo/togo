@@ -176,7 +176,8 @@ type Relauncher interface {
 // of the session's pane (omp's per-terminal record of its session file).
 // Restarting the agent respawns the pane, and tmux gives it a new device:
 // the engine hands the mapper the session's environment with the new
-// device and the time of the restart (source.VarTTY, VarRelaunched).
+// device, when the pane's process started and its command line
+// (source.VarTTY, VarPaneStarted, VarPaneCommand).
 type PaneMover interface {
 	PaneMoved(env Env)
 }

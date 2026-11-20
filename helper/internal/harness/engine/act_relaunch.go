@@ -61,7 +61,8 @@ group:
 	// The restarted agent may open another conversation: the one this
 	// session showed is no longer what a helper restart should load.
 	e.forgetConversation(s.id)
-	at := time.Now()
+	s.relaunching.Store(true)
+	defer s.relaunching.Store(false)
 	if err := e.cfg.Relaunch(ctx, s.id, argv); err != nil {
 		e.dropRelaunch(s.id)
 		if had {
@@ -72,7 +73,7 @@ group:
 		return harness.ActionResult{Result: harness.ResultFailed, Message: "The agent could not be restarted"}, nil
 	}
 	// The pane was respawned, most often on a new terminal device.
-	e.paneMoved(s, at, false)
+	e.paneMoved(s, false)
 	s.mu.Lock()
 	s.relaunchedAt = time.Now()
 	s.forgetSuggestionLocked()

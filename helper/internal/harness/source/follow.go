@@ -19,11 +19,18 @@ const VarTogoHome = "togo_home"
 // the helper knows it.
 const VarTTY = "tty"
 
-// VarRelaunched is when the helper last restarted the agent in its pane
-// (RFC 3339), unset before the first restart. The restart respawns the
-// pane, often on a new device: a file named after the device that is older
-// than this is the device's previous occupant's.
-const VarRelaunched = "relaunched"
+// VarPaneStarted is when the process in the session's pane started (RFC
+// 3339). Restarting the agent respawns the pane, often on a device another
+// terminal used: a file named after the device that is older than this is
+// a previous occupant's.
+const VarPaneStarted = "pane_started"
+
+// VarPaneCommand is the command the session's pane was started or last
+// respawned with, as tmux prints it: the agent's arguments are in it.
+const VarPaneCommand = "pane_command"
+
+// VarPanePID is the process tmux started in the session's pane.
+const VarPanePID = "pane_pid"
 
 // followFile is where a session's followed file is remembered, "" when the
 // environment has no folder or the id is not a plain name.
