@@ -94,6 +94,7 @@ func TestOMPQuestionAnsweredFromThePhone(t *testing.T) {
 	// The screen watcher sees the dialog gone and closes what it opened.
 	r.Look()
 	r.WaitPending(0, 3*time.Second)
+	st = r.SettleUntil(support.FileLimit, func(st enginetest.State) bool { return st.Mission.Summary.NeedsYou == 0 })
 	if st.Mission.Summary.NeedsYou != 0 || len(r.Pending()) != 0 {
 		t.Errorf("summary %+v and %d approvals open after the answer", st.Mission.Summary, len(r.Pending()))
 	}
