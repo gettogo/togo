@@ -251,9 +251,10 @@ actions:
   # A resume restarts omp on the chosen conversation with the options the session was
   # started with (its profile, model, tools, folders, approval mode). Options that pick
   # a conversation or run once (--resume, --continue, --fork, --print, a prompt) are
-  # never carried. --smol and --slow name a model ("--smol <model>"): carried
-  # as flags, a relaunch on 19.0.1 read the next option as the model and
-  # sent a path as a prompt.
+  # never carried. --smol and --slow are bare flags on 18 (checked on 18.16)
+  # and name a model from 19 ("--smol <model>"): carried as flags there, a
+  # relaunch on 19.0.1 read the next option as the model and sent a path as
+  # a prompt.
   resume:
     relaunch:
       argv: [omp, --resume, '{{.id}}']
@@ -261,10 +262,11 @@ actions:
         values: [--profile, --cwd, --config, --add-dir, --provider, --model, --models, --service-tier,
           --api-key, --system-prompt, --system-prompt-template, --append-system-prompt, --session-dir,
           --tools, --thinking, --hook, --extension, -e, --trusted-extension, --plugin-dir, --skills,
-          --approval-mode, --max-time, --warn-cost, --max-cost, --smol, --slow]
-        flags: [--allow-home, --no-tools, --no-lsp, --no-pty, --hide-thinking,
+          --approval-mode, --max-time, --warn-cost, --max-cost]
+        flags: [--smol, --slow, --allow-home, --no-tools, --no-lsp, --no-pty, --hide-thinking,
           --external-thinking, --prewalk, --no-prewalk, --no-extensions, --no-skills, --no-rules,
           --no-context-files, --no-title, --auto-approve, --yolo]
+        from: { range: ">=19", values: [--smol, --slow] }
     stability: documented
   # The ask tool's dialog (❯ ○ rows, ☐ boxes for a multi-select, "Other
   # (type your own)", a Review page for a batch; seen on 18.16.0) is driven

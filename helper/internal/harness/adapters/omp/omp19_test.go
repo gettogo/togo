@@ -157,19 +157,40 @@ func TestJobsReadOmp19Reports(t *testing.T) {
 	}
 }
 
-// Seen live on omp 19.0.1: --smol was carried as a flag, so a resume ran
-// `omp --resume <id> --smol --config <file>`; omp took --config as the
-// model and sent the file's path as a prompt.
-func TestResumeCarriesSmolWithItsModel(t *testing.T) {
+// --smol and --slow are bare flags on omp 18 (checked on 18.16) and name a
+// model from 19. Seen live on 19.0.1: carried as flags, a resume ran
+// `omp --resume <id> --smol --config <file>`; omp took --config as the model
+// and sent the file's path as a prompt. On 18 a value carried for them
+// would resend the old prompt.
+func TestResumeCarriesSmolPerVersion(t *testing.T) {
 	a, err := spec.Parse(AdapterFile())
 	if err != nil {
 		t.Fatal(err)
 	}
 	r := a.Actions["resume"].Relaunch
-	running := []string{"omp", "--model", "openrouter/x", "--smol", "openrouter/y", "--config", "/Users/dev/o.yml", "--slow=openrouter/z", "--no-title"}
+	if r.Carry.From == nil || r.Carry.From.Range != ">=19" {
+		t.Fatalf("carry.from = %+v", r.Carry.From)
+	}
+	// The engine judges the range; here the major alone decides it.
+	at := func(major int) func(string) bool {
+		return func(rng string) bool { return rng == ">=19" && major >= 19 }
+	}
 	next := []string{"omp", "--resume", "01a1f71a"}
-	got := strings.Join(r.Carry.Pick(running, next, 4096), " ")
-	if want := "--model openrouter/x --smol openrouter/y --config /Users/dev/o.yml --slow=openrouter/z --no-title"; got != want {
-		t.Fatalf("carried %q, want %q", got, want)
+	cases := []struct {
+		major   int
+		running []string
+		want    string
+	}{
+		{19, []string{"omp", "--model", "openrouter/x", "--smol", "openrouter/y", "--config", "/Users/dev/o.yml", "--slow=openrouter/z", "--no-title"},
+			"--model openrouter/x --smol openrouter/y --config /Users/dev/o.yml --slow=openrouter/z --no-title"},
+		{19, []string{"omp", "--smol", "opus", "fix the bug"}, "--smol opus"},
+		{18, []string{"omp", "--smol", "fix the bug"}, "--smol"},
+		{18, []string{"omp", "--smol", "--config", "/Users/dev/o.yml", "--slow"}, "--smol --config /Users/dev/o.yml --slow"},
+	}
+	for _, c := range cases {
+		got := strings.Join(r.Carry.ForVersion(at(c.major)).Pick(c.running, next, 4096), " ")
+		if got != c.want {
+			t.Errorf("%d %q: carried %q, want %q", c.major, c.running, got, c.want)
+		}
 	}
 }

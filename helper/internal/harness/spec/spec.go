@@ -517,6 +517,16 @@ type Relaunch struct {
 type Carry struct {
 	Values []string `yaml:"values"`
 	Flags  []string `yaml:"flags"`
+	// From lists options that take a value only in the harness versions
+	// its range holds; elsewhere they stay in Flags (omp's --smol is a bare
+	// flag on 18 and names a model on 19).
+	From *CarryFrom `yaml:"from"`
+}
+
+// CarryFrom is a set of value options for a range of harness versions.
+type CarryFrom struct {
+	Range  string   `yaml:"range"`
+	Values []string `yaml:"values"`
 }
 
 // Write sets a key in a harness config file (json or toml), atomically.
