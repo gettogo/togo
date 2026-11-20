@@ -6,12 +6,14 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/spec"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/tmux"
 )
 
 // SessionTypist types through the session service's sendText path (one
-// bracketed paste, then Enter) and sends allow-listed keys with tmux.
+// bracketed paste, then Enter) and sends allow-listed keys with tmux, each
+// under the pane's one lock (panelock), as answers and prompts are.
 type SessionTypist struct {
 	Sessions *session.Service
 	Tmux     *tmux.Client
@@ -49,6 +51,9 @@ func (t SessionTypist) TypeKeys(ctx context.Context, id, text string) error {
 			return errors.New("harness: text has a control character")
 		}
 	}
+	mu := panelock.For(id)
+	mu.Lock()
+	defer mu.Unlock()
 	return t.Tmux.SendKeys(ctx, "="+id+":", true, text)
 }
 
@@ -64,5 +69,8 @@ func (t SessionTypist) Keys(ctx context.Context, id string, keys ...string) erro
 			return errors.New("harness: key not allowed")
 		}
 	}
+	mu := panelock.For(id)
+	mu.Lock()
+	defer mu.Unlock()
 	return t.Tmux.SendKeys(ctx, "="+id+":", false, keys...)
 }

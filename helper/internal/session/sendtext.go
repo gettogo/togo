@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
 
@@ -65,9 +65,11 @@ func (s *Service) SendText(ctx context.Context, id, text string, submit bool, st
 	}
 	// One reply at a time per session: the checks, the paste, the settle
 	// and Enter of two replies must not interleave into one submission.
-	mu, _ := replyLocks.LoadOrStore(id, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer mu.(*sync.Mutex).Unlock()
+	// The pane's one lock (panelock): an answer typing keys into a dialog
+	// must not interleave with them either.
+	mu := panelock.For(id)
+	mu.Lock()
+	defer mu.Unlock()
 	sess, err := s.find(ctx, id)
 	if err != nil {
 		return err
@@ -91,10 +93,6 @@ func (s *Service) SendText(ctx context.Context, id, text string, submit bool, st
 	}
 	return nil
 }
-
-// replyLocks holds a *sync.Mutex per session id that has been replied to.
-// Ids are random and never reused, so an entry is a few bytes per session.
-var replyLocks sync.Map
 
 // knownShells are the shells whose name in the foreground of an agent's
 // pane means the agent is gone and the text would run as a command.

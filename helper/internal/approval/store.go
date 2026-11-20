@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/tmux"
 	"github.com/gettogo/togo/helper/internal/wire"
 )
@@ -84,10 +85,6 @@ type Store struct {
 	// questions are blocking AskUserQuestion hooks waiting for answers.
 	questions map[uint64]*questionWait
 	nextWait  uint64
-	// paneLocks serialise everything that reads a pane and then acts on
-	// what it saw (an answer typing keys, the watcher closing a prompt),
-	// so a capture, its check and the keys sent are one step per pane.
-	paneLocks map[string]*sync.Mutex
 	// pub is Config.Pub without the write that follows each change;
 	// saver writes the open approvals off the lock (persist.go).
 	pub   wire.Publisher
@@ -103,7 +100,7 @@ func New(cfg Config) *Store {
 	if cfg.NewID == nil {
 		cfg.NewID = wire.NewRequestID
 	}
-	s := &Store{cfg: cfg, entries: map[string]*entry{}, paneLocks: map[string]*sync.Mutex{}, questions: map[uint64]*questionWait{}}
+	s := &Store{cfg: cfg, entries: map[string]*entry{}, questions: map[uint64]*questionWait{}}
 	s.pub = cfg.Pub
 	if cfg.Path != "" {
 		s.saver = newSaver(s.logf)
@@ -120,15 +117,12 @@ func (s *Store) logf(format string, args ...any) {
 }
 
 // lockFor returns the mutex serialising work on one session's pane.
+// Everything that reads a pane and then acts on what it saw (an answer
+// typing keys, the watcher closing a prompt) holds it, so a capture, its
+// check and the keys sent are one step per pane. It is the pane's one lock
+// (panelock), which prompts and harness keys take too.
 func (s *Store) lockFor(key string) *sync.Mutex {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	m, ok := s.paneLocks[key]
-	if !ok {
-		m = &sync.Mutex{}
-		s.paneLocks[key] = m
-	}
-	return m
+	return panelock.For(key)
 }
 
 // Pending returns the open approvals, oldest first, for sessionID or for
@@ -235,7 +229,7 @@ func (s *Store) SessionGone(_ context.Context, sessionID string) {
 	}
 	// The session is gone for good: its pane lock would otherwise stay in
 	// the map for the life of the daemon.
-	delete(s.paneLocks, sessionID)
+	panelock.Forget(sessionID)
 }
 
 // OpenFromHook opens an approval for an agent permission hook. The title

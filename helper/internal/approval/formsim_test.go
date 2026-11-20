@@ -33,7 +33,8 @@ type formSim struct {
 	deaf      bool
 	keepPick  bool
 	closeAt   int
-	afterShut int // key calls after the dialog closed
+	afterShut int    // key calls after the dialog closed
+	onKey     func() // called, unlocked, after each key call
 }
 
 type simField struct {
@@ -199,7 +200,15 @@ func (s *formSim) shown(f *simField) string {
 	return strings.Join(on, "   ")
 }
 
-func (s *formSim) SendKeys(_ context.Context, _ string, literal bool, keys ...string) error {
+func (s *formSim) SendKeys(ctx context.Context, tgt string, literal bool, keys ...string) error {
+	err := s.sendKeys(literal, keys...)
+	if s.onKey != nil {
+		s.onKey()
+	}
+	return err
+}
+
+func (s *formSim) sendKeys(literal bool, keys ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sent = append(s.sent, append([]string{fmt.Sprint(literal)}, keys...))

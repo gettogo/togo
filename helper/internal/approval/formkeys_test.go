@@ -5,7 +5,10 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/gettogo/togo/helper/internal/panelock"
 )
 
 // noComposerKeys fails when a key went to omp's composer: after Escape,
@@ -274,5 +277,37 @@ func TestAnswerChoiceRefusesAKeptQuestion(t *testing.T) {
 	err := st.AnswerChoice(context.Background(), sess, []AskAnswer{{Prompt: "Which color?", Keep: true}})
 	if answerErr(t, err); len(sim.sent) != 0 {
 		t.Fatalf("keys %v", sim.sent)
+	}
+}
+
+// A prompt sent while the form is being answered waits for the pane's one
+// lock: its keys come after the whole answer, never between its keys.
+func TestAnswerFormAndAPromptDoNotInterleave(t *testing.T) {
+	fastAsk(t)
+	sim := colorForm()
+	var once sync.Once
+	prompted := make(chan struct{})
+	sim.onKey = func() {
+		once.Do(func() {
+			go func() {
+				defer close(prompted)
+				mu := panelock.For(sess) // what session.SendText takes
+				mu.Lock()
+				defer mu.Unlock()
+				_ = sim.SendKeys(context.Background(), "", true, "PROMPT")
+			}()
+		})
+	}
+	st := New(Config{Tmux: sim, Pub: &fakePub{}})
+	err := st.AnswerChoice(context.Background(), sess, []AskAnswer{
+		{Prompt: "Which color should the button be?", Labels: []string{"Red"}}, {Prompt: "Button text", Text: "Go"},
+	})
+	<-prompted
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := len(sim.sent) - 1
+	if !reflect.DeepEqual(sim.sent[last], []string{"true", "PROMPT"}) || !reflect.DeepEqual(sim.sent[last-1], []string{"false", "Enter"}) {
+		t.Fatalf("keys %v: the prompt came in the middle of the answer", sim.sent)
 	}
 }
