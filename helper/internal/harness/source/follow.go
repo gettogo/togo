@@ -19,6 +19,19 @@ const VarTogoHome = "togo_home"
 // the helper knows it.
 const VarTTY = "tty"
 
+// VarPaneStarted is when the process in the session's pane started (RFC
+// 3339). Restarting the agent respawns the pane, often on a device another
+// terminal used: a file named after the device that is older than this is
+// a previous occupant's.
+const VarPaneStarted = "pane_started"
+
+// VarPaneCommand is the command the session's pane was started or last
+// respawned with, as tmux prints it: the agent's arguments are in it.
+const VarPaneCommand = "pane_command"
+
+// VarPanePID is the process tmux started in the session's pane.
+const VarPanePID = "pane_pid"
+
 // followFile is where a session's followed file is remembered, "" when the
 // environment has no folder or the id is not a plain name.
 func followFile(env harness.Env) string {

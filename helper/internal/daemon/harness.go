@@ -13,6 +13,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/adapters/shell"
 	"github.com/gettogo/togo/helper/internal/harness/anchor"
 	"github.com/gettogo/togo/helper/internal/harness/engine"
+	"github.com/gettogo/togo/helper/internal/harness/procs"
 	"github.com/gettogo/togo/helper/internal/harness/source"
 	"github.com/gettogo/togo/helper/internal/ports"
 	"github.com/gettogo/togo/helper/internal/rpc"
@@ -108,10 +109,17 @@ func newHarness(c *Components, svc *session.Service, git *gitx.Git, o ComposeOpt
 		Done: func(id, title, body string) {
 			c.Local.Pub.Publish(wire.EventNotify, &id, wire.NotifyEvent{Title: title, Body: body, Level: wire.LevelDone})
 		},
-		Git:        git.Status,
-		Ports:      pl.List,
-		PanePIDs:   svc.Tmux.PanePIDs,
-		PaneTTY:    svc.Tmux.PaneTTY,
+		Git:      git.Status,
+		Ports:    pl.List,
+		PanePIDs: svc.Tmux.PanePIDs,
+		Pane: func(ctx context.Context, id string) (engine.PaneInfo, error) {
+			p, err := svc.Tmux.AgentPane(ctx, id)
+			info := engine.PaneInfo{TTY: p.TTY, PID: p.PID, Command: p.StartCommand}
+			if p.PID > 0 {
+				info.Started, _ = procs.Started(p.PID)
+			}
+			return info, err
+		},
 		LoginPath:  func(ctx context.Context) string { return loginPath(ctx, svc, home) },
 		LoginEnv:   state.LoginEnv,
 		Home:       home,
