@@ -25,20 +25,33 @@ import (
 // still answers (harness.action answer): only the approval, the one the
 // Lock Screen and the Watch answer, is dead.
 //
+// The engine offers the ask again under a new id after each lifetime; a
+// fresh offer answers, one listed past its lifetime is refused.
+//
 // Correct: while Codex waits, the approval the phone lists answers the
 // request.
 func TestKnownFault_Codex_LongWaitApprovalRefused(t *testing.T) {
 	t.Parallel()
-	c := codexStart(t, 87, func(o *enginetest.Options) { o.ApprovalTTL = 300 * time.Millisecond }, sessiongen.Turn{Say: 20})
+	const ttl = 300 * time.Millisecond
+	c := codexStart(t, 87, func(o *enginetest.Options) { o.ApprovalTTL = ttl }, sessiongen.Turn{Say: 20})
 	support.SettleUntil(c.r, 1)
 	c.joined(t)
 	_, release := c.approvalTurn(t)
 	defer release()
 	c.r.WaitPending(1, support.Quick)
-	time.Sleep(time.Second)
-	ps := c.r.Pending()
-	if len(ps) != 1 {
-		t.Fatalf("%d approvals listed after a long wait: the fault changed: %+v", len(ps), ps)
+	// Past its lifetime the ask is offered again under a new id, which
+	// answers until its own lifetime ends: wait until the one listed is
+	// older than its lifetime, whichever offer it is. (A fixed wait
+	// sampled either phase, and the test passed or failed by it.)
+	var ps []wire.Approval
+	stale := func() bool {
+		ps = c.r.Pending()
+		return len(ps) == 1 && time.Since(ps[0].CreatedAt) > 2*ttl
+	}
+	for deadline := time.Now().Add(30 * time.Second); !stale() && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+	}
+	if !stale() {
+		t.Fatalf("no approval listed past its lifetime: the fault changed: %+v", ps)
 	}
 	err := c.r.Answer(ps[0].RequestID, wire.DecisionApprove)
 	if err == nil {

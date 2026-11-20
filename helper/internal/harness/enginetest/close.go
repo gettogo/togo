@@ -38,8 +38,12 @@ func Goroutines() []string {
 	for _, g := range stacks() {
 		switch {
 		case !strings.Contains(g, "/helper/internal/"):
-		// The agent's server outlives the engine, as the agent does.
-		case strings.Contains(g, "enginetest.(*APIServer)"), strings.Contains(g, "enginetest.(*CodexServer)"):
+		// The agent's server outlives the engine, as the agent does. So
+		// does the wait on an OpenCode 2.x server the engine started
+		// (engine/server.go startServer): the server is the helper's to
+		// stop, not the engine's, and the rig stops it in a later cleanup.
+		case strings.Contains(g, "enginetest.(*APIServer)"), strings.Contains(g, "enginetest.(*CodexServer)"),
+			strings.Contains(g, "engine.(*Engine).startServer.func"):
 		case strings.Contains(g, "testing.tRunner"), strings.Contains(g, "testing.(*M)"),
 			strings.Contains(g, "testing.runTests"), strings.Contains(g, "enginetest.Goroutines"):
 		default:
