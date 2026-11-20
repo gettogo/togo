@@ -32,6 +32,17 @@ func TestParseFormReadsTheFocusedField(t *testing.T) {
 		{"select", Form{Stop: FormSelect, Prompt: "Region", Value: "Europe", Cursor: -1}},
 		{"select-changed", Form{Stop: FormSelect, Prompt: "Region", Value: "United States", Cursor: -1}},
 		{"textarea-typed", Form{Stop: FormText, Prompt: "Notes", Value: "two words", Cursor: -1, Rows: 4}},
+		// Other typed at the desk, then Red picked: Other no longer counts.
+		{"desk-other-kept", Form{Stop: FormOption, Prompt: "Which color?", Cursor: 0, Options: []ChoiceOption{
+			{Label: "Red", Checked: true}, {Label: "Green"}, {Label: "Other", Detail: "desk words", Text: true}}}},
+		// A limit after the star: "Count *  ≥ 3".
+		{"limit-suffix", Form{Stop: FormText, Prompt: "Count", Cursor: -1, Rows: 1}},
+		// Longer than the field: the input shows the end, with no ellipsis.
+		{"long-text", Form{Stop: FormText, Prompt: "Long text", Cursor: -1, Rows: 1,
+			Value: "ver the lazy dog and keeps running past the river bank into the old forest beyond the hills"}},
+		{"long-folded", Form{Stop: FormSubmit, Cursor: -1}},
+		// Submit sent the person back to a field that omp refuses.
+		{"validation", Form{Stop: FormText, Prompt: "Count", Value: "2", Cursor: -1, Rows: 1, Error: "Must be at least 3", Fix: 1}},
 		// Typed into the Other row by the phone's answer (live, through the helper).
 		{"other-typed", Form{Stop: FormOther, Prompt: "Which color should the button be?", Value: "Teal (not listed)", Cursor: 3,
 			Options: append(opts(colors)[:3], ChoiceOption{Label: "Other", Detail: "Teal (not listed)", Checked: true, Text: true})}},
@@ -45,7 +56,10 @@ func TestParseFormReadsTheFocusedField(t *testing.T) {
 			t.Errorf("%s: no form", c.file)
 			continue
 		}
-		got.Lines = nil
+		if got.Width != 96 {
+			t.Errorf("%s: width %d, want 96", c.file, got.Width)
+		}
+		got.Lines, got.Width, got.Values = nil, 0, nil
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s:\n got %+v\nwant %+v", c.file, got, c.want)
 		}
@@ -96,6 +110,12 @@ func TestParseFormPresetsAndShapes(t *testing.T) {
 	nerd := box("Pick any", "\uf054 \uf14a Alpha", "  \uf096 Beta", "", "  Submit")
 	if f, ok := ParseForm(nerd); !ok || !f.Multi || !f.Options[0].Checked || f.Options[1].Checked {
 		t.Errorf("nerd preset: %+v %v", f, ok)
+	}
+	if f, ok := ParseForm(box("❯ Name *  ≥ 3", "  │ ab", "    Must be at least 3 characters", "", "  Submit  1 to fix")); !ok || f.Prompt != "Name" || f.Error != "Must be at least 3 characters" || f.Fix != 1 {
+		t.Errorf("limit and error: %+v %v", f, ok)
+	}
+	if f, ok := ParseForm(box("Pick", "  ○ A", "❯ ○ Other:  type your own", "", "  Submit")); !ok || f.Stop != FormOther || f.Value != "" {
+		t.Errorf("focused empty Other row: %+v %v", f, ok)
 	}
 	wrapped := box("Which plan?", "  ○ Postgres: relational, JSONB support and a", "    long description", "❯ ○ Other: Cockroach; 50% (or |more|)", "", "  Submit")
 	f, ok = ParseForm(wrapped)

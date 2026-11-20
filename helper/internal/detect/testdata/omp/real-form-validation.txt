@@ -1,0 +1,40 @@
+                                     ██  ██       ▀▄▄▀ █ █ █ █▄▄▀
+                                     ▒▒  ██                  █
+                                         ██       v19.0.1
+
+                                    Tip: Please use nerdfont 😭.
+
+
+
+
+ Use your ask tool once with exactly this form html and nothing else: <form><fieldset><legend>Which
+ color?</legend><label><input type="radio" name="color" value="Red"> Red</label><label><input
+ type="radio" name="color" value="Green"> Green</label></fieldset><label>Count <input type="number"
+ name="count" min="3" required></label><label>Long text <input type="text"
+ name="long"></label></form> Use no other tool. After I answer, reply with only the word done.
+
+
+
+
+ I need to use the ask tool exactly as specified. The HTML form is provided. I'll call ask with
+ that HTML and no other tools. Let me do that.
+╭─ Ask · 2 of 3 answered ──────────────────────────────────────────────────────────────────────────╮
+│ ✓ Which color?                                                                                   │
+│    ✓ Red   Green                                                                                 │
+│                                                                                                  │
+│ ❯ Count *  ≥ 3                                                                                   │
+│   │ 2                                                                                            │
+│     Must be at least 3                                                                           │
+│                                                                                                  │
+│ ✓ Long text                                                                                      │
+│   The quick brown fox jumps over the lazy dog and keeps running past the river bank into the ol… │
+│                                                                                                  │
+│   Submit  1 to fix                                                                               │
+│                                                                                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+  ⎋ Color choice                                               📋 FORM: Present color and count form
+ ❓ 22s > ◒ DeepSeek V3.2 > 🗑 ~/code/demo > ⑂ main > $0.01 ▶─11%╎┃164K─
+╰─

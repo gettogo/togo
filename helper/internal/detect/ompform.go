@@ -2,6 +2,7 @@ package detect
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -50,11 +51,21 @@ type Form struct {
 	Cursor  int
 	Multi   bool
 	// Value is the dropdown's value, the text field's text (its rows
-	// joined by a space), or the Other row's typed text.
+	// joined by a space), or the Other row's typed text. A focused field
+	// that is empty shows its placeholder after the cursor's cell: a
+	// Value that starts with a space is that, not typed words.
 	Value string
+	// Values are a text field's rows as drawn, trailing spaces dropped.
+	Values []string
 	// Rows is how many rows a text field draws: 1 for an input, more for
 	// a text area.
 	Rows int
+	// Width is the cells inside the dialog's frame and padding.
+	Width int
+	// Error is the validation message under the focused field; Fix is
+	// how many fields omp sent the person back to on Submit.
+	Error string
+	Fix   int
 	// Lines is the dialog's body, unboxed; Scrolled says it is a window
 	// on a longer form.
 	Lines    []string
@@ -62,8 +73,9 @@ type Form struct {
 }
 
 var (
-	formTitle = regexp.MustCompile(`^\s*[╭┌]─+\s*Ask(?: · \d+ of \d+ answered)?(?: \(\d+s\))?\s*─+[╮┐]\s*$`)
-	formEnd   = regexp.MustCompile(`^\s*[╰└]─+[╯┘]\s*$`)
+	formSubmit = regexp.MustCompile(`^(?:[❯>\x{f054}] |  )Submit(?:\s{2,}(\d+) to fix)?$`)
+	formTitle  = regexp.MustCompile(`^\s*[╭┌]─+\s*Ask(?: · \d+ of \d+ answered)?(?: \(\d+s\))?\s*─+[╮┐]\s*$`)
+	formEnd    = regexp.MustCompile(`^\s*[╰└]─+[╯┘]\s*$`)
 	// formOption: cursor or two spaces, a mark of any of omp's symbol
 	// presets, the label.
 	formOption = regexp.MustCompile(`^(?:([❯>\x{f054}]) |  )(○|◉|●|☐|☑|\(o\)|\( \)|\[x\]|\[ \]|[\x{f10c}\x{f192}\x{f096}\x{f14a}]) (.*)$`)
@@ -97,7 +109,7 @@ func boxMark(m string) bool {
 
 // formBody returns the lines inside the last omp form dialog on screen,
 // unboxed, blank lines kept, or false.
-func formBody(screen string) ([]string, bool, bool) {
+func formBody(screen string) ([]string, int, bool, bool) {
 	if len(screen) > maxScreenBytes {
 		screen = screen[len(screen)-maxScreenBytes:]
 	}
@@ -115,19 +127,23 @@ func formBody(screen string) ([]string, bool, bool) {
 		}
 	}
 	if top < 0 || end-top < 2 {
-		return nil, false, false
+		return nil, 0, false, false
 	}
+	width := utf8.RuneCountInString(strings.TrimSpace(stripControls(all[top]))) - 4
 	var body []string
 	for _, l := range all[top+1 : end] {
 		l = strings.TrimRight(stripControls(l), " ")
 		u := unbox(l)
 		if u == l {
-			return nil, false, false // a line out of the box: not one dialog
+			return nil, 0, false, false // a line out of the box: not one dialog
 		}
 		body = append(body, strings.TrimPrefix(u, " "))
 	}
 	body, scrolled := dropScrollbar(body)
-	return body, scrolled, true
+	if scrolled {
+		width--
+	}
+	return body, width, scrolled, true
 }
 
 // dropScrollbar removes the track or thumb a long form draws in its last
@@ -154,15 +170,18 @@ func dropScrollbar(body []string) ([]string, bool) {
 
 // ParseForm reads omp's form dialog at the bottom of screen.
 func ParseForm(screen string) (Form, bool) {
-	body, scrolled, ok := formBody(screen)
+	body, width, scrolled, ok := formBody(screen)
 	if !ok {
 		return Form{}, false
 	}
-	f := Form{Lines: body, Scrolled: scrolled, Cursor: -1}
+	f := Form{Lines: body, Scrolled: scrolled, Cursor: -1, Width: width}
 	focus, submit := -1, false
 	for i, l := range body {
-		if m := formCursor.FindStringSubmatch(l); strings.TrimSpace(l) == "Submit" || m != nil && m[1] == "Submit" {
+		if m := formSubmit.FindStringSubmatch(l); m != nil {
 			submit = true
+			if m[1] != "" {
+				f.Fix, _ = strconv.Atoi(m[1])
+			}
 		}
 		if formCursor.MatchString(l) && focus < 0 {
 			focus = i
@@ -176,7 +195,7 @@ func ParseForm(screen string) (Form, bool) {
 		return parseFormGroup(f, body, focus)
 	}
 	text := formCursor.FindStringSubmatch(l)[1]
-	if text == "Submit" {
+	if formSubmit.MatchString(l) {
 		f.Stop = FormSubmit
 		return f, true
 	}
@@ -187,26 +206,28 @@ func ParseForm(screen string) (Form, bool) {
 	for ; i < len(body) && strings.HasPrefix(body[i], "  ") && !strings.HasPrefix(strings.TrimLeft(body[i], " "), "│"); i++ {
 		label = append(label, strings.TrimSpace(body[i]))
 	}
-	f.Prompt = strings.TrimSpace(formBounds.ReplaceAllString(normalise(strings.Join(label, " ")), ""))
+	// The star and limits go before spaces are collapsed: "Count *  ≥ 3".
+	f.Prompt = normalise(formBounds.ReplaceAllString(strings.Join(label, " "), ""))
 	var rows []string
 	for ; i < len(body); i++ {
 		t := strings.TrimLeft(body[i], " ")
 		if !strings.HasPrefix(t, "│") {
 			break
 		}
-		rows = append(rows, strings.TrimSpace(strings.TrimPrefix(t, "│")))
+		rows = append(rows, strings.TrimRight(strings.TrimPrefix(strings.TrimPrefix(t, "│"), " "), " "))
 	}
 	if len(rows) == 0 {
 		return Form{}, false
 	}
-	if m := formSelect.FindStringSubmatch(rows[0]); m != nil && len(rows) == 1 {
+	f.Error = formError(body, i)
+	if m := formSelect.FindStringSubmatch(strings.TrimSpace(rows[0])); m != nil && len(rows) == 1 {
 		f.Stop, f.Value = FormSelect, strings.TrimSpace(m[1])
 		return f, true
 	}
-	f.Stop, f.Rows = FormText, len(rows)
+	f.Stop, f.Rows, f.Values = FormText, len(rows), rows
 	var parts []string
 	for _, r := range rows {
-		if r != "" {
+		if strings.TrimSpace(r) != "" {
 			parts = append(parts, r)
 		}
 	}
@@ -224,9 +245,14 @@ func parseFormGroup(f Form, body []string, focus int) (Form, bool) {
 	for start < focus && !formOption.MatchString(body[start]) {
 		start++ // a group starts at a row, not inside a wrapped label
 	}
+	end := len(body)
 	for i := start; i < len(body); i++ {
 		l := body[i]
 		m := formOption.FindStringSubmatch(l)
+		if len(f.Options) > 0 && f.Options[len(f.Options)-1].Text {
+			end = i // the Other row is the group's last: what follows is its error
+			break
+		}
 		if m == nil {
 			if formWrapped(l) && len(f.Options) > 0 {
 				o := &f.Options[len(f.Options)-1]
@@ -242,7 +268,9 @@ func parseFormGroup(f Form, body []string, focus int) (Form, bool) {
 		o := ChoiceOption{Label: normalise(m[3]), Checked: checkedMark(m[2])}
 		if rest, ok := strings.CutPrefix(m[3], otherPrefix); ok || m[3] == strings.TrimSpace(otherPrefix) {
 			o.Text, o.Label = true, "Other"
-			if v := strings.TrimSpace(rest); v != formPlaceholder {
+			// Empty, it shows its placeholder: after the cursor's cell
+			// when focused.
+			if v := strings.TrimRight(rest, " "); v != formPlaceholder && !strings.HasPrefix(v, " ") {
 				o.Detail = v
 			}
 		}
@@ -253,6 +281,9 @@ func parseFormGroup(f Form, body []string, focus int) (Form, bool) {
 	}
 	if f.Cursor < 0 {
 		return Form{}, false
+	}
+	if end < len(body) {
+		f.Error = formError(body, end)
 	}
 	// The question: the block of words above the rows, up to a blank line.
 	var head []string
@@ -270,4 +301,14 @@ func parseFormGroup(f Form, body []string, focus int) (Form, bool) {
 // formWrapped is a wrapped label's next line: indented past the marks.
 func formWrapped(l string) bool {
 	return strings.HasPrefix(l, "    ") && strings.TrimSpace(l) != "" && utf8.RuneCountInString(l) > 4
+}
+
+// formError is the validation message drawn under a field, from line i:
+// words indented past the field's marks, up to a blank line.
+func formError(body []string, i int) string {
+	var words []string
+	for ; i < len(body) && strings.HasPrefix(body[i], "    ") && strings.TrimSpace(body[i]) != ""; i++ {
+		words = append(words, strings.TrimSpace(body[i]))
+	}
+	return strings.Join(words, " ")
 }
