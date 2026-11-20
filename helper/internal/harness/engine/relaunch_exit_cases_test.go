@@ -226,3 +226,59 @@ func TestExitClosesTheAgentsApprovals(t *testing.T) {
 		t.Errorf("approvals closed %d times at the exit", n)
 	}
 }
+
+// A background job Kimi started runs inside its process: the exit ends it,
+// and a relaunched Kimi carries on in the same log, which never says the
+// job died. A helper restart reading that log again must not show the job
+// running.
+func TestKilledJobStaysEndedOverAHelperRestart(t *testing.T) {
+	c := caseNamed(t, "kimi")
+	id := "s_exitjobkim"
+	togo := t.TempDir()
+	withHome := func(cfg *Config) { cfg.TogoHome = togo }
+	var status atomic.Value
+	status.Store("working")
+	recs := c.records(t)
+	f, _ := harness.LookupMapper(c.mapper)
+	m := f(harness.Env{SessionID: "s_scratch0001"})
+	mid := -1
+	for i, r := range recs {
+		_, ops := m.Map(r)
+		for _, op := range ops {
+			if op.Section == harness.SectionBackground && op.Row != nil && op.Row.State == harness.StateRunning {
+				mid = i + 1
+			}
+		}
+		if mid >= 0 {
+			break
+		}
+	}
+	if mid < 0 {
+		t.Fatal("the recording starts no job")
+	}
+	e, s := deadTurnEngineWith(t, c, id, &status, withHome)
+	feedRecords(s, c.mapper, recs[:mid])
+	waitFor(t, func() bool { return s.sum.Load().Background == 1 })
+	hubSays(e, s, &status, wire.StatusEnded)
+	if n := s.sum.Load().Background; n != 0 {
+		t.Fatalf("%d jobs running after the exit", n)
+	}
+	path := filepath.Join(togo, "run", "harness", id+".exit")
+	waitFor(t, func() bool { _, err := os.Stat(path); return err == nil })
+	e.Unload(id)
+
+	status.Store("idle")
+	_, s2 := deadTurnEngineWith(t, c, id, &status, withHome)
+	var replay []json.RawMessage
+	var at []time.Time
+	for _, r := range recs[:mid] {
+		replay, at = append(replay, r.Data), append(at, r.At)
+	}
+	s2.record(s2.ctx, c.mapper, harness.Record{Source: "file", At: time.Now(), Replay: replay, ReplayAt: at})
+	if n := s2.sum.Load().Background; n != 0 {
+		t.Errorf("%d jobs running after the restart", n)
+	}
+	if w := sessWorking(s2); w != "false" {
+		t.Errorf("working = %s after the restart", w)
+	}
+}

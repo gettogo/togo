@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,8 +38,40 @@ type exitFence struct {
 	// Items are the ids of the turns, tools, subagents and jobs the exit
 	// ended.
 	Items map[string]bool `json:"items"`
+	// Rows are the subagent and job rows of mission control the exit
+	// ended, by section and id ("background/7").
+	Rows map[string]bool `json:"rows,omitempty"`
 	// Masks maps a mapper to the turn it still said ran at the exit.
 	Masks map[string]string `json:"masks,omitempty"`
+}
+
+func rowKey(section, id string) string { return section + "/" + id }
+
+// keepEndedRowsLocked holds a row the exit ended at interrupted when a
+// mapper (replayed after a restart, or never told of the exit) lists it
+// running again.
+func (s *sess) keepEndedRowsLocked(ops []harness.Op) []harness.Op {
+	f := s.exit
+	if f == nil || len(f.Rows) == 0 {
+		return ops
+	}
+	var out []harness.Op
+	for i, op := range ops {
+		if op.Op != harness.OpUpsert || op.Row == nil || !f.Rows[rowKey(op.Section, op.Row.ID)] ||
+			(op.Row.State != harness.StateRunning && op.Row.State != harness.StateWaiting) {
+			continue
+		}
+		if out == nil {
+			out = slices.Clone(ops)
+		}
+		row := *op.Row
+		row.State = harness.StateInterrupted
+		out[i].Row = &row
+	}
+	if out == nil {
+		return ops
+	}
+	return out
 }
 
 // maxFenceItems bounds the ids a fence keeps over many exits.
@@ -178,13 +212,16 @@ func (s *sess) agentExitedLocked() {
 			}
 		}
 	}
+	rows := s.mission.stopRunning()
+	for _, op := range rows {
+		ids[rowKey(op.Section, op.Row.ID)] = true
+	}
 	if len(ids) > 0 || len(masks) > 0 {
 		s.fenceLocked(now, ids, masks)
 	}
 	for i := range ended {
 		s.keepEndedLocked(&ended[i], false)
 	}
-	rows := s.mission.stopRunning()
 	for _, q := range s.queue {
 		if q.item.User == nil {
 			continue
@@ -226,7 +263,7 @@ func (s *sess) promptsLocked(items []harness.Item) bool {
 // fenceLocked adds what an exit ended to the session's fence and saves it.
 func (s *sess) fenceLocked(at time.Time, ids map[string]bool, masks map[string]string) {
 	f := s.exit
-	if f == nil || len(f.Items)+len(ids) > maxFenceItems {
+	if f == nil || len(f.Items)+len(f.Rows)+len(ids) > maxFenceItems {
 		f = &exitFence{Items: map[string]bool{}, Masks: map[string]string{}}
 		if s.exit != nil {
 			f.Masks = s.exit.Masks
@@ -236,10 +273,17 @@ func (s *sess) fenceLocked(at time.Time, ids map[string]bool, masks map[string]s
 	if f.Masks == nil {
 		f.Masks = map[string]string{}
 	}
+	if f.Rows == nil {
+		f.Rows = map[string]bool{}
+	}
 	changed := false
 	for id := range ids {
-		if !f.Items[id] {
-			f.Items[id], changed = true, true
+		into := f.Items
+		if strings.HasPrefix(id, harness.SectionAgents+"/") || strings.HasPrefix(id, harness.SectionBackground+"/") {
+			into = f.Rows
+		}
+		if !into[id] {
+			into[id], changed = true, true
 		}
 	}
 	for name, mark := range masks {
@@ -331,7 +375,7 @@ func (e *Engine) loadExitFence(id string) *exitFence {
 		return nil
 	}
 	var f exitFence
-	if json.Unmarshal(b, &f) != nil || len(f.Items) > maxFenceItems || len(f.Masks) > 64 {
+	if json.Unmarshal(b, &f) != nil || len(f.Items)+len(f.Rows) > maxFenceItems || len(f.Masks) > 64 {
 		return nil
 	}
 	if f.Items == nil {
