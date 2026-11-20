@@ -101,10 +101,11 @@ sources:
   # a project's is the process name `omp ps stop` takes. From 19 one daemon
   # per user prints {daemon, reports: [{scope, units}]}; a unit's id is what
   # `omp ps stop` takes, and the "predict" unit is omp's own word completion,
-  # not work the agent started (seen on 19.0.1).
+  # not work the agent started (seen on 19.0.1). A unit that is not an
+  # object or has no string id is skipped, not the whole list.
   jobs:
     cli: { argv: [omp, ps, --json] }
-    select: 'if type == "array" then [.[] | . as $p | .daemons[]? | . + {rowId: (if $p.kind == "global" then "global:" + (($p.scope // $p.name // "") | tostring) + ":" + .name else .name end)}] else [.reports[]?.units[]? | select(.kind != "predict") | . + {rowId: .id, name: (.label // .key // .id)}] end'
+    select: 'if type == "array" then [.[] | . as $p | .daemons[]? | . + {rowId: (if $p.kind == "global" then "global:" + (($p.scope // $p.name // "") | tostring) + ":" + .name else .name end)}] else [.reports[]? | objects | .units[]? | objects | select((.id | type) == "string" and .kind != "predict") | . + {rowId: .id, name: (.label // .key // .id)}] end'
     cache: 5s
     timeout: 15s
     stability: documented

@@ -123,11 +123,17 @@ func TestJobsReadOmp19Reports(t *testing.T) {
 	if rows := out[0].([]any); len(rows) != 0 {
 		t.Fatalf("rows %v, want omp's own prediction unit left out", rows)
 	}
-	// A unit the agent started, in the shape the real report gives units.
+	// Constructed, not captured: no agent-started unit could be recorded
+	// live (the model stalled starting one). It copies the fields the real
+	// prediction unit has, which has no command. Around it: a unit that is
+	// not an object, one without an id and a report that is not an object;
+	// each is skipped and the good unit stays.
 	var in any
-	json.Unmarshal([]byte(`{"daemon":{"pid":1},"reports":[{"scope":{"kind":"project","dir":"/Users/dev/proj"},"units":[
+	json.Unmarshal([]byte(`{"daemon":{"pid":1},"reports":[7,{"scope":{"kind":"project","dir":"/Users/dev/proj"},"units":[
+		"bad",
+		{"kind":"service","label":"no id","state":"running"},
 		{"id":"5f0c2a8e-1111-4c1e-9a55-2d6f4f3b9e01","kind":"service","scope":{"kind":"project","dir":"/Users/dev/proj"},
-		 "key":"9a1b","label":"dev","command":"npm run dev","state":"running"}]}]}`), &in)
+		 "key":"9a1b","label":"dev","state":"running"}]}]}`), &in)
 	out, err = engine.JQ(sel, in, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -140,7 +146,7 @@ func TestJobsReadOmp19Reports(t *testing.T) {
 	if row["rowId"] != "5f0c2a8e-1111-4c1e-9a55-2d6f4f3b9e01" || row["name"] != "dev" {
 		t.Fatalf("row %v", row)
 	}
-	if sub, _ := engine.MapValue(a.Mission["background"].Map["item.subtitle"], row, nil); sub != "npm run dev" {
+	if sub, _ := engine.MapValue(a.Mission["background"].Map["item.subtitle"], row, nil); sub != "running" {
 		t.Errorf("subtitle %q", sub)
 	}
 	stop := a.Actions["stop"].Branch
