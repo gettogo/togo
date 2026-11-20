@@ -55,6 +55,17 @@ func terminalSession(env harness.Env) string {
 	return filepath.ToSlash(rel)
 }
 
+// PaneMoved takes the session's environment after omp was restarted in its
+// pane (a resume): the record to read is the one omp writes for the pane's
+// new device, and the old device's, which still names the conversation
+// before the restart, is not read again. It is read at once.
+func (s *session) PaneMoved(env harness.Env) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.env = env
+	s.crumbAt, s.crumb = time.Time{}, ""
+}
+
 // recordSince is the time a record for the pane's device must be written
 // at or after: the session's start, or the last restart of omp in its pane,
 // which tmux respawns on a device another terminal may have used (seen on

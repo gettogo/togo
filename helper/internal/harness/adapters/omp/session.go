@@ -106,17 +106,6 @@ func (s *session) State() map[string]string {
 	return out
 }
 
-// PaneMoved takes the session's environment after omp was restarted in its
-// pane (a resume): the record to read is the one omp writes for the pane's
-// new device, and the old device's, which still names the conversation
-// before the restart, is not read again. It is read at once.
-func (s *session) PaneMoved(env harness.Env) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.env = env
-	s.crumbAt, s.crumb = time.Time{}, ""
-}
-
 // found reports whether a session file was read, so the folder is known.
 func (s *session) found() bool { return s.state["harness_session"] != "" }
 
