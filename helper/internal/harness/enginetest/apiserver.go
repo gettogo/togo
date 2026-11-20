@@ -52,12 +52,15 @@ type APIServer struct {
 	from     int64 // where the next stream starts, -1 for the end
 	// shown is how much of the journal the stream and the routes see, in
 	// bytes; -1 is all of it (Hold).
-	shown   atomic.Int64
-	streams map[chan struct{}]bool
-	calls   []APICall
-	fail    []failRule
-	delay   time.Duration
-	lost    map[string]bool
+	shown atomic.Int64
+	// midRead and opened, in tests, run in the middle of a read of the
+	// journal and once a stream is counted in Streams.
+	midRead, opened func()
+	streams         map[chan struct{}]bool
+	calls           []APICall
+	fail            []failRule
+	delay           time.Duration
+	lost            map[string]bool
 	// v2 is set for OpenCode 2.x, whose routes are under /api
 	// (apiroutes2.go).
 	v2 *v2State
@@ -302,13 +305,18 @@ func (s *APIServer) stream(w http.ResponseWriter, r *http.Request) int {
 		return http.StatusInternalServerError
 	}
 	done := make(chan struct{})
+	// Where the stream starts is fixed before it is counted in Streams: a
+	// test that saw it come back and writes a turn has that turn sent.
 	s.mu.Lock()
 	from := s.from
 	s.from = -1
-	s.streams[done] = true
-	s.mu.Unlock()
 	if from < 0 {
 		from = s.size()
+	}
+	s.streams[done] = true
+	s.mu.Unlock()
+	if s.opened != nil {
+		s.opened()
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
@@ -367,9 +375,21 @@ func (s *APIServer) size() int64 {
 	return n
 }
 
-// read is readLines of the part of the journal the server shows.
+// read is readLines of the part of the journal the server shows. A Hold
+// that comes while the file is read can hide some of what was read (hold
+// in apifed sets the limit, then writes the turn): the read is made again
+// with the new limit, or a stream could show a held turn whole.
 func (s *APIServer) read(off int64) ([][]byte, int64) {
-	return readLinesTo(s.journal, off, s.shown.Load())
+	for {
+		limit := s.shown.Load()
+		if s.midRead != nil {
+			s.midRead()
+		}
+		lines, next := readLinesTo(s.journal, off, limit)
+		if s.shown.Load() == limit {
+			return lines, next
+		}
+	}
 }
 
 func fileSize(path string) int64 {

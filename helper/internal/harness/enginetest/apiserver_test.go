@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -147,5 +148,97 @@ func TestAPIServerHold(t *testing.T) {
 	s.Hold(-1)
 	if lines, _ = s.read(off); len(lines) != 1 || string(lines[0]) != "d" {
 		t.Fatalf("released: %q", lines)
+	}
+}
+
+// A read of the journal that is under way when a turn is held and written
+// shows none of the turn: hold (apifed) sets the limit, then writes, and a
+// stream must never see the held part, even for one read.
+func TestAPIServerHoldDuringRead(t *testing.T) {
+	s := &APIServer{journal: filepath.Join(t.TempDir(), "journal")}
+	s.shown.Store(-1)
+	if err := os.WriteFile(s.journal, []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reached, resume := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	s.midRead = func() {
+		once.Do(func() {
+			close(reached)
+			<-resume
+		})
+	}
+	got := make(chan [][]byte)
+	go func() {
+		lines, _ := s.read(0)
+		got <- lines
+	}()
+	<-reached
+	s.Hold(int64(len("a\n")))
+	f, err := os.OpenFile(s.journal, os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("held\n"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	close(resume)
+	if lines := <-got; len(lines) != 1 || string(lines[0]) != "a" {
+		t.Fatalf("a read under way showed %q", lines)
+	}
+}
+
+// A stream counted in Streams has its start fixed: what is written after a
+// test saw the stream come back is sent on it (apifed waits for Streams,
+// then writes the next turn).
+func TestAPIServerStreamStartsWhenCounted(t *testing.T) {
+	home := t.TempDir()
+	journal := sessiongen.OpenCodeJournal(home)
+	if err := os.MkdirAll(filepath.Dir(journal), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(journal, []byte(`{"type":"session.idle","properties":{"sessionID":"ses_1"}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s := newAPIServer("opencode", home)
+	counted, resume := make(chan struct{}), make(chan struct{})
+	s.opened = func() {
+		close(counted)
+		<-resume
+	}
+	port := freeTestPort(t)
+	if err := s.Start(port, "pw", false); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Stop)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	res := make(chan *http.Response)
+	go func() { res <- apiGet(t, ctx, port, "/event", "opencode", "pw") }()
+	<-counted
+	if s.Streams() != 1 {
+		t.Fatalf("streams: %d", s.Streams())
+	}
+	status := func(v string) map[string]any {
+		return map[string]any{"type": "session.status", "properties": map[string]any{"sessionID": "ses_1", "status": map[string]any{"type": v}}}
+	}
+	s.Append(status("busy"))
+	close(resume)
+	r := <-res
+	defer r.Body.Close()
+	s.Append(status("retry"))
+	rd := bufio.NewReader(r.Body)
+	for {
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasPrefix(line, "data: ") && !strings.Contains(line, "server.connected") {
+			if !strings.Contains(line, "busy") {
+				t.Fatalf("the event written once the stream was counted was not sent; first: %q", line)
+			}
+			return
+		}
 	}
 }
