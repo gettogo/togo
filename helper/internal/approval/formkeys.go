@@ -9,37 +9,45 @@ import (
 	"github.com/gettogo/togo/helper/internal/detect"
 )
 
-// maxFormText bounds a typed form answer: longer text is typed at the
-// terminal.
-const maxFormText = 4000
-
 // maxFormMoves bounds the Tab, arrow and Space presses of one step.
 const maxFormMoves = 64
 
+// otherPrefixCells is what an Other row draws before its typed words:
+// "❯ ○ Other: ".
+const otherPrefixCells = 11
+
 // answerForm answers omp's form dialog (detect.ParseForm) with keys, one
-// field at a time, reading the screen back after every key:
+// field at a time:
 //
 //   - Tab (Shift+Tab when the field lies behind) moves to the field whose
 //     question the answer names; fields with no answer keep what they hold;
 //   - on a group, Up and Down move the cursor and Space picks a radio or
 //     flips a check box; typed words go into the Other row, which Enter
-//     takes (a radio group's pick is dropped for it);
+//     takes; a check-box group's Other that holds words it should not is
+//     emptied;
 //   - on a dropdown, Right and Left step to the option;
-//   - on a text field, the words are typed (an input that holds text is
-//     emptied first with End and C-u);
-//   - Enter on Submit, and the dialog must leave the screen.
+//   - on a text field, the words are typed (a field that holds other text
+//     is emptied first with End and C-u).
 //
-// Escape, Ctrl+C and Tab on Submit are never sent: they hand the keys to
-// omp's composer, where Escape cancels the ask. It stops at the first
-// mismatch and says so; typed words that did not show as typed are removed
-// again. The caller holds the pane lock.
-func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskAnswer) error {
+// Then the whole form is read back, field by field from the first, and
+// every answered field must show exactly the answer (checkForm); only then
+// is Enter pressed on Submit, and only when the dialog has left the screen
+// and, with open, the agent has recorded the answer (the question is no
+// longer open) is the answer taken (formGone).
+//
+// Before every key the screen is read: the form must be there and its focus
+// where the driver left it, or nothing is sent. Escape, Ctrl+C and Tab on
+// Submit are never sent: they hand the keys to omp's composer. Typed words
+// that did not show as typed are removed again, only while their field
+// still has the focus. The caller holds the pane lock.
+func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskAnswer, open func() bool) error {
 	for _, a := range answers {
-		if strings.IndexFunc(a.Text, unicode.IsControl) >= 0 {
+		t := a.Text
+		if strings.IndexFunc(t, unicode.IsControl) >= 0 {
 			return &AskError{"A typed answer with a line break or a tab can only be sent from the terminal"}
 		}
-		if len(a.Text) > maxFormText {
-			return &AskError{"An answer this long can only be typed in the terminal"}
+		if t != strings.TrimSpace(t) {
+			return &AskError{"A typed answer that starts or ends with a space can only be sent from the terminal"}
 		}
 	}
 	d := formDriver{s: s, ctx: ctx, target: target(sessionID)}
@@ -47,13 +55,16 @@ func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskA
 	if !ok {
 		return &AskError{"The question is not waiting at the terminal"}
 	}
-	if !cur.Scrolled {
-		// The whole form shows: a question it does not ask is refused
-		// before any key.
-		for _, a := range answers {
-			if !asksAny(cur, []AskAnswer{a}) {
-				return &AskError{"The terminal shows a different question; nothing was sent"}
-			}
+	for _, a := range answers {
+		// Typed words must fit their row to be read back: an input scrolls
+		// longer text and shows no sign of it.
+		if cells(a.Text) > cur.Width-otherPrefixCells-1 {
+			return &AskError{"An answer this long can only be typed in the terminal"}
+		}
+		if !cur.Scrolled && !asksAny(cur, []AskAnswer{a}) {
+			// The whole form shows: a question it does not ask is refused
+			// before any key.
+			return &AskError{"The terminal shows a different question; nothing was sent"}
 		}
 	}
 	var err error
@@ -62,7 +73,7 @@ func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskA
 			continue // Tab passes it on the way to the next one
 		}
 		if cur, err = d.seek(cur, func(f detect.Form) bool {
-			return f.Stop != detect.FormSubmit && strings.EqualFold(normalise(f.Prompt), normalise(a.Prompt))
+			return f.Stop != detect.FormSubmit && samePromptExact(f.Prompt, a.Prompt)
 		}); err != nil {
 			return err
 		}
@@ -78,29 +89,25 @@ func (s *Store) answerForm(ctx context.Context, sessionID string, answers []AskA
 			return err
 		}
 	}
-	if cur, err = d.seek(cur, func(f detect.Form) bool { return f.Stop == detect.FormSubmit }); err != nil {
+	if cur, err = d.checkForm(cur, answers); err != nil {
 		return err
 	}
-	if err := d.keys(false, "Enter"); err != nil {
+	if err := d.press(isSubmit, false, "Enter"); err != nil {
 		return err
 	}
-	// Taken: the dialog left, or another form replaced it. A required
-	// field still empty keeps it open with the focus on that field.
-	if f, ok := d.gone(answers); !ok {
-		if f.Stop == detect.FormSubmit {
-			return &AskError{"The form is still open; check the terminal"}
-		}
-		return &AskError{"omp did not take the answers: a field needs something it does not accept. Finish in the terminal"}
-	}
-	return nil
+	return d.formGone(open)
 }
+
+func isSubmit(f detect.Form) bool { return f.Stop == detect.FormSubmit && f.Fix == 0 }
+
+func samePromptExact(a, b string) bool { return strings.EqualFold(normalise(a), normalise(b)) }
 
 // asksAny reports a form whose body shows one of the answers' questions:
 // the same form, not a new one.
 func asksAny(f detect.Form, answers []AskAnswer) bool {
-	body := normalise(strings.Join(f.Lines, " "))
+	body := strings.ToLower(normalise(strings.Join(f.Lines, " ")))
 	for _, a := range answers {
-		if a.Prompt != "" && strings.Contains(strings.ToLower(body), strings.ToLower(normalise(a.Prompt))) {
+		if a.Prompt != "" && strings.Contains(body, strings.ToLower(normalise(a.Prompt))) {
 			return true
 		}
 	}
@@ -108,6 +115,20 @@ func asksAny(f detect.Form, answers []AskAnswer) bool {
 }
 
 func normalise(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// cells counts the terminal cells s takes, a wide character as two.
+func cells(s string) int {
+	n := 0
+	for _, r := range s {
+		n++
+		if r >= 0x1100 && (r <= 0x115f || r >= 0x2e80 && r <= 0xa4cf || r >= 0xac00 && r <= 0xd7a3 ||
+			r >= 0xf900 && r <= 0xfaff || r >= 0xfe30 && r <= 0xfe4f || r >= 0xff00 && r <= 0xff60 ||
+			r >= 0xffe0 && r <= 0xffe6 || r >= 0x1f300 && r <= 0x1faff || r >= 0x20000) {
+			n++
+		}
+	}
+	return n
+}
 
 type formDriver struct {
 	s      *Store
@@ -123,6 +144,22 @@ func (d formDriver) read() (detect.Form, bool) {
 	return detect.ParseForm(screen)
 }
 
+// press reads the screen and sends keys only while the form is there and
+// expect holds for it: the focus is where the driver left it.
+func (d formDriver) press(expect func(detect.Form) bool, literal bool, keys ...string) error {
+	f, found := d.read()
+	if !found {
+		return &AskError{"The form left the screen; nothing more was sent"}
+	}
+	if !expect(f) {
+		return &AskError{"The form changed at the terminal; stopped there. Finish in the terminal"}
+	}
+	if err := d.s.cfg.Tmux.SendKeys(d.ctx, d.target, literal, keys...); err != nil {
+		return &AskError{"Sending keys to the terminal failed"}
+	}
+	return nil
+}
+
 // await waits for the form to show what ok wants.
 func (d formDriver) await(ok func(detect.Form) bool) (detect.Form, bool) {
 	deadline := time.Now().Add(askWait)
@@ -133,27 +170,6 @@ func (d formDriver) await(ok func(detect.Form) bool) (detect.Form, bool) {
 		}
 		if time.Now().After(deadline) || d.ctx.Err() != nil {
 			return f, false
-		}
-		time.Sleep(askPoll)
-	}
-}
-
-// gone waits for the submitted form to leave the screen: no form, or one
-// that asks none of the answered questions.
-func (d formDriver) gone(answers []AskAnswer) (detect.Form, bool) {
-	deadline := time.Now().Add(askWait)
-	for {
-		screen, err := d.s.cfg.Tmux.CapturePane(d.ctx, d.target)
-		if err == nil {
-			f, found := detect.ParseForm(screen)
-			if !found || !asksAny(f, answers) {
-				return f, true
-			}
-			if time.Now().After(deadline) || d.ctx.Err() != nil {
-				return f, false
-			}
-		} else if time.Now().After(deadline) || d.ctx.Err() != nil {
-			return detect.Form{}, false
 		}
 		time.Sleep(askPoll)
 	}
@@ -176,16 +192,14 @@ func (d formDriver) settled() (detect.Form, bool) {
 	return d.await(any)
 }
 
-func (d formDriver) keys(literal bool, keys ...string) error {
-	if err := d.s.cfg.Tmux.SendKeys(d.ctx, d.target, literal, keys...); err != nil {
-		return &AskError{"Sending keys to the terminal failed"}
-	}
-	return nil
-}
-
 // same reports that two reads show the focus on the same row.
 func same(a, b detect.Form) bool {
 	return a.Stop == b.Stop && a.Prompt == b.Prompt && a.Cursor == b.Cursor
+}
+
+// at is the check that the focus is still on cur's row.
+func at(cur detect.Form) func(detect.Form) bool {
+	return func(f detect.Form) bool { return same(f, cur) }
 }
 
 // seek moves the focus field by field until want holds: Tab forward, then
@@ -199,10 +213,10 @@ func (d formDriver) seek(cur detect.Form, want func(detect.Form) bool) (detect.F
 			if key == "Tab" && cur.Stop == detect.FormSubmit {
 				break
 			}
-			if err := d.keys(false, key); err != nil {
+			prev := cur
+			if err := d.press(at(prev), false, key); err != nil {
 				return cur, err
 			}
-			prev := cur
 			next, ok := d.await(func(f detect.Form) bool { return !same(f, prev) })
 			if !ok {
 				break // the first or last field: the focus stays
@@ -219,7 +233,7 @@ func (d formDriver) seek(cur detect.Form, want func(detect.Form) bool) (detect.F
 // leave moves past the field cur is on with key (Tab, or Enter on an Other
 // row) and waits for the focus to leave it.
 func (d formDriver) leave(cur detect.Form, key string) (detect.Form, error) {
-	if err := d.keys(false, key); err != nil {
+	if err := d.press(at(cur), false, key); err != nil {
 		return cur, err
 	}
 	next, ok := d.await(func(f detect.Form) bool { return f.Stop == detect.FormSubmit || f.Prompt != cur.Prompt })
@@ -239,7 +253,7 @@ func (d formDriver) moveTo(cur detect.Form, idx int) (detect.Form, error) {
 		if n >= maxFormMoves {
 			return cur, &AskError{"The cursor did not move; finish in the terminal"}
 		}
-		if err := d.keys(false, key); err != nil {
+		if err := d.press(at(cur), false, key); err != nil {
 			return cur, err
 		}
 		prompt := cur.Prompt
@@ -254,82 +268,6 @@ func (d formDriver) moveTo(cur detect.Form, idx int) (detect.Form, error) {
 	return cur, nil
 }
 
-func optionIndex(f detect.Form, label string) (int, bool) {
-	for i, o := range f.Options {
-		if !o.Text && strings.EqualFold(normalise(o.Label), normalise(label)) {
-			return i, true
-		}
-	}
-	return 0, false
-}
-
-func otherIndex(f detect.Form) int {
-	for i, o := range f.Options {
-		if o.Text {
-			return i
-		}
-	}
-	return -1
-}
-
-// group answers a radio or check-box group.
-func (d formDriver) group(cur detect.Form, a AskAnswer) (detect.Form, error) {
-	for _, l := range a.Labels {
-		if _, ok := optionIndex(cur, l); !ok {
-			return cur, &AskError{"The terminal does not offer " + l}
-		}
-	}
-	other := otherIndex(cur)
-	if a.Text != "" && other < 0 {
-		return cur, &AskError{"This question takes no typed answer"}
-	}
-	if !cur.Multi && len(a.Labels)+boolInt(a.Text != "") != 1 {
-		return cur, &AskError{"Pick one answer"}
-	}
-	if cur.Multi && a.Text == "" && other >= 0 && cur.Options[other].Detail != "" {
-		// Typed at the terminal: it would count as an answer too.
-		return cur, &AskError{"The terminal holds a typed answer to this question; finish there"}
-	}
-	var err error
-	for i := range cur.Options {
-		o := cur.Options[i]
-		want := false
-		for _, l := range a.Labels {
-			if j, _ := optionIndex(cur, l); j == i {
-				want = true
-			}
-		}
-		if o.Text || want == o.Checked || !cur.Multi && !want {
-			continue
-		}
-		if cur, err = d.moveTo(cur, i); err != nil {
-			return cur, err
-		}
-		if err := d.keys(false, "Space"); err != nil {
-			return cur, err
-		}
-		prompt := cur.Prompt
-		next, ok := d.await(func(f detect.Form) bool {
-			return f.Prompt == prompt && i < len(f.Options) && f.Options[i].Checked == want
-		})
-		if !ok {
-			return cur, &AskError{"The choice did not stick; finish in the terminal"}
-		}
-		cur = next
-	}
-	if a.Text == "" {
-		return d.leave(cur, "Tab")
-	}
-	if cur, err = d.moveTo(cur, other); err != nil {
-		return cur, err
-	}
-	if cur, err = d.typeInto(cur, a.Text, 1); err != nil {
-		return cur, err
-	}
-	// Enter takes the typed words as the answer; Tab would keep a radio's pick.
-	return d.leave(cur, "Enter")
-}
-
 // dropdown steps a dropdown to the chosen option: Right to the end, then Left.
 func (d formDriver) dropdown(cur detect.Form, a AskAnswer) (detect.Form, error) {
 	if a.Text != "" || len(a.Labels) != 1 {
@@ -337,21 +275,21 @@ func (d formDriver) dropdown(cur detect.Form, a AskAnswer) (detect.Form, error) 
 	}
 	want := normalise(a.Labels[0])
 	for _, key := range []string{"Right", "Left"} {
-		for n := 0; n < maxFormMoves && !strings.EqualFold(normalise(cur.Value), want); n++ {
-			if err := d.keys(false, key); err != nil {
+		for n := 0; n < maxFormMoves && normalise(cur.Value) != want; n++ {
+			prev := cur
+			if err := d.press(func(f detect.Form) bool { return same(f, prev) && f.Value == prev.Value }, false, key); err != nil {
 				return cur, err
 			}
-			prev := cur.Value
 			next, ok := d.await(func(f detect.Form) bool {
-				return f.Stop == detect.FormSelect && f.Prompt == cur.Prompt && f.Value != prev
+				return f.Stop == detect.FormSelect && f.Prompt == prev.Prompt && f.Value != prev.Value
 			})
 			if !ok {
-				break // the end of the list
+				break // the end of the list; the next press reads the screen again
 			}
 			cur = next
 		}
 	}
-	if !strings.EqualFold(normalise(cur.Value), want) {
+	if normalise(cur.Value) != want {
 		return cur, &AskError{"The terminal does not offer " + a.Labels[0]}
 	}
 	return d.leave(cur, "Tab")
@@ -359,79 +297,79 @@ func (d formDriver) dropdown(cur detect.Form, a AskAnswer) (detect.Form, error) 
 
 // text answers a text field or text area.
 func (d formDriver) text(cur detect.Form, a AskAnswer) (detect.Form, error) {
-	t := a.Text
-	if t == "" && len(a.Labels) == 1 {
-		t = a.Labels[0]
-	}
-	if t == "" || len(a.Labels) > 1 {
+	t, ok := textOf(a)
+	if !ok {
 		return cur, &AskError{"This question takes typed words"}
 	}
-	if strings.IndexFunc(t, unicode.IsControl) >= 0 || len(t) > maxFormText {
-		return cur, &AskError{"An answer like this can only be typed in the terminal"}
-	}
 	var err error
-	if cur, err = d.typeInto(cur, t, cur.Rows); err != nil {
+	if cur, err = d.typeInto(cur, t); err != nil {
 		return cur, err
 	}
 	return d.leave(cur, "Tab")
 }
 
+// textOf is the words an answer types into a text field.
+func textOf(a AskAnswer) (string, bool) {
+	t := a.Text
+	if t == "" && len(a.Labels) == 1 {
+		t = a.Labels[0]
+	}
+	return t, t != "" && len(a.Labels) <= 1
+}
+
+// shownText is what the focused input holds: "" for an empty one, which
+// shows its placeholder after the cursor's cell.
+func shownText(f detect.Form) string {
+	if strings.HasPrefix(f.Value, " ") {
+		return ""
+	}
+	return f.Value
+}
+
 // typeInto types t into the focused input (an Other row or a text field)
-// and waits for it to show. A field that holds other text is emptied
-// first; a text area of several lines is not touched.
-func (d formDriver) typeInto(cur detect.Form, t string, rows int) (detect.Form, error) {
-	if shows(t, cur.Value) {
+// and waits for it to show exactly t. A field that holds other text is
+// emptied first; a text area of several lines is not touched. t == ""
+// only empties the field.
+func (d formDriver) typeInto(cur detect.Form, t string) (detect.Form, error) {
+	if shownText(cur) == t {
 		return cur, nil
 	}
-	prompt, stop := cur.Prompt, cur.Stop
-	here := func(f detect.Form) bool { return f.Stop == stop && f.Prompt == prompt }
-	if cur.Value != "" {
-		if rows > 1 {
+	here := func(f detect.Form) bool {
+		return f.Stop == cur.Stop && f.Prompt == cur.Prompt && f.Cursor == cur.Cursor
+	}
+	if shownText(cur) != "" {
+		lines := 0
+		for _, v := range cur.Values {
+			if strings.TrimSpace(v) != "" {
+				lines++
+			}
+		}
+		if lines > 1 {
 			return cur, &AskError{"This field already holds text; finish in the terminal"}
 		}
-		if err := d.keys(false, "End", "C-u"); err != nil {
+		if err := d.press(here, false, "End", "C-u"); err != nil {
 			return cur, err
 		}
-		old := cur.Value
-		next, ok := d.await(func(f detect.Form) bool { return here(f) && f.Value != old })
+		next, ok := d.await(func(f detect.Form) bool { return here(f) && shownText(f) == "" })
 		if !ok {
 			return cur, &AskError{"The field could not be emptied; finish in the terminal"}
 		}
 		cur = next
 	}
-	if err := d.keys(true, t); err != nil {
+	if t == "" {
+		return cur, nil
+	}
+	if err := d.press(func(f detect.Form) bool { return here(f) && shownText(f) == "" }, true, t); err != nil {
 		return cur, err
 	}
-	next, ok := d.await(func(f detect.Form) bool { return here(f) && shows(t, f.Value) })
+	next, ok := d.await(func(f detect.Form) bool { return here(f) && shownText(f) == t })
 	if !ok {
-		// Never leave half an answer in the field.
-		_ = d.keys(false, "End", "C-u")
+		// Never leave half an answer in the field, and never erase
+		// anything else: only while this field still has the focus.
+		_ = d.press(here, false, "End", "C-u")
 		return cur, &AskError{"The typed answer did not show as sent; finish in the terminal"}
 	}
 	return next, nil
-}
-
-// shows reports that a field's visible text is t: all of it, or for text
-// longer than the field the end of it (an input scrolls to its cursor; a
-// text area wraps), spaces aside.
-func shows(t, shown string) bool {
-	full, vis := compact(t), compact(strings.TrimLeft(shown, "…"))
-	if vis == "" {
-		return full == ""
-	}
-	if len([]rune(full)) <= 60 {
-		return full == vis
-	}
-	return strings.HasSuffix(full, vis) && len([]rune(vis)) >= 20
-}
-
-func compact(s string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) {
-			return -1
-		}
-		return r
-	}, s)
 }
 
 func boolInt(b bool) int {

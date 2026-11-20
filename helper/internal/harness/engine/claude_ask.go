@@ -69,11 +69,28 @@ func (e *Engine) answerScreenQuestion(ctx context.Context, s *sess, target strin
 	if err != nil {
 		return harness.ActionResult{}, err
 	}
+	// Still open once the pane is ours: an answer that waited behind
+	// another device's is not typed into a follow-up asking the same.
+	open := func() bool {
+		s.mu.Lock()
+		it, ok := e.log.Get(s.id, target)
+		s.mu.Unlock()
+		return ok && it.Question != nil && len(it.Question.Answered) == 0
+	}
+	if k, ok := e.cfg.Approvals.(openChoiceKeyer); ok {
+		return keyedResult(k.AnswerChoiceOpen(ctx, s.id, keyed, open))
+	}
 	k, ok := e.cfg.Approvals.(choiceKeyer)
 	if !ok {
 		return harness.ActionResult{Result: harness.ResultFallback}, nil
 	}
 	return keyedResult(k.AnswerChoice(ctx, s.id, keyed))
+}
+
+// openChoiceKeyer is a choiceKeyer that checks the question is still open
+// once it holds the pane, and confirms a form's answer by its closing.
+type openChoiceKeyer interface {
+	AnswerChoiceOpen(ctx context.Context, sessionID string, answers []approval.AskAnswer, open func() bool) error
 }
 
 // takesText reports an AskUserQuestion item: every question of one takes

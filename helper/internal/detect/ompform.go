@@ -312,3 +312,14 @@ func formError(body []string, i int) string {
 	}
 	return strings.Join(words, " ")
 }
+
+// FormOnScreen reports that omp's form dialog is drawn on screen: its
+// framed "Ask" title, whatever its body shows.
+func FormOnScreen(screen string) bool {
+	for _, l := range strings.Split(ansiSeq.ReplaceAllString(screen, ""), "\n") {
+		if formTitle.MatchString(strings.TrimRight(stripControls(l), " ")) {
+			return true
+		}
+	}
+	return false
+}

@@ -25,12 +25,24 @@ import (
 // omp's form dialog (18.20 on) is not such a list: when the screen shows
 // one, answerForm drives it instead.
 func (s *Store) AnswerChoice(ctx context.Context, sessionID string, answers []AskAnswer) error {
+	return s.AnswerChoiceOpen(ctx, sessionID, answers, nil)
+}
+
+// AnswerChoiceOpen is AnswerChoice for a question the caller tracks: open
+// reports that it is still waiting for an answer. It is asked once the
+// pane lock is held, so an answer that waited behind another one is not
+// typed into a follow-up dialog asking the same; and a form's answer is
+// taken only once open turns false (the agent recorded it).
+func (s *Store) AnswerChoiceOpen(ctx context.Context, sessionID string, answers []AskAnswer, open func() bool) error {
 	mu := s.lockFor(sessionID)
 	mu.Lock()
 	defer mu.Unlock()
+	if open != nil && !open() {
+		return &AskError{"The question was already answered"}
+	}
 	d := choiceDriver{s: s, ctx: ctx, target: target(sessionID)}
 	if d.form() {
-		return s.answerForm(ctx, sessionID, answers)
+		return s.answerForm(ctx, sessionID, answers, open)
 	}
 	for _, a := range answers {
 		if a.Keep {
