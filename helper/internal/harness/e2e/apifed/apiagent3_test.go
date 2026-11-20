@@ -22,7 +22,7 @@ func apiStreamDrop(t *testing.T, agent string) {
 	s.api.DropStreams()
 	support.Eventually(t, 10*time.Second, "the stream to come back", func() bool { return s.api.Streams() == 1 })
 	s.add(t, sessiongen.Turn{Say: 30, Tools: 1})
-	after := support.SettleUntil(s.r, 3)
+	after := s.r.SettleUntil(support.Quick, turnOver(3))
 	support.CheckEdge(t, "after the drop", after, s.l)
 	for id := range latestByID(before) {
 		if _, ok := latestByID(after)[id]; !ok {
@@ -43,6 +43,13 @@ func apiStreamDrop(t *testing.T, agent string) {
 	}
 	s.answerPrompts(t)
 	s.sendGoesTo(t, "After the drops", s.p.Session())
+}
+
+// turnOver is prompt n shown and its turn over. A turn's events reach the
+// stream in more than one read, and the chat can be quiet between two of
+// them on a loaded machine: a check of the whole chat waits for the end.
+func turnOver(n int) func(enginetest.State) bool {
+	return func(st enginetest.State) bool { return support.HasPrompt(n)(st) && !st.Mission.Summary.Working }
 }
 
 func latestByID(st enginetest.State) map[string]harness.Item {
@@ -72,7 +79,7 @@ func apiServerMoves(t *testing.T, agent string) {
 	}
 	support.Eventually(t, 10*time.Second, "the helper to connect to the new run", func() bool { return s.api.Streams() == 1 })
 	s.add(t, sessiongen.Turn{Say: 20, Tools: 1})
-	st := support.SettleUntil(s.r, 2)
+	st := s.r.SettleUntil(support.Quick, turnOver(2))
 	support.CheckEdge(t, "after the move", st, s.l)
 	s.answerPrompts(t)
 	s.r.SettleUntil(support.Quick, func(st enginetest.State) bool { return !st.Mission.Summary.Working })
