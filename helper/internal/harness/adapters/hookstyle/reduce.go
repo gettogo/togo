@@ -24,6 +24,11 @@ func Reduce(d Dialect, event string, payload []byte, env map[string]string) (wir
 		return wire.HookForward{}, err
 	}
 	ev, _, err := claudehook.Map(canon, norm, env)
+	if err == nil && subagentOwn(canon, norm) {
+		// A subagent's own prompt, stop or session event is not the
+		// session's: the summary would take it for the main turn's end.
+		err = claudehook.ErrUnsupported
+	}
 	switch {
 	case errors.Is(err, claudehook.ErrUnsupported):
 		var p struct {
@@ -41,6 +46,22 @@ func Reduce(d Dialect, event string, payload []byte, env map[string]string) (wir
 		permissionSubject(&ev, norm)
 	}
 	return claudehook.Forward(ev, canon, norm), nil
+}
+
+// subagentOwn reports whether a normalized payload is a subagent's own
+// turn or session event: it names a parent agent other than its session
+// (Copilot's parentAgentId). Its tool and permission hooks still count:
+// the session works and may wait on an approval while a subagent runs.
+func subagentOwn(canon string, norm json.RawMessage) bool {
+	switch canon {
+	case PreToolUse, PostToolUse, PostToolUseFailure, PermissionRequest, Notification:
+		return false
+	}
+	var p struct {
+		SessionID string `json:"session_id"`
+		Parent    string `json:"parent_agent_id"`
+	}
+	return json.Unmarshal(norm, &p) == nil && p.Parent != "" && p.Parent != p.SessionID
 }
 
 // permissionSubject names what a permission request is about from the
