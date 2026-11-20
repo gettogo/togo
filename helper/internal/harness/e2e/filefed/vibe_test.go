@@ -1,6 +1,7 @@
 package filefed
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -341,6 +342,8 @@ func TestVibe_ExitedTurnStaysInterruptedAtRelaunch(t *testing.T) {
 	vibeAgent.add(t, l, sessiongen.Turn{Say: 30})
 	st := r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
 	turns := itemsOfKind(st, harness.KindTurn)
+	// The map they come from has no order: oldest first.
+	slices.SortFunc(turns, func(a, b harness.Item) int { return a.At.Compare(b.At) })
 	if len(turns) != 2 || turns[0].Turn.State != harness.StateInterrupted || turns[1].Turn.State != harness.StateOK {
 		for _, it := range turns {
 			t.Logf("turn %s: %s", it.ID, it.Turn.State)

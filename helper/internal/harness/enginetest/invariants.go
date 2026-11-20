@@ -349,10 +349,55 @@ func Restarted(before, after State) []Violation {
 // exactly, apart from seq and epoch.
 func Reread(first, second State) []Violation {
 	out := Restarted(first, second)
-	if len(latest(first.Items)) != len(latest(second.Items)) {
-		out = append(out, Violation{"reread-count", fmt.Sprintf("%d items, then %d", len(first.Items), len(second.Items))})
+	if a, b := latest(first.Items), latest(second.Items); len(a) != len(b) {
+		out = append(out, Violation{"reread-count", fmt.Sprintf("%d items, then %d; %s", len(first.Items), len(second.Items), countDiff(first, second, a, b))})
 	}
 	return out
+}
+
+// countDiff names what differs between two reads of the same files, for
+// a reread-count failure: the items only one holds, and the edges of
+// each read.
+func countDiff(first, second State, a, b map[string]harness.Item) string {
+	only := func(x, y map[string]harness.Item) string {
+		var ids []string
+		for id := range x {
+			if _, ok := y[id]; !ok {
+				ids = append(ids, id)
+			}
+		}
+		sort.Strings(ids)
+		var parts []string
+		for i, id := range ids {
+			if i == 20 {
+				parts = append(parts, fmt.Sprintf("and %d more", len(ids)-20))
+				break
+			}
+			it := x[id]
+			extra := ""
+			if it.Approval != nil {
+				extra = ", owner " + it.Approval.Owner + ", resolved " + it.Approval.Resolved
+			}
+			parts = append(parts, fmt.Sprintf("%s (%s, seq %d, at %s%s)", id, view(it), it.Seq, it.At.Format(time.RFC3339Nano), extra))
+		}
+		return "[" + strings.Join(parts, "; ") + "]"
+	}
+	edge := func(st State, m map[string]harness.Item) string {
+		var lo, hi harness.Item
+		for _, it := range m {
+			if it.Parent != "" {
+				continue
+			}
+			if lo.ID == "" || it.At.Before(lo.At) {
+				lo = it
+			}
+			if hi.ID == "" || it.At.After(hi.At) {
+				hi = it
+			}
+		}
+		return fmt.Sprintf("oldest %s at %s, newest %s, discarded through %d, epoch %s", lo.ID, lo.At.Format(time.RFC3339Nano), hi.ID, st.Discarded, st.Epoch)
+	}
+	return fmt.Sprintf("only in the first: %s; only in the second: %s; first: %s; second: %s", only(a, b), only(b, a), edge(first, a), edge(second, b))
 }
 
 // drawn leaves out the approval items another item owns. The engine
