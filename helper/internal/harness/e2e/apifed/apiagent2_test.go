@@ -2,10 +2,12 @@ package apifed
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/e2e/support"
 	"github.com/gettogo/togo/helper/internal/harness/enginetest"
@@ -17,6 +19,10 @@ import (
 func (s *apiSession) sendGoesTo(t *testing.T, text, want string) {
 	t.Helper()
 	if _, err := s.r.Send(text, harness.SendNow); err != nil {
+		var ce *api.CodeError
+		if errors.As(err, &ce) {
+			t.Fatalf("send %q: %v %v", text, err, ce.Data)
+		}
 		t.Fatalf("send %q: %v", text, err)
 	}
 	for _, p := range s.prompts() {
@@ -52,6 +58,13 @@ func apiNewAndResume(t *testing.T, agent string) {
 	if !strings.Contains(c.Body, first) {
 		t.Errorf("resume selected %s, want %s", c.Body, first)
 	}
+	// The terminal shows the first session now: the agent answers the
+	// next prompt there. Written into the second, its prompt was a move
+	// back to the second, which could land while the send was on its way
+	// and refuse it as moved (engine/conversation.go errMoved).
+	s.mu.Lock()
+	s.p.Select(first)
+	s.mu.Unlock()
 	// The agent's stream says the terminal shows the first one now: the
 	// chat starts over on it. Until then the helper does not know, and a
 	// prompt sent in the gap goes to the conversation it last knew (or is

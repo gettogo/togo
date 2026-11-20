@@ -98,6 +98,10 @@ func (p *OpenCode) Name() string {
 // Session is the id of the session the terminal shows now.
 func (p *OpenCode) Session() string { return p.main }
 
+// Select makes the terminal show session id, as a resume does: the turns
+// written after it go to that session.
+func (p *OpenCode) Select(id string) { p.main = id }
+
 // Agent is the agent (Togo's mode) the session runs: Kilo's default is
 // "code" (offline.jsonl), OpenCode's "build" (events.sse).
 func (p *OpenCode) Agent() string {

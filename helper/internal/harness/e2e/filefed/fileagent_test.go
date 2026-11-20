@@ -2,6 +2,7 @@ package filefed
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/gettogo/togo/helper/internal/harness/e2e/support"
 	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
+	"github.com/gettogo/togo/helper/internal/session"
 )
 
 // fileAgent is an agent whose chat comes from files or a database its own
@@ -278,20 +280,24 @@ func (a fileAgent) reconnect(t *testing.T) {
 }
 
 // removed: the hub reports the session gone while the agent works on.
+// The engine drops it, and the app's next open is answered "not found":
+// nothing is served again from the files the agent left. (Reading the
+// session after Engine.Forget alone served it again, as the session still
+// resolved, and the check raced the restore of its files.)
 func (a fileAgent) removed(t *testing.T) {
 	e := support.NewEnv(t, time.Hour)
 	l, r := a.start(t, e, sessiongen.Script{Seed: 62})
 	a.add(t, l, sessiongen.Turn{Say: 40, Tools: 2, Output: 100}, open(sessiongen.Turn{Say: 40, Tools: 2, Output: 100}))
 	a.seen(t, r, "before", l, true)
-	r.Engine.Forget(r.ID)
-	st := r.Read()
-	if len(st.Items) != 0 || st.Mission.Summary.Working || st.Mission.Summary.NeedsYou != 0 {
-		t.Errorf("after the removal: %d items, summary %+v", len(st.Items), st.Mission.Summary)
+	r.Remove()
+	if _, ok := r.Engine.Summary(r.ID); ok {
+		t.Error("the engine still has a summary for the removed session")
 	}
-	for _, sec := range st.Mission.Sections {
-		if len(sec.Rows) != 0 {
-			t.Errorf("section %s still has %d rows", sec.Kind, len(sec.Rows))
-		}
+	if _, err := r.Call("harness.open", map[string]any{"id": r.ID, "after": 0, "limit": 50}); !errors.Is(err, session.ErrNotFound) {
+		t.Errorf("harness.open after the removal: %v, want session not found", err)
+	}
+	if p := r.Pending(); len(p) != 0 {
+		t.Errorf("%d approvals still open after the removal", len(p))
 	}
 }
 
