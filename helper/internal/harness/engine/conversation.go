@@ -176,7 +176,8 @@ func (s *sess) startOverLocked(mapper string) harness.Mapper {
 	s.anchors = map[string]*harness.Anchor{}
 	s.pending, s.sentText, s.lastPart = map[string]harness.Item{}, map[string]string{}, map[string]time.Time{}
 	s.mission, s.srcRows = newMission(s.missionCaps()), nil
-	s.needs = needsState{}
+	// Offers still opening are kept: their asks close when they return.
+	s.needs = needsState{opening: s.needs.opening}
 	s.turn, s.working, s.feedWorking = "", false, false
 	s.stoppedAt, s.feedEndedAt = time.Time{}, time.Time{}
 	s.awaitReply, s.awaitText = false, ""

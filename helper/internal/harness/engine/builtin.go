@@ -285,6 +285,9 @@ func (e *Engine) addApproval(s *sess, a wire.Approval) {
 	if e.cfg.Approvals != nil && !slices.ContainsFunc(e.cfg.Approvals.Pending(s.id), func(p wire.Approval) bool { return p.RequestID == a.RequestID }) {
 		return
 	}
+	if s.droppedOfferLocked(a) {
+		return
+	}
 	owner := s.ownerLocked(a)
 	if a.Source != wire.SourceAsk {
 		s.screenPromptOpenedLocked()
