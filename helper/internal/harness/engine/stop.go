@@ -45,14 +45,14 @@ func (e *Engine) stopUntilIdle(ctx context.Context, s *sess, k *spec.Keys) (harn
 	if e.idleNow(s) {
 		// Nothing runs that Togo can see: one press, which the harness
 		// may still need (a turn the hooks have not reported yet).
-		if err := e.cfg.Typist.Keys(ctx, s.id, k.Keys...); err != nil {
+		if err := e.stopKeys(ctx, s, k.Keys...); err != nil {
 			return harness.ActionResult{Result: harness.ResultFailed, Message: "Sending keys failed"}, nil
 		}
 		return harness.ActionResult{Result: harness.ResultTyped}, nil
 	}
 	max := min(k.Max, maxStop)
 	for press := 1; press <= max; press++ {
-		if err := e.cfg.Typist.Keys(ctx, s.id, k.Keys...); err != nil {
+		if err := e.stopKeys(ctx, s, k.Keys...); err != nil {
 			return harness.ActionResult{Result: harness.ResultFailed, Message: "Sending keys failed"}, nil
 		}
 		if press == 1 && len(k.Then) > 0 {
@@ -61,7 +61,7 @@ func (e *Engine) stopUntilIdle(ctx context.Context, s *sess, k *spec.Keys) (harn
 				return harness.ActionResult{}, ctx.Err()
 			case <-time.After(e.scaled(thenGap)):
 			}
-			if err := e.cfg.Typist.Keys(ctx, s.id, k.Then...); err != nil {
+			if err := e.stopKeys(ctx, s, k.Then...); err != nil {
 				return harness.ActionResult{Result: harness.ResultFailed, Message: "Sending keys failed"}, nil
 			}
 		}

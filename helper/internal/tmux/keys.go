@@ -20,7 +20,10 @@ func (c *Client) SendKeys(ctx context.Context, target string, literal bool, keys
 		args = append(args, "-l")
 	}
 	args = append(args, "--")
-	args = append(args, keys...)
+	for _, k := range keys {
+		// Typed words ending in ";" would end the command instead.
+		args = append(args, escapeArg(k))
+	}
 	_, err := c.run(ctx, args...)
 	if errors.Is(err, errNoServer) {
 		return ErrNoSession

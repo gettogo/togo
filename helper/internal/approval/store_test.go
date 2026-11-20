@@ -16,6 +16,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/api"
 	"github.com/gettogo/togo/helper/internal/detect"
+	"github.com/gettogo/togo/helper/internal/panelock"
 	"github.com/gettogo/togo/helper/internal/rpc"
 	"github.com/gettogo/togo/helper/internal/session"
 	"github.com/gettogo/togo/helper/internal/state"
@@ -396,11 +397,8 @@ func TestSessionGoneDropsThePaneLock(t *testing.T) {
 	pr, _ := detect.Detect(menu)
 	st.PromptSeen(context.Background(), "s_aaaaaaaaaa", pr)
 	st.SessionGone(context.Background(), "s_aaaaaaaaaa")
-	st.mu.Lock()
-	n := len(st.paneLocks)
-	st.mu.Unlock()
-	if n != 0 {
-		t.Fatalf("%d pane locks kept for a session that is gone", n)
+	if panelock.Held("s_aaaaaaaaaa") {
+		t.Fatal("the pane lock is kept for a session that is gone")
 	}
 }
 

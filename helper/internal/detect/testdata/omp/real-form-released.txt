@@ -1,0 +1,40 @@
+
+╭─── ? Ask ────────────────────────────────────────────────────────────────────────────────────────╮
+│  Which color should the button be?                                                               │
+│  ✔ Red                                                                                           │
+│  Button text                                                                                     │
+│  ✔ Go                                                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ The user answered. The instruction was: "After I answer, reply with only the word done." So I
+ reply with only "done".
+
+ done
+
+
+ Use your ask tool once with exactly this form html: <form><fieldset><legend>Which color should the
+ button be?</legend><label><input type="radio" name="color" value="Red"> Red</label><label><input
+ type="radio" name="color" value="Green"> Green</label><label><input type="radio" name="color"
+ value="Blue"> Blue</label></fieldset><label>Button text <input type="text" name="label"
+ required></label></form> Use no other tool. After I answer, reply with only the word done.
+
+
+ The user wants me to use the ask tool once with exactly that HTML form, use no other tool, and
+ after they answer, reply with only "done".
+╭─ Ask · 0 of 2 answered ──────────────────────────────────────────────────────────────────────────╮
+│ Which color should the button be?                                                                │
+│   ○ Red                                                                                          │
+│   ○ Green                                                                                        │
+│   ○ Blue                                                                                         │
+│   ○ Other: type your own                                                                         │
+│                                                                                                  │
+│ ○ Button text                                                                                    │
+│   type your answer                                                                               │
+│                                                                                                  │
+│   Submit                                                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+  ⎋ Asking button color and text                                   🔘 BTN: Ask button color and text
+ ❓ 1m > ◒ DeepSeek V3.2 > 🗑 ~/code/demo > ⑂ main > $0.01 ▶─11%─╎┃164K─
+╰─                                           ↑ answer the questions above, or type here to skip them

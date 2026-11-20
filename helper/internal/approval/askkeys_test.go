@@ -142,9 +142,9 @@ func (a *askSim) next() {
 }
 
 func fastAsk(t *testing.T) {
-	poll, wait, settle := askPoll, askWait, askSettle
-	askPoll, askWait, askSettle = time.Millisecond, 200*time.Millisecond, 0
-	t.Cleanup(func() { askPoll, askWait, askSettle = poll, wait, settle })
+	poll, wait, settle, record := askPoll, askWait, askSettle, askRecordWait
+	askPoll, askWait, askSettle, askRecordWait = time.Millisecond, 200*time.Millisecond, 0, 200*time.Millisecond
+	t.Cleanup(func() { askPoll, askWait, askSettle, askRecordWait = poll, wait, settle, record })
 }
 
 func TestAnswerAskTwoQuestionsWithMultiSelectAndText(t *testing.T) {

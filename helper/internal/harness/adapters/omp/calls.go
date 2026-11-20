@@ -32,7 +32,7 @@ func (s *session) toolCall(blk map[string]any, parent, tid string, at time.Time)
 	items := []harness.Item{*it}
 	var ops []harness.Op
 	if strings.EqualFold(name, "ask") {
-		if q := askQuestion(callID, tid, parent, at, args); q != nil {
+		if q := askQuestion(callID, tid, parent, at, args, s.runtime); q != nil {
 			s.asks[callID] = q
 			items = append(items, *q)
 		}

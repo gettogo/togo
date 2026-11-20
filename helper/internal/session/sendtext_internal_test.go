@@ -2,9 +2,13 @@ package session
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/gettogo/togo/helper/internal/panelock"
 )
 
 // fakePane records calls in order and serves screens from a script, one
@@ -132,6 +136,32 @@ func TestIsShell(t *testing.T) {
 	} {
 		if got := isShell(tc.cmd, tc.login); got != tc.want {
 			t.Errorf("isShell(%q, %q) = %v, want %v", tc.cmd, tc.login, got, tc.want)
+		}
+	}
+}
+
+// A stop that comes while a reply settles keeps its Enter from being
+// pressed: no key of the reply lands after the stop.
+func TestTypeReplyStopsAtAStop(t *testing.T) {
+	const id = "s_abcdefghij"
+	ctx, release, err := panelock.Acquire(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	var now time.Duration
+	f := &fakePane{screens: []string{"> ", "> hi"}, now: &now}
+	sleep := fakeSleep(&now)
+	stopping := func(ctx context.Context, d time.Duration) error {
+		panelock.Stop(id)
+		return sleep(ctx, d)
+	}
+	if err := typeReply(ctx, f, id, "hi", true, stopping); !errors.Is(err, ErrStopped) {
+		t.Fatalf("err = %v, want ErrStopped", err)
+	}
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "keys") {
+			t.Fatalf("a key after the stop: %v", f.calls)
 		}
 	}
 }

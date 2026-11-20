@@ -89,6 +89,11 @@ func (e *Engine) typeCommand(ctx context.Context, s *sess, text string, submit, 
 			if err := e.heldNatively(s); err != nil {
 				return err
 			}
+			ctx, release, err := e.paneSeq(ctx, s)
+			if err != nil {
+				return err
+			}
+			defer release()
 			if err := e.screenClear(ctx, s); err != nil {
 				return err
 			}
@@ -106,16 +111,22 @@ func (e *Engine) sendKeys(ctx context.Context, s *sess, cycling bool, keys ...st
 			return errKeyRefused
 		}
 	}
-	if !interruptKeys(keys) {
-		l := typingLock(s.id)
-		l.Lock()
-		defer l.Unlock()
-		if err := e.heldNatively(s); err != nil {
-			return err
-		}
-		if err := e.screenClear(ctx, s); err != nil {
-			return err
-		}
+	if interruptKeys(keys) {
+		return e.stopKeys(ctx, s, keys...)
+	}
+	l := typingLock(s.id)
+	l.Lock()
+	defer l.Unlock()
+	if err := e.heldNatively(s); err != nil {
+		return err
+	}
+	ctx, release, err := e.paneSeq(ctx, s)
+	if err != nil {
+		return err
+	}
+	defer release()
+	if err := e.screenClear(ctx, s); err != nil {
+		return err
 	}
 	return e.cfg.Typist.Keys(ctx, s.id, keys...)
 }

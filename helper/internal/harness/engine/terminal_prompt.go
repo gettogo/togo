@@ -102,6 +102,11 @@ func (e *Engine) answerPrompt(ctx context.Context, s *sess, m *terminalMenu, val
 	l := typingLock(s.id)
 	l.Lock()
 	defer l.Unlock()
+	ctx, release, err := e.paneSeq(ctx, s)
+	if err != nil {
+		return harness.ActionResult{}, err
+	}
+	defer release()
 	p, is := e.readPrompt(ctx, s)
 	if !is || p.Title != m.panel {
 		e.setMenu(s.id, nil)

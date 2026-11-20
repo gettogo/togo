@@ -1,0 +1,40 @@
+                                     ██  ██       ▀▄▄▀ █ █ █ █▄▄▀
+                                     ▒▒  ██                  █
+                                         ██       v19.0.1
+
+                Tip: Agent overthinking? Say `chillax` — on models with per-message
+                effort, thinking drops to the lowest level, even mid-turn — watch it
+                                          glow as you type
+
+
+
+
+ Use your ask tool once to ask me one form with exactly two fields: a radio group named "color"
+ with legend "Which color should the button be?" and options Red, Green, Blue (none checked), and a
+ required text input named "label" with label "Button text". Use no other tool. After I answer,
+ reply with only the word done.
+
+
+ The user is asking me to call the ask tool once with a specific form, and after receiving a
+ response, reply with only "done". I'll use only the ask tool. Radio group: name is "color", legend
+ is "Which color should the button be?", options are Red, Green, Blue, none checked. A required
+ text input named "label" with the label "Button text". No script or style. Each control needs a
+ name. Wrap the controls in labels, and use fieldset/legend for radio groups.
+                                                          Optimizing skills ━━━━━───────────── 11/44
+╭─ Ask · 1 of 2 answered ──────────────────────────────────────────────────────────────────────────╮
+│ ✓ Which color should the button be?                                                              │
+│    Red   ✓ Green   Blue                                                                          │
+│                                                                                                  │
+│ ❯ Button text *                                                                                  │
+│   │                                                                                              │
+│                                                                                                  │
+│   Submit                                                                                         │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+  ⎋ Collecting button color and text                                  🎛️ FORM: Ask button color form
+ ❓ 19s > ◒ DeepSeek V3.2 > 🗑 ~/code/demo > ⑂ main > $0.01 ▶─11%╎┃164K─
+╰─
