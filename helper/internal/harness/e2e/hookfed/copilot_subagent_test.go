@@ -23,6 +23,7 @@ import (
 //     the task tool still running at that moment, also interrupted, though
 //     both finished normally;
 //   - no agent row shows the subagent (the Agents section stays empty).
+//
 // The same payloads also lose the turn's final reply: the turn that shows
 // is the subagent's, and the main agent's closing message of the live run
 // ("done") was not shown. (The reply comes from Copilot's own events log,
