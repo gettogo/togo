@@ -170,7 +170,8 @@ func (r *Rig) Hook(f wire.HookForward) error {
 // Look does what the pane watcher does when it reads the screen
 // (watch/watch.go inspect, promptSeen, clearPrompt): a prompt the
 // detector recognises is reported once, and its leaving is reported. A
-// prompt the phone itself opened is not (daemon/compose.go ownScreens).
+// prompt the phone itself opened is not, nor a step of a question dialog
+// the chat already shows (daemon/compose.go ownScreens).
 func (r *Rig) Look() {
 	// One look at a time: two that read the old prompt would both report
 	// what they saw.
@@ -186,7 +187,13 @@ func (r *Rig) Look() {
 		r.mu.Lock()
 		r.prompt = p.Fingerprint
 		r.mu.Unlock()
-		if !r.Engine.PhoneDriving(r.ID) {
+		switch {
+		case r.Engine.PhoneDriving(r.ID):
+		case r.Engine.QuestionDialog(r.ID, p):
+			// A step of a question dialog whose question item the phone
+			// already shows; a request opened for an earlier step goes.
+			r.Approvals.CloseScreenPrompts(ctx, r.ID)
+		default:
 			r.Approvals.PromptSeen(ctx, r.ID, p)
 		}
 	case !ok && prev != "":

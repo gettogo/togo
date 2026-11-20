@@ -41,16 +41,25 @@ func declare(t *testing.T, agent, cell string) bool {
 }
 
 // declared holds, per cell, the literal declaration the coverage scan
-// reads (coverage.ScanEvidence takes only string literals). Relaunch is
-// claimed only for agents without TestKnownFault_RelaunchKeepsDeadTurnWorking.
-// Sending while idle proves part of chat, not the cell. OpenCode and Kilo
-// claim relaunch here: they do not have that fault (their exit ends the
-// stream, and the relaunched agent's stream starts idle). Codex claims it
-// too: its relaunch is a new app-server, whose feed starts with the
-// thread the terminal resumes or a new idle one. Its approvals here are
+// reads (coverage.ScanEvidence takes only string literals). Every agent
+// claims relaunch: the relaunched run is idle and takes a prompt. Sending
+// while idle proves part of chat, not the cell. Codex's relaunch is a new
+// app-server, whose feed starts with the thread the terminal resumes or a
+// new idle one. Its approvals here are
 // the terminal's captured dialog; the app-server's approval requests are
 // proven in e2e (codex_approvals_test.go).
 var declared = map[string]func(t *testing.T){
+	"amp/lifecycle/relaunch":              func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/relaunch") },
+	"claude/lifecycle/relaunch":           func(t *testing.T) { coverage.Covers(t, "generated", "claude/lifecycle/relaunch") },
+	"copilot/lifecycle/relaunch":          func(t *testing.T) { coverage.Covers(t, "generated", "copilot/lifecycle/relaunch") },
+	"cursor/lifecycle/relaunch":           func(t *testing.T) { coverage.Covers(t, "generated", "cursor/lifecycle/relaunch") },
+	"droid/lifecycle/relaunch":            func(t *testing.T) { coverage.Covers(t, "generated", "droid/lifecycle/relaunch") },
+	"kimi/lifecycle/relaunch":             func(t *testing.T) { coverage.Covers(t, "generated", "kimi/lifecycle/relaunch") },
+	"omp/lifecycle/relaunch":              func(t *testing.T) { coverage.Covers(t, "generated", "omp/lifecycle/relaunch") },
+	"pi/lifecycle/relaunch":               func(t *testing.T) { coverage.Covers(t, "generated", "pi/lifecycle/relaunch") },
+	"vibe/lifecycle/relaunch":             func(t *testing.T) { coverage.Covers(t, "generated", "vibe/lifecycle/relaunch") },
+	"goose/lifecycle/relaunch":            func(t *testing.T) { coverage.Covers(t, "generated", "goose/lifecycle/relaunch") },
+	"crush/lifecycle/relaunch":            func(t *testing.T) { coverage.Covers(t, "generated", "crush/lifecycle/relaunch") },
 	"amp/lifecycle/agent_exits":           func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/agent_exits") },
 	"amp/lifecycle/session_removed":       func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/session_removed") },
 	"amp/lifecycle/turn_end":              func(t *testing.T) { coverage.Covers(t, "generated", "amp/lifecycle/turn_end") },

@@ -180,16 +180,13 @@ func TestKimiExitAndRelaunch(t *testing.T) {
 	support.Fail(t, "restart", support.OfferedAsks(after, support.ExitNotices(support.Restarted(after, again))))
 }
 
-// TestKnownFault_KimiKilledAgentsJobRunsAgainAfterARestart documents a
-// fault: when the hub reports Kimi gone, its background job ends
-// interrupted, as it should. Relaunched with --continue, Kimi carries on in
-// the same log with no new header, so the log never says the job died
-// (adapters/kimi/wire.go prompt() ends the turn but keeps w.tasks). A helper
-// restart then reads the job as running again, for good.
-//
-// Correct: the job stays ended. This test passes while the fault is
-// present; when it fails the fault is fixed: delete it.
-func TestKnownFault_KimiKilledAgentsJobRunsAgainAfterARestart(t *testing.T) {
+// When the hub reports Kimi gone, its background job ends interrupted.
+// Relaunched with --continue, Kimi carries on in the same log with no new
+// header, so the log never says the job died. The exit's record of what it
+// ended (engine/exit.go, kept under run/) keeps the job ended when a helper
+// restart reads the log again; before it, the restart read the job as
+// running for good.
+func TestKimiKilledAgentsJobStaysEndedAfterARestart(t *testing.T) {
 	l, r := kimiStart(t, false, map[int]sessiongen.KimiTurn{1: {Detached: 1}}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
 	st := support.SettleUntil(r, 1)
@@ -209,8 +206,11 @@ func TestKnownFault_KimiKilledAgentsJobRunsAgainAfterARestart(t *testing.T) {
 	support.SettleUntil(r, 2)
 	r.Restart()
 	after := support.SettleUntil(r, 2)
-	if after.Mission.Summary.Background != 1 {
-		t.Fatal("the dead job stays ended after the restart: the fault is fixed")
+	if after.Mission.Summary.Background != 0 {
+		t.Errorf("%+v after the restart, want no job running", after.Mission.Summary)
+	}
+	if bg := support.Items(after, support.OfKind(harness.KindBackground)); len(bg) != 1 || bg[0].Background.State != harness.StateInterrupted {
+		t.Errorf("job after the restart: %+v, want interrupted", bg)
 	}
 }
 

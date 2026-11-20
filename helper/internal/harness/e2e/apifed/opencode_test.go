@@ -2,12 +2,14 @@ package apifed
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/gettogo/togo/helper/internal/harness/coverage"
 	"github.com/gettogo/togo/helper/internal/harness/e2e/support"
+	"github.com/gettogo/togo/helper/internal/harness/enginetest"
 	"github.com/gettogo/togo/helper/internal/harness/sessiongen"
 )
 
@@ -104,34 +106,35 @@ func TestKnownFault_OpenCode_RestartLosesChat(t *testing.T) {
 	}
 }
 
-// TestKnownFault_OpenCode_ContextPercentIsNeverShown documents a fault:
-// opencode.yaml and kilo.yaml declare status.context, but the status block
-// of a session never has a context percent. The assistant message the agent
-// streams carries the turn's tokens (events.sse), and the model's context
-// limit is in /config/providers, but no mapper reads either: nothing under
-// adapters/opencode builds a StatusBlock with ContextPercent (Claude's and
-// Codex's mappers do, claude/usage.go and codex/live.go), so the app's
-// context gauge stays empty for these agents.
-//
-// Correct: after a turn that used 41,000 tokens of the model's window, the
-// status block says how full the context is. This passes while the fault is
-// present; when it fails the fault is fixed: write the test for the
-// percentage and claim opencode/capability/status.context and
-// kilo/capability/status.context.
-func TestKnownFault_OpenCode_ContextPercentIsNeverShown(t *testing.T) {
+// TestOpenCode_ContextPercent: the assistant message the agent streams
+// carries the turn's tokens (events.sse), and the model's window is in the
+// provider list (/config/providers, the recorded providers.json the rig
+// serves). After a reply that used 41,900 tokens of local/coder-dense's
+// 65,536 the status block says the context is 63.9 % full
+// (adapters/opencode/context.go). Kilo Code reads the same way, but its
+// recorded list gives its models no window, so it shows no percent: its
+// status.context cell stays open until a list with a window is recorded.
+func TestOpenCode_ContextPercent(t *testing.T) {
 	t.Parallel()
-	for _, agent := range []string{"opencode", "kilo"} {
-		t.Run(agent, func(t *testing.T) {
+	coverage.Covers(t, "generated", "opencode/capability/status.context")
+	for _, c := range []struct {
+		agent, provider, model string
+		want                   float64 // < 0: no percent
+	}{
+		{"opencode", "local", "coder-dense", 100 * 41900.0 / 65536},
+		{"kilo", "moonshotai", "kimi-k2.6", -1},
+	} {
+		t.Run(c.agent, func(t *testing.T) {
 			t.Parallel()
-			s := apiStart(t, agent, 99, nil, sessiongen.Turn{Say: 20, Tools: 1}, sessiongen.Turn{Say: 20})
+			s := apiStart(t, c.agent, 99, nil, sessiongen.Turn{Say: 20, Tools: 1}, sessiongen.Turn{Say: 20})
 			support.SettleUntil(s.r, 2)
-			// An assistant message that used 41,000 tokens, as the
+			// An assistant message that used 41,900 tokens, as the
 			// stream carries it (adapters/opencode/testdata/events.sse),
 			// written as the agent writes it.
 			now := time.Now().UnixMilli()
 			line := fmt.Sprintf(`{"type":"message.updated","properties":{"sessionID":%q,"info":{"id":"msg_tokens","role":"assistant",`+
-				`"modelID":"m","providerID":"p","sessionID":%q,"time":{"created":%d,"completed":%d},"cost":0,`+
-				`"tokens":{"input":41000,"output":900,"reasoning":0,"cache":{"read":0,"write":0}}}}}`+"\n", s.p.Session(), s.p.Session(), now, now)
+				`"modelID":%q,"providerID":%q,"sessionID":%q,"time":{"created":%d,"completed":%d},"cost":0,`+
+				`"tokens":{"input":41000,"output":900,"reasoning":0,"cache":{"read":0,"write":0}}}}}`+"\n", s.p.Session(), c.model, c.provider, s.p.Session(), now, now)
 			f, err := os.OpenFile(s.api.Journal(), os.O_APPEND|os.O_WRONLY, 0o644)
 			if err != nil {
 				t.Fatal(err)
@@ -140,12 +143,21 @@ func TestKnownFault_OpenCode_ContextPercentIsNeverShown(t *testing.T) {
 				t.Fatal(err)
 			}
 			_ = f.Close()
-			// The journal is read in order: when the next turn is shown,
-			// the message before it has been read.
-			s.add(t, sessiongen.Turn{Say: 20})
-			st := support.SettleUntil(s.r, 3)
-			if got := support.StatusOf(st); got.ContextPercent != nil {
-				t.Fatalf("the status shows the context at %v percent: the fault is fixed", *got.ContextPercent)
+			if c.want < 0 {
+				// The journal is read in order: when the next turn is
+				// shown, the message before it has been read.
+				s.add(t, sessiongen.Turn{Say: 20})
+				st := support.SettleUntil(s.r, 3)
+				if got := support.StatusOf(st); got.ContextPercent != nil && *got.ContextPercent >= 0 {
+					t.Errorf("the status shows the context at %v percent for a model with no known window", *got.ContextPercent)
+				}
+				return
+			}
+			// The window is read off the session's lock, after the message.
+			st := s.r.SettleUntil(10*time.Second, func(st enginetest.State) bool { return support.StatusOf(st).ContextPercent != nil })
+			got := support.StatusOf(st).ContextPercent
+			if got == nil || math.Abs(*got-c.want) > 0.05 {
+				t.Errorf("context percent %v, want %.1f", got, c.want)
 			}
 		})
 	}

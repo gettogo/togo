@@ -2,7 +2,6 @@ package sessions
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -104,42 +103,57 @@ func TestOMPQuestionAnsweredFromThePhone(t *testing.T) {
 	}
 }
 
-// omp 18.20's ask takes an HTML form (adapters/omp/ask_test.go has the
-// call as omp wrote it). Its dialog is not the list the key driver reads.
-//
-// TestKnownFault_OMP_FormQuestionHasNoAnswerAction documents the gap seen
-// in a live run: the question shows with its options but is marked
-// unanswerable (adapters/omp/ask.go askQuestion), and the phone's answer
-// action does not take it, so the user must go to the terminal.
-//
-// Correct: the phone answers a form question like any other, with keys
-// for its fields. This test passes while the gap is there; when it fails
-// the gap is closed: claim needs.questions for forms and delete it.
-func TestKnownFault_OMP_FormQuestionHasNoAnswerAction(t *testing.T) {
+// omp's ask takes an HTML form from 18.20 (adapters/omp/ask_test.go has
+// the call as omp wrote it). The phone answers a form with keys for its
+// fields only when omp 19 or later wrote the call (its records carry
+// "runtime": {"version": ...}, as adapters/omp/testdata/ask-form-19.jsonl
+// does): the key driver was built against 19's dialog. An 18.x form shows
+// with its fields but is marked unanswerable, and the phone's answer is
+// refused, so the user answers at the terminal (adapters/omp/ask.go
+// formDriverVersion). The answer's keys are tested on the captured 19
+// dialog in adapters/omp/askform_test.go.
+func TestOMP_FormQuestionAnswerableFromOMP19(t *testing.T) {
 	t.Parallel()
-	a := newOMPAgent(t, nil, sessiongen.Turn{Say: 30})
-	r := a.r
-	st := r.SettleUntil(support.FileLimit, enginetest.Has(a.l.Truth.Last))
-	const form = `{"html": "<form><fieldset><legend>Audit color</legend><label><input type=\"radio\" name=\"color\" value=\"red\" checked>Red</label><label><input type=\"radio\" name=\"color\" value=\"yellow\">Yellow</label></fieldset><button type=\"submit\">Submit</button></form>", "i": "Audit color selection"}`
-	line := `{"type":"message","id":"formask1","parentId":"` + a.l.Truth.Last + `","timestamp":"` + time.Now().UTC().Format("2006-01-02T15:04:05.000Z") +
-		`","message":{"role":"assistant","content":[{"type":"toolCall","id":"toolu_form1","name":"ask","arguments":` + form + `}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"toolUse"}}` + "\n"
-	f, err := os.OpenFile(a.l.Main(), os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		t.Fatal(err)
+	for _, c := range []struct {
+		name, runtime string
+		answerable    bool
+	}{
+		{"18.20", "", false},
+		{"19.0.1", `"runtime":{"version":"19.0.1"},`, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			a := newOMPAgent(t, nil, sessiongen.Turn{Say: 30})
+			r := a.r
+			r.SettleUntil(support.FileLimit, enginetest.Has(a.l.Truth.Last))
+			const form = `{"html": "<form><fieldset><legend>Audit color</legend><label><input type=\"radio\" name=\"color\" value=\"red\" checked>Red</label><label><input type=\"radio\" name=\"color\" value=\"yellow\">Yellow</label></fieldset><button type=\"submit\">Submit</button></form>", "i": "Audit color selection"}`
+			line := `{"type":"message","id":"formask1","parentId":"` + a.l.Truth.Last + `",` + c.runtime + `"timestamp":"` + time.Now().UTC().Format("2006-01-02T15:04:05.000Z") +
+				`","message":{"role":"assistant","content":[{"type":"toolCall","id":"toolu_form1","name":"ask","arguments":` + form + `}],"provider":"llama.cpp","model":"qwen3.8-27b","stopReason":"toolUse"}}` + "\n"
+			f, err := os.OpenFile(a.l.Main(), os.O_APPEND|os.O_WRONLY, 0o644)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.WriteString(line); err != nil {
+				t.Fatal(err)
+			}
+			f.Close()
+			st := r.SettleUntil(support.FileLimit, func(st enginetest.State) bool {
+				return len(support.Items(st, support.OfKind(harness.KindQuestion))) == 1
+			})
+			qs := support.Items(st, support.OfKind(harness.KindQuestion))
+			if len(qs) != 1 || len(qs[0].Question.Questions) == 0 || qs[0].Question.Questions[0].ID != "color" {
+				t.Fatalf("the form question: %+v", qs)
+			}
+			q := qs[0]
+			if got := q.Question.Answerable == nil || *q.Question.Answerable; got != c.answerable {
+				t.Fatalf("the form question is answerable %v, want %v: %+v", got, c.answerable, q.Question)
+			}
+			if c.answerable {
+				return
+			}
+			if res, _ := r.Act("answer", q.ID, map[string]any{"answers": map[string][]string{"color": {"Yellow"}}}); res.Result == harness.ResultApplied {
+				t.Errorf("an 18.x form was answered from the phone: %+v", res)
+			}
+		})
 	}
-	if _, err := f.WriteString(line); err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	st = r.SettleUntil(support.FileLimit, func(st enginetest.State) bool {
-		return len(support.Items(st, support.OfKind(harness.KindQuestion))) == 1
-	})
-	q := support.Items(st, support.OfKind(harness.KindQuestion))[0]
-	if q.Question.Answerable == nil || *q.Question.Answerable || q.Question.Questions[0].ID != "color" {
-		t.Fatalf("the form question: %+v", q.Question)
-	}
-	if res, _ := r.Act("answer", q.ID, map[string]any{"answers": map[string][]string{"color": {"Yellow"}}}); res.Result == harness.ResultApplied {
-		t.Fatalf("the gap is closed: the answer was %+v", res)
-	}
-	_ = filepath.Join
 }

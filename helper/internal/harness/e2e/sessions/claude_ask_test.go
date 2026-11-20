@@ -251,27 +251,17 @@ func TestClaudeTwoQuestionsAnsweredFromThePhone(t *testing.T) {
 	}
 }
 
-// TestKnownFault_ClaudeQuestionDialogShowsAsApprovals: while Claude Code's
-// AskUserQuestion dialog is on screen, the phone is offered it twice, and
-// neither offer can be answered as an approval. The engine opens an
-// approval for the question when the PermissionRequest hook arrives
-// (engine/feedapproval.go offerPermission); the pane watcher then reads
-// the same dialog as a permission prompt (watch.go, approval/store.go
-// PromptSeen), closes the engine's approval as "answered at the desk"
-// although nobody answered, and opens a screen approval that is not
-// answerable (the detector sees the options but the dialog takes digits
-// and a review). Every step of the dialog (colour, fruit, review) does the
-// same (the review's, "Submit answers / Cancel", can be answered), so a
-// two-question dialog leaves two to four approval rows, all resolved at
-// the desk, and while it is up one pending approval, the first two not
-// answerable.
-//
-// Correct: the question item is the only thing the phone is offered; no
-// approval row, and no "desk" resolution nobody made.
-//
-// Trigger: AskUserQuestion with the dialog on screen and the pane watcher
-// looking (any Claude Code 2.1.3xx session at the terminal).
-func TestKnownFault_ClaudeQuestionDialogShowsAsApprovals(t *testing.T) {
+// TestClaudeQuestionDialogIsOneRequest: while Claude Code's
+// AskUserQuestion dialog is on screen, the phone is offered the engine's
+// own request for the question (engine/feedapproval.go offerPermission)
+// and nothing else. Each step of the dialog (colour, fruit, review) is
+// read by the pane watcher as a step of that dialog
+// (engine/claude_dialog.go QuestionDialog, daemon/compose.go ownScreens),
+// not as a new permission prompt. Before the fix each step closed the
+// request before it as answered at the desk and opened a screen request
+// the phone could not answer, so a two-question dialog left two to four
+// approval rows.
+func TestClaudeQuestionDialogIsOneRequest(t *testing.T) {
 	t.Parallel()
 	a := startAsk(t)
 	r := a.r
@@ -281,41 +271,28 @@ func TestKnownFault_ClaudeQuestionDialogShowsAsApprovals(t *testing.T) {
 	}
 	for i, key := range []string{"1", "2", "Enter"} {
 		r.Look()
-		p := r.WaitPending(1, 3*time.Second)
-		if p[0].Source != wire.SourceScreen {
-			t.Errorf("step %d: pending %s, want a screen approval", i+1, p[0].Source)
-		}
-		if i < 2 {
-			// The colour and fruit steps list their options and can't be answered.
-			if p[0].Answerable == nil || *p[0].Answerable || len(p[0].Options) != 2 || p[0].Options[0].Label != []string{"Red", "Apple"}[i] {
-				t.Errorf("step %d: pending %+v, want a not answerable approval offering the question's options", i+1, p[0])
-			}
-		} else if p[0].Answerable != nil || len(p[0].Options) != 2 || p[0].Options[0].Label != "Submit answers" || p[0].Options[1].Label != "Cancel" {
-			// The review is offered as an approval with Submit answers and Cancel.
-			t.Errorf("review: pending %+v, want Submit answers and Cancel, answerable", p[0])
+		p := r.Pending()
+		if len(p) != 1 || p[0].RequestID != offer[0].RequestID {
+			t.Errorf("step %d: pending %+v, want only the engine's offer %s", i+1, p, offer[0].RequestID)
 		}
 		if err := r.Term.Keys(context.Background(), "", key); err != nil {
 			t.Fatal(err)
 		}
 	}
 	r.Look()
-	// How many rows are left varies from run to run, two to four (not
-	// traced further: the approvals close from the watcher's looks, from
-	// the PostToolUse hook of the finished tool and from the engine's own
-	// offer, which run side by side); what does not vary is that each is
-	// resolved at the desk, by no one, and none is left pending.
-	r.SettleUntil(support.FileLimit, func(st enginetest.State) bool { return answeredQuestion(st) && len(r.Pending()) == 0 })
-	st := r.Settle(support.Quick / 15)
-	approvals := support.Items(st, support.OfKind(harness.KindApproval))
-	if len(approvals) < 2 || len(approvals) > 4 {
-		t.Fatalf("%d approval rows, want the fault's two to four", len(approvals))
-	}
-	for _, it := range approvals {
-		if it.Approval.Resolved != wire.ResolutionDesk || it.Approval.Owner != a.id {
-			t.Errorf("approval %+v, want resolved at the desk, owned by the question", it.Approval)
-		}
+	st := r.SettleUntil(support.FileLimit, func(st enginetest.State) bool { return answeredQuestion(st) && len(r.Pending()) == 0 })
+	if !answeredQuestion(st) {
+		t.Fatal("the question was not answered at the desk")
 	}
 	if p := r.Pending(); len(p) != 0 {
 		t.Errorf("%d approvals still pending after the dialog closed", len(p))
+	}
+	for _, it := range support.Items(st, support.OfKind(harness.KindApproval)) {
+		if it.Approval.Owner != a.id {
+			t.Errorf("approval %s %+v belongs to no question", it.ID, it.Approval)
+		}
+	}
+	if n := len(support.Items(st, support.OfKind(harness.KindApproval))); n > 1 {
+		t.Errorf("%d approval rows, want at most the question's own", n)
 	}
 }

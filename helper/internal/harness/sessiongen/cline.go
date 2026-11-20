@@ -30,7 +30,7 @@ import (
 //
 // Cline writes no record of its exit or of an interrupt (none is
 // recorded), so Exit, Interrupt, Agents and Jobs are refused. A /new
-// writes a new session folder.
+// writes a new session folder; a resume goes on in an earlier one.
 type Cline struct {
 	// Extra adds Cline-only content to a turn, keyed by the number of the
 	// turn's prompt (1 is the first).
@@ -61,6 +61,10 @@ type ClineTurn struct {
 	// Unfinished ends the document after a tool call with no result and
 	// no reply, as when Cline is killed at work.
 	Unfinished bool
+	// Resume, when above 0, writes the turn into the Resume-th session
+	// (1 is the first), as `cline -i --id <id>` does: Cline rewrites that
+	// session's document with the turn appended.
+	Resume int
 }
 
 // ClineQuestion is an ask_question call.
@@ -137,6 +141,13 @@ func (c *Cline) Turn(g *Gen, t Turn) error {
 	}
 	n := g.L.Truth.Prompts + 1
 	x := c.Extra[n]
+	if x.Resume > 0 {
+		if x.Resume > len(c.files) {
+			return fmt.Errorf("sessiongen: Cline has no session %d to resume", x.Resume)
+		}
+		c.cur = c.files[x.Resume-1]
+		c.id = c.cur.id
+	}
 	if x.Mode != "" {
 		c.mode = x.Mode
 	}

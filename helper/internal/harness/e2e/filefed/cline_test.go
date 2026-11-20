@@ -2,6 +2,8 @@ package filefed
 
 import (
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -268,17 +270,12 @@ func TestClineConcurrentReaders(t *testing.T) {
 	support.ConcurrentReaders(t, clineStarter)
 }
 
-// TestKnownFault_ClineKilledTurnEndsOK documents the fault of
-// TestKnownFault_AiderKilledTurnEndsOK for Cline: when the hub reports the
-// agent exited at work, the working flag falls first and the mapper closes
-// the open turn as the pane going idle would (engine/sess.go statusChanged,
-// adapters/cline/messages.go CloseIdle), so a turn killed with a tool
-// running ends ok. Its tool does end interrupted.
-//
-// Correct: a turn open when the agent exits ends interrupted. This test
-// passes while the fault is present; when it fails the fault is fixed:
-// delete it.
-func TestKnownFault_ClineKilledTurnEndsOK(t *testing.T) {
+// When the hub reports Cline exited at work, a turn killed with a tool
+// running ends interrupted, with its tool. The exit ends what the run left
+// open before the working flag falls (engine/exit.go agentExitedLocked),
+// so the mapper's idle close (adapters/cline/messages.go CloseIdle) no
+// longer ends it ok, as it did before.
+func TestClineKilledTurnEndsInterrupted(t *testing.T) {
 	t.Parallel()
 	_, r := clineStart(t, map[int]sessiongen.ClineTurn{1: {Unfinished: true}}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
@@ -288,7 +285,71 @@ func TestKnownFault_ClineKilledTurnEndsOK(t *testing.T) {
 	}
 	r.Hub("ended")
 	st = support.WaitFor(t, r, "the exit", func(st enginetest.State) bool { return len(support.TurnsIn(st, harness.StateRunning)) == 0 })
-	if len(support.TurnsIn(st, harness.StateInterrupted)) != 0 || len(support.TurnsIn(st, harness.StateOK)) != 1 {
-		t.Fatalf("the killed turn: %d ok, %d interrupted: the fault is fixed", len(support.TurnsIn(st, harness.StateOK)), len(support.TurnsIn(st, harness.StateInterrupted)))
+	if len(support.TurnsIn(st, harness.StateInterrupted)) != 1 || len(support.TurnsIn(st, harness.StateOK)) != 0 {
+		t.Errorf("the killed turn: %d ok, %d interrupted, want it interrupted", len(support.TurnsIn(st, harness.StateOK)), len(support.TurnsIn(st, harness.StateInterrupted)))
 	}
+	if st.Mission.Summary.Working {
+		t.Error("working after the agent exited")
+	}
+}
+
+// A resume from the phone relaunches Cline with --id of an earlier
+// session: the chat follows that session at once, and the turn Cline
+// writes into it shows. A /new at the desk after the resume moves the
+// chat on; a helper restart then stays on the session the chat followed,
+// not on the --id the pane's command line still carries
+// (adapters/cline/restart.go), and goes on following it.
+func TestClineResumeFromThePhone(t *testing.T) {
+	t.Parallel()
+	coverage.Covers(t, "generated", "cline/lifecycle/resume")
+	e := support.NewEnv(t, 10*time.Minute)
+	l, err := sessiongen.Write(e.Home, &sessiongen.Cline{Extra: map[int]sessiongen.ClineTurn{3: {Resume: 1}}}, sessiongen.Script{Seed: 52, Start: e.Start, Cwd: e.Cwd,
+		Turns: []sessiongen.Turn{{Say: 20, Tools: 1, Output: 20}, {New: true, Say: 20}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Mains) != 2 {
+		t.Fatalf("%d sessions, want 2", len(l.Mains))
+	}
+	first := filepath.Base(filepath.Dir(l.Mains[0]))
+	r := e.RigMod(t, "cline", func(o *enginetest.Options) { o.PanePIDs = support.ProcsOf(t) })
+	support.SettleUntil(r, 2)
+	res, err := r.Act("resume", "", map[string]any{"id": first})
+	if err != nil || res.Result != harness.ResultRelaunched {
+		t.Fatalf("resume: %+v %v", res, err)
+	}
+	if rel := r.Relaunches(); len(rel) != 1 || !slices.Contains(rel[0], first) {
+		t.Fatalf("relaunched with %q, want --id %s", rel, first)
+	}
+	support.Now(l)
+	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil { // prompt 3, in the first session
+		t.Fatal(err)
+	}
+	st := support.SettleUntil(r, 3)
+	if !support.HasPrompt(3)(st) {
+		t.Fatal("the turn written into the resumed session is not shown")
+	}
+	support.Fail(t, "after the resume", enginetest.Paging(st))
+	// A /new at the desk: the chat moves on from the resumed session.
+	support.Now(l)
+	if err := l.Append(sessiongen.Turn{New: true, Say: 20}); err != nil { // prompt 4
+		t.Fatal(err)
+	}
+	if !support.HasPrompt(4)(support.SettleUntil(r, 4)) {
+		t.Fatal("the /new after the resume is not followed")
+	}
+	r.Restart()
+	after := support.SettleUntil(r, 4)
+	if !support.HasPrompt(4)(after) {
+		t.Fatal("the restart did not restore the conversation the chat followed")
+	}
+	support.Now(l)
+	if err := l.Append(sessiongen.Turn{Say: 20}); err != nil { // prompt 5, in the newest session
+		t.Fatal(err)
+	}
+	more := support.SettleUntil(r, 5)
+	if !support.HasPrompt(5)(more) {
+		t.Fatal("the conversation the chat followed is not followed after the restart")
+	}
+	support.Fail(t, "after the restart", enginetest.Paging(more))
 }

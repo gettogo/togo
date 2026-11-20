@@ -86,7 +86,7 @@ func TestAiderNewConversation(t *testing.T) {
 // Aider killed at work leaves a prompt with no reply. When the hub reports
 // the agent exited nothing is working or running any more; relaunched,
 // aider writes a new header and the chat goes on. (How the killed turn
-// ends is TestKnownFault_AiderKilledTurnEndsOK.)
+// ends is TestAiderKilledTurnEndsInterrupted.)
 func TestAiderExitAndRelaunch(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "generated", "aider/lifecycle/agent_exits", "aider/lifecycle/relaunch")
@@ -117,17 +117,12 @@ func TestAiderExitAndRelaunch(t *testing.T) {
 	}
 }
 
-// TestKnownFault_AiderKilledTurnEndsOK documents a fault: when the hub
-// reports Aider exited at work, the engine first sees the working flag fall
-// and has the mapper close the open turn as the pane going idle would
-// (engine/sess.go statusChanged: setWorkingLocked before agentExitedLocked;
-// adapters/aider/history.go CloseIdle, endState ok), so the turn of a
-// prompt that got no reply ends ok, not interrupted.
-//
-// Correct: a turn open when the agent exits ends interrupted. This test
-// passes while the fault is present; when it fails the fault is fixed:
-// delete it.
-func TestKnownFault_AiderKilledTurnEndsOK(t *testing.T) {
+// When the hub reports Aider exited at work, the turn of a prompt that got
+// no reply ends interrupted. The exit ends what the run left open before
+// the working flag falls (engine/exit.go agentExitedLocked), so the
+// mapper's idle close (adapters/aider/history.go CloseIdle) no longer ends
+// it ok, as it did before.
+func TestAiderKilledTurnEndsInterrupted(t *testing.T) {
 	t.Parallel()
 	_, r := aiderStart(t, map[int]sessiongen.AiderTurn{1: {Unfinished: true}}, sessiongen.Turn{Say: 20})
 	r.Hub("working")
@@ -137,8 +132,11 @@ func TestKnownFault_AiderKilledTurnEndsOK(t *testing.T) {
 	}
 	r.Hub("ended")
 	st = support.WaitFor(t, r, "the exit", func(st enginetest.State) bool { return len(support.TurnsIn(st, harness.StateRunning)) == 0 })
-	if len(support.TurnsIn(st, harness.StateInterrupted)) != 0 || len(support.TurnsIn(st, harness.StateOK)) != 1 {
-		t.Fatalf("the killed turn: %d ok, %d interrupted: the fault is fixed", len(support.TurnsIn(st, harness.StateOK)), len(support.TurnsIn(st, harness.StateInterrupted)))
+	if len(support.TurnsIn(st, harness.StateInterrupted)) != 1 || len(support.TurnsIn(st, harness.StateOK)) != 0 {
+		t.Errorf("the killed turn: %d ok, %d interrupted, want it interrupted", len(support.TurnsIn(st, harness.StateOK)), len(support.TurnsIn(st, harness.StateInterrupted)))
+	}
+	if st.Mission.Summary.Working {
+		t.Error("working after the agent exited")
 	}
 }
 

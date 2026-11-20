@@ -311,20 +311,20 @@ func TestVibeExitAndRelaunch(t *testing.T) {
 		t.Errorf("%d turns, summary %+v after the relaunched turn", len(itemsOfKind(st, harness.KindTurn)), st.Mission.Summary)
 	}
 	support.Fail(t, "relaunched", enginetest.Without(enginetest.Check(st, enginetest.Facts{Truth: l.Truth, Over: true}), "prompt-unanswered"), l)
-	// TestKnownFault_Vibe_ExitedTurnBecomesOKAtRelaunch: the turn the agent
-	// died in is now ok, and is excluded from the rule above.
-	if turnOf(st, harness.StateInterrupted) != 0 && turnOf(st, harness.StateOK) != 3 {
-		t.Logf("the interrupted turn stayed interrupted")
+	// The turn the agent died in stays interrupted after the relaunched
+	// agent's turn (TestVibe_ExitedTurnStaysInterruptedAtRelaunch).
+	if n := turnOf(st, harness.StateInterrupted); n != 1 {
+		t.Errorf("%d interrupted turns after the relaunch, want the one the agent died in", n)
 	}
 }
 
-// TestKnownFault_Vibe_ExitedTurnBecomesOKAtRelaunch documents a fault: the
-// turn Vibe died in is shown interrupted, and when the relaunched Vibe starts
-// its next turn the first one is shown ok, as if it had finished. Correct: it
-// stays interrupted. The cause is vibe/session.go:221-224, where a new turn
-// closes earlier ones the mapper still holds open with state ok; the exit was
-// only drawn by the engine. This passes while the fault is present.
-func TestKnownFault_Vibe_ExitedTurnBecomesOKAtRelaunch(t *testing.T) {
+// TestVibe_ExitedTurnStaysInterruptedAtRelaunch: the turn Vibe died in is
+// shown interrupted, and stays so when the relaunched Vibe starts its next
+// turn. A new turn closes the earlier ones the mapper still holds open
+// with state ok (vibe/session.go); the exit's record of what it ended
+// (engine/exit.go) keeps the dead turn interrupted. Before it, the dead
+// turn was shown ok, as if it had finished.
+func TestVibe_ExitedTurnStaysInterruptedAtRelaunch(t *testing.T) {
 	t.Parallel()
 	e := support.NewEnv(t, time.Hour)
 	l, r := vibeAgent.start(t, e, sessiongen.Script{Seed: 19})
@@ -340,10 +340,12 @@ func TestKnownFault_Vibe_ExitedTurnBecomesOKAtRelaunch(t *testing.T) {
 	r.SetEnded(false)
 	vibeAgent.add(t, l, sessiongen.Turn{Say: 30})
 	st := r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
-	for _, it := range itemsOfKind(st, harness.KindTurn) {
-		if it.Turn.State == harness.StateInterrupted {
-			t.Fatal("the turn the agent died in stays interrupted: the fault is fixed")
+	turns := itemsOfKind(st, harness.KindTurn)
+	if len(turns) != 2 || turns[0].Turn.State != harness.StateInterrupted || turns[1].Turn.State != harness.StateOK {
+		for _, it := range turns {
+			t.Logf("turn %s: %s", it.ID, it.Turn.State)
 		}
+		t.Error("want the turn the agent died in interrupted and the relaunched agent's turn ok")
 	}
 }
 
