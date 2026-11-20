@@ -26,6 +26,5 @@ opencode/capability/status.context
 opencode/lifecycle/helper_restart
 opencode2/capability/changes
 opencode2/capability/ports
-pi/lifecycle/fork
 vibe/capability/changes
 vibe/capability/ports
