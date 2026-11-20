@@ -167,6 +167,10 @@ func (e *Engine) offerAfterGrace(s *sess, o permissionOffer, ask asker) {
 		s.mu.Unlock()
 		return
 	}
+	if s.needs.opening == nil {
+		s.needs.opening = map[string]string{}
+	}
+	s.needs.opening[o.item] = offerTitle(o.prompt)
 	s.mu.Unlock()
 	e.offerPermission(s, o, ask)
 }
@@ -226,11 +230,17 @@ func (e *Engine) offerPermission(s *sess, o permissionOffer, ask asker) {
 	_, still := s.needs.asked[o.item]
 	if still {
 		s.needs.asked[o.item] = a.RequestID
+		delete(s.needs.opening, o.item)
 	}
 	s.mu.Unlock()
 	if !still {
-		// Answered while the approval was opening.
+		// Answered while the approval was opening. Its open event is not
+		// drawn while the offer is noted as opening (droppedOfferLocked),
+		// and not after the close, which leaves it no longer pending.
 		ask.CloseDesk(a.RequestID)
+		s.mu.Lock()
+		delete(s.needs.opening, o.item)
+		s.mu.Unlock()
 		return
 	}
 	label, ok := <-answers
@@ -290,11 +300,38 @@ func (s *sess) offersLocked(id string, q harness.QuestionBody, a wire.Approval) 
 	if _, offered := s.needs.asked[id]; !offered || a.Source != wire.SourceAsk || len(q.Questions) == 0 {
 		return false
 	}
-	prompt := []rune(askOffer(harness.Item{ID: id, Question: &q}).prompt)
-	if len(prompt) > wire.MaxTitle {
-		prompt = prompt[:wire.MaxTitle]
+	return a.Title == offerTitle(askOffer(harness.Item{ID: id, Question: &q}).prompt)
+}
+
+// offerTitle is the title an offered ask carries for prompt, cut as
+// approval titles are.
+func offerTitle(prompt string) string {
+	r := []rune(prompt)
+	if len(r) > wire.MaxTitle {
+		r = r[:wire.MaxTitle]
 	}
-	return a.Title == string(prompt)
+	return string(r)
+}
+
+// droppedOfferLocked reports whether ask a is the engine's offer of a
+// question that was answered or withdrawn while the offer opened: every
+// offer still opening with its title has lost its question. Such an ask
+// is about to be closed and belongs to no open question.
+func (s *sess) droppedOfferLocked(a wire.Approval) bool {
+	if a.Source != wire.SourceAsk {
+		return false
+	}
+	found := false
+	for id, title := range s.needs.opening {
+		if title != a.Title {
+			continue
+		}
+		if _, still := s.needs.asked[id]; still {
+			return false
+		}
+		found = true
+	}
+	return found
 }
 
 // choiceLabel is the label of q's option id, or "" when q has none.

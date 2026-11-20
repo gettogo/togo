@@ -16,7 +16,12 @@ type needsState struct {
 	request map[string]string               // question item id to its request id
 	relink  []string                        // approval items to republish with their owner
 	asked   map[string]string               // permission question id to the approval offering it ("" while it opens)
-	hint    bool                            // the setup-hooks notice is showing
+	// opening is the title of each offer whose OpenAsk has not returned,
+	// by question id. Its ask can be opened before the offer learns the
+	// request id; once the question's asked entry is gone, the ask is a
+	// copy of a question no longer open, and is not drawn.
+	opening map[string]string
+	hint    bool // the setup-hooks notice is showing
 }
 
 // needsOpenLocked reports whether a question item is unanswered or an
