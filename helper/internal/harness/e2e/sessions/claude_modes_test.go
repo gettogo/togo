@@ -65,7 +65,10 @@ func (s *shiftTab) take() int {
 func TestClaudeModeCycle(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "tape", "claude/capability/mode")
-	_, l, r := claudeSession(t, time.Hour, nil, enginetest.Options{}, sessiongen.Turn{Say: 30})
+	// The session begins on the manual screen: the engine takes the mode
+	// from the screen as the records arrive, and a session it took for
+	// don't ask would be restarted, not cycled.
+	_, l, r := claudeSessionOn(t, modeShots+"manual.ansi", time.Hour, nil, enginetest.Options{}, sessiongen.Turn{Say: 30})
 	r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
 	keys := newShiftTab(r, 0)
 	for _, step := range []struct {
@@ -113,9 +116,8 @@ func TestClaudeModeCycle(t *testing.T) {
 func TestClaudeModeLeavesDontAskByRestart(t *testing.T) {
 	t.Parallel()
 	coverage.Covers(t, "tape", "claude/capability/mode")
-	_, l, r := claudeSession(t, time.Hour, nil, enginetest.Options{}, sessiongen.Turn{Say: 30})
+	_, l, r := claudeSessionOn(t, modeShots+"dontask.ansi", time.Hour, nil, enginetest.Options{}, sessiongen.Turn{Say: 30})
 	r.SettleUntil(support.FileLimit, enginetest.Has(l.Truth.Last))
-	r.Term.Show(r.Term.MustCapture(modeShots + "dontask.ansi"))
 	r.SettleUntil(support.FileLimit, func(st enginetest.State) bool { return support.StatusOf(st).Mode == "dontAsk" })
 	res, err := r.Act("set_mode", "", map[string]any{"id": "plan"})
 	if err != nil || res.Result != harness.ResultRelaunched {

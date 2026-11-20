@@ -24,6 +24,15 @@ const claudeIdle = "harness/engine/testdata/input/claude-suggested-prompt.ansi"
 // path as Claude Code's SessionStart hook does.
 func claudeSession(t *testing.T, age time.Duration, extra map[int]sessiongen.ClaudeTurn, o enginetest.Options, turns ...sessiongen.Turn) (support.Env, *sessiongen.Layout, *enginetest.Rig) {
 	t.Helper()
+	return claudeSessionOn(t, claudeIdle, age, extra, o, turns...)
+}
+
+// claudeSessionOn is claudeSession with the pane on another capture from
+// the start: the engine reads the mode off the screen as the records
+// arrive, so a test that cares which mode it began in must not change the
+// screen afterwards.
+func claudeSessionOn(t *testing.T, screen string, age time.Duration, extra map[int]sessiongen.ClaudeTurn, o enginetest.Options, turns ...sessiongen.Turn) (support.Env, *sessiongen.Layout, *enginetest.Rig) {
+	t.Helper()
 	e := support.NewEnv(t, age)
 	l, err := sessiongen.Write(e.Home, &sessiongen.Claude{Extra: extra}, sessiongen.Script{Seed: 61, Start: e.Start, Cwd: e.Cwd, Turns: turns})
 	if err != nil {
@@ -31,7 +40,7 @@ func claudeSession(t *testing.T, age time.Duration, extra map[int]sessiongen.Cla
 	}
 	o.Agent, o.NoRedact = "claude", true
 	r := e.RigWith(t, o)
-	r.Term.Show(r.Term.MustCapture(claudeIdle))
+	r.Term.Show(r.Term.MustCapture(screen))
 	claudeStart(r, l.Main(), "startup")
 	return e, l, r
 }
