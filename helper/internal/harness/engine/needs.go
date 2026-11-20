@@ -41,8 +41,12 @@ func (s *sess) questionLocked(it *harness.Item) []harness.Op {
 		n.open, n.request = map[string]harness.QuestionBody{}, map[string]string{}
 	}
 	if _, ok := s.ad.Actions[harness.ActionAnswer]; !ok {
+		// On a copy: the body is shared with whoever published the item
+		// (a mapper may keep it), which must not see the engine's mark.
 		f := false
-		it.Question.Answerable = &f
+		q := *it.Question
+		q.Answerable = &f
+		it.Question = &q
 	}
 	var ops []harness.Op
 	if len(it.Question.Answered) > 0 {
