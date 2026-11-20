@@ -157,3 +157,55 @@ func TestThreadsJoinAgainOnlyOnAMove(t *testing.T) {
 		t.Fatalf("torn params: join %q", got)
 	}
 }
+
+// Two sessions each have their own Codex server (see threads). A thread
+// loaded on one server is never joined, late or not, by the other
+// session's feed: the feed learns of threads only from its own server's
+// list, and nothing is shared between feeds.
+func TestLateJoinStaysWithItsOwnServer(t *testing.T) {
+	dir := socketDir(t)
+	sockA, sockB := filepath.Join(dir, "a.sock"), filepath.Join(dir, "b.sock")
+	fa, fb := startFake(t, sockA), startFake(t, sockB)
+	ja, jb := &joins{n: map[string]int{}}, &joins{n: map[string]int{}}
+	fa.handle, fb.handle = ja.handle, jb.handle
+	fa.loaded, fb.loaded = []string{"thr-a"}, []string{"thr-b"}
+	home := t.TempDir()
+	envA := harness.Env{SessionID: "s_rpcownA1", Endpoint: "unix://" + sockA, Vars: map[string]string{source.VarTogoHome: home}}
+	envB := harness.Env{SessionID: "s_rpcownB1", Endpoint: "unix://" + sockB, Vars: map[string]string{source.VarTogoHome: home}}
+	r := NewRunner()
+	r.Poll = 20 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ra, rb := &recorder{}, &recorder{}
+	feed := feedSpec(t, spec.RPC{Method: MethodResume, Params: map[string]string{"threadId": ""}})
+	go r.Watch(ctx, feed, envA, ra.emit)
+	go r.Watch(ctx, feed, envB, rb.emit)
+	waitFor(t, "both first joins", func() bool { return ja.count("thr-a") == 1 && jb.count("thr-b") == 1 })
+
+	// The other terminal resumes a conversation: its server loads it.
+	fb.mu.Lock()
+	fb.loaded = []string{"thr-b", "thr-x"}
+	fb.mu.Unlock()
+	waitFor(t, "the late join on B", func() bool { return rb.lates()["thr-x"] })
+	// A's feed asked its own server again since, twice.
+	since := fa.count(methodLoaded)
+	waitFor(t, "two more listings on A", func() bool { return fa.count(methodLoaded) >= since+2 })
+	if _, ok := ra.lates()["thr-x"]; ok || ja.count("thr-x") != 0 {
+		t.Fatalf("A's feed joined B's thread: records %v, joins %d", ra.lates(), ja.count("thr-x"))
+	}
+	// A turn on B's thread, should A's server ever send one, joins nothing.
+	fa.broadcast(turnStarted("thr-x"))
+	fa.broadcast(turnStarted("thr-a"))
+	waitFor(t, "A's turns read", func() bool {
+		n := 0
+		for _, m := range ra.methods() {
+			if m == "turn/started" {
+				n++
+			}
+		}
+		return n == 2
+	})
+	if ja.count("thr-x") != 0 {
+		t.Fatal("A's feed joined B's thread on a turn")
+	}
+}

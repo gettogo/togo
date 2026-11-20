@@ -24,6 +24,17 @@ import (
 //     is sent before its next turn starts. Then the feed joins it again,
 //     so the chat that starts over on it gets its earlier turns too.
 //
+// A late thread is one this session's own server loaded, so it is this
+// session's terminal (or the phone through it) that opened it. Checked on
+// Codex 0.170.0 with two servers started as the helper starts them
+// (`app-server --listen unix://<session>.sock`, while a per-user Codex
+// daemon served other terminals): each socket is a link to its own socket
+// under /tmp/codex-daemon-<uid>/, held by its own server process; each
+// server's thread/loaded/list held only its own threads, and a thread
+// started on one was neither listed by nor announced to the other. Only
+// thread/list (the conversations saved on disk) is shared, and the feed
+// does not follow it.
+//
 // Set: on the first answer of thread/loaded/list, on each join. Cleared:
 // with the connection (a reconnect or a helper restart asks again, and
 // nothing then is late).
