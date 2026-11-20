@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/adapters/hookstyle"
@@ -65,6 +66,7 @@ func repliesUpTo(env harness.Env, session string, offset, limit int64) ([]hookst
 		return nil, offset
 	}
 	var out []hookstyle.Reply
+	sub := map[string]bool{} // the subagents' interactions read so far
 	start := offset
 	r := bufio.NewReader(io.LimitReader(f, min(maxRead, end-offset)))
 	for {
@@ -82,20 +84,46 @@ func repliesUpTo(env harness.Env, session string, offset, limit int64) ([]hookst
 			return out, offset
 		}
 		offset += int64(len(line))
-		if !bytes.Contains(line, []byte(`"assistant.message"`)) {
+		if !bytes.Contains(line, []byte(`"assistant.message"`)) && !bytes.Contains(line, []byte(`"user.message"`)) &&
+			!bytes.Contains(line, []byte(`"assistant.turn_start"`)) {
 			continue
 		}
 		var ev struct {
 			Type string `json:"type"`
 			Data struct {
 				Content          string `json:"content"`
+				Source           string `json:"source"`
+				InteractionID    string `json:"interactionId"`
 				ParentToolCallID string `json:"parentToolCallId"`
 				ToolRequests     []struct {
 					ToolCallID string `json:"toolCallId"`
 				} `json:"toolRequests"`
 			} `json:"data"`
 		}
-		if json.Unmarshal(line, &ev) != nil || ev.Type != "assistant.message" || ev.Data.ParentToolCallID != "" {
+		if json.Unmarshal(line, &ev) != nil {
+			continue
+		}
+		// A subagent writes to the session's log too, in an interaction
+		// of its own (Copilot CLI 1.0.114, testdata/subagent.events.jsonl):
+		// its prompt is a user.message from "agent-<parent id>" and its
+		// turn starts with the task call's id as parentToolCallId. Its
+		// messages carry neither, only that interaction's id.
+		switch ev.Type {
+		case "user.message":
+			if strings.HasPrefix(ev.Data.Source, "agent-") && ev.Data.InteractionID != "" {
+				sub[ev.Data.InteractionID] = true
+			}
+			continue
+		case "assistant.turn_start":
+			if ev.Data.ParentToolCallID != "" && ev.Data.InteractionID != "" {
+				sub[ev.Data.InteractionID] = true
+			}
+			continue
+		case "assistant.message":
+		default:
+			continue
+		}
+		if ev.Data.ParentToolCallID != "" || sub[ev.Data.InteractionID] {
 			continue
 		}
 		r := hookstyle.Reply{Text: ev.Data.Content}

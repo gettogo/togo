@@ -17,8 +17,9 @@ const subMain = "00575c31-adb0-4c0b-be0a-c3500095f354"
 
 // subagentRun feeds testdata/subagent-hooks.jsonl (Copilot CLI 1.0.114, a
 // real turn that starts one subagent with the task tool) through the
-// mapper. The main agent's closing message is written to its log just
-// before its own agentStop, as Copilot does. It returns every item in
+// mapper, with the same run's own log (testdata/subagent.events.jsonl,
+// trimmed to the records the reader looks at) written as it was: each
+// record before the first hook stamped after it. It returns every item in
 // order, the last version of each by id, and the mapper.
 func subagentRun(t *testing.T) ([]harness.Item, map[string]harness.Item, harness.Mapper) {
 	t.Helper()
@@ -28,7 +29,22 @@ func subagentRun(t *testing.T) ([]harness.Item, map[string]harness.Item, harness
 		t.Fatal(err)
 	}
 	log := filepath.Join(dir, "events.jsonl")
-	appendLines(t, log, `{"type":"session.start","data":{}}`)
+	events := hookLines(t, "subagent.events.jsonl")
+	written := 0
+	writeUpTo := func(ms int64) {
+		for ; written < len(events); written++ {
+			var ev struct {
+				Timestamp time.Time `json:"timestamp"`
+			}
+			if err := json.Unmarshal(events[written], &ev); err != nil {
+				t.Fatal(err)
+			}
+			if ev.Timestamp.UnixMilli() > ms {
+				return
+			}
+			appendLines(t, log, string(events[written]))
+		}
+	}
 	newMapper, _ := harness.LookupMapper(MapperHooks)
 	m := newMapper(harness.Env{SessionID: "s_sub", Vars: map[string]string{source.VarHome: home}})
 	d, _ := hookstyle.For("copilot")
@@ -50,9 +66,7 @@ func subagentRun(t *testing.T) ([]harness.Item, map[string]harness.Item, harness
 			Timestamp int64  `json:"timestamp"`
 		}
 		_ = json.Unmarshal(c.Payload, &p)
-		if c.Event == "agentStop" && p.SessionID == subMain {
-			appendLines(t, log, `{"type":"assistant.message","data":{"messageId":"m9","content":"done","toolRequests":[],"turnId":"3"},"id":"e9"}`)
-		}
+		writeUpTo(p.Timestamp)
 		_, norm, err := hookstyle.Normalize(d, c.Event, c.Payload)
 		if err != nil {
 			t.Fatalf("line %d: %v", i+1, err)
@@ -121,14 +135,16 @@ func TestSubagentHooksStayWithTheSubagent(t *testing.T) {
 			t.Errorf("subagent prompt under %q, agent is %q", x.Parent, agent.ID)
 		}
 	}
-	done := false
+	var said []string
 	for _, x := range all {
-		if x.Kind == harness.KindAssistant && x.Parent == "" && x.Assistant.Text == "done" {
-			done = true
+		if x.Kind == harness.KindAssistant && x.Parent == "" {
+			said = append(said, x.Assistant.Text)
 		}
 	}
-	if !done {
-		t.Error("the main agent's reply did not show")
+	// The subagent's "ok" is in the session's log too, as its own
+	// interaction: it is the subagent's answer, not the main agent's.
+	if len(said) != 1 || said[0] != "done" {
+		t.Errorf("main agent said %q, want just done", said)
 	}
 	if got := m.State()["harness_session"]; got != subMain {
 		t.Errorf("harness_session %q, want the main session", got)
