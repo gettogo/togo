@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -107,10 +108,19 @@ func TestHookExitWaitsForNewRunAfterRelaunch(t *testing.T) {
 // new run starts, its pane can look as if the agent were gone, and a
 // second respawn would kill it. Here the agent exits at once and nothing
 // reports it, so only that rule refuses the second call.
+//
+// The login shell around the agent runs the user's profile before and
+// after it, and a profile runs commands (Ubuntu's does): between them the
+// pane reads as if the agent were gone for a moment. The pane is settled
+// once the agent ran and the shell after it shows its prompt.
 func TestRelaunchOneRunAtATime(t *testing.T) {
 	e := newEnv(t)
+	if err := os.WriteFile(filepath.Join(e.home, ".profile"), []byte("sleep 0.05; sleep 0.05\nPS1='settled$ '\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runs := filepath.Join(e.home, "runs")
 	prog := filepath.Join(e.svc.Path, "agent")
-	if err := os.WriteFile(prog, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	if err := os.WriteFile(prog, []byte("#!/bin/sh\necho run >> '"+runs+"'\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
@@ -118,10 +128,14 @@ func TestRelaunchOneRunAtATime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	settled := func() {
+	settled := func(want int) {
 		t.Helper()
 		for deadline := time.Now().Add(10 * time.Second); ; {
-			if gone, err := e.svc.AgentGone(ctx, sess.ID); err == nil && gone {
+			b, _ := os.ReadFile(runs)
+			screen, _ := e.svc.Tmux.CapturePane(ctx, "="+sess.ID+":")
+			lines := strings.Fields(strings.TrimSpace(screen))
+			prompt := len(lines) > 0 && lines[len(lines)-1] == "settled$"
+			if gone, err := e.svc.AgentGone(ctx, sess.ID); err == nil && gone && prompt && strings.Count(string(b), "run\n") == want {
 				return
 			}
 			if time.Now().After(deadline) {
@@ -135,7 +149,7 @@ func TestRelaunchOneRunAtATime(t *testing.T) {
 		var ce *api.CodeError
 		return errors.As(err, &ce) && ce.Code == rpc.CodeConflict
 	}
-	settled()
+	settled(1)
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
 	for i := range errs {
@@ -145,7 +159,7 @@ func TestRelaunchOneRunAtATime(t *testing.T) {
 	if (errs[0] == nil) == (errs[1] == nil) || !running(errs[0]) && !running(errs[1]) {
 		t.Fatalf("two relaunches at once: %v, %v; want one run and one running", errs[0], errs[1])
 	}
-	settled()
+	settled(2)
 	if _, err := e.hub.SessionRelaunch(ctx, params); !running(err) {
 		t.Fatalf("relaunch before the new run reported: %v, want running", err)
 	}
