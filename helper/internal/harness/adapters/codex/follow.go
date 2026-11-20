@@ -6,6 +6,7 @@ import (
 
 	"github.com/gettogo/togo/helper/internal/harness"
 	"github.com/gettogo/togo/helper/internal/harness/source"
+	"github.com/gettogo/togo/helper/internal/harness/source/rpc"
 )
 
 // The app-server keeps every thread the TUI opened loaded, so after a /new
@@ -21,7 +22,7 @@ import (
 // relaunch starts a new app-server, which does not list the old thread,
 // so it no longer matters; the new main thread replaces it. Kept on turn
 // ends, interrupts, reconnects and helper restarts.
-const followName = "codex"
+const followName = rpc.FollowedThread
 
 // threadID is the shape of a Codex thread id (a UUID).
 var threadID = regexp.MustCompile(`^[0-9a-fA-F-]{8,64}$`)
