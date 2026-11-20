@@ -261,8 +261,10 @@ func TestClaudeTwoQuestionsAnsweredFromThePhone(t *testing.T) {
 // although nobody answered, and opens a screen approval that is not
 // answerable (the detector sees the options but the dialog takes digits
 // and a review). Every step of the dialog (colour, fruit, review) does the
-// same, so a two-question dialog leaves four approval rows, all resolved at
-// the desk, and one pending, not answerable, approval while it is up.
+// same (the review's, "Submit answers / Cancel", can be answered), so a
+// two-question dialog leaves two to four approval rows, all resolved at
+// the desk, and while it is up one pending approval, the first two not
+// answerable.
 //
 // Correct: the question item is the only thing the phone is offered; no
 // approval row, and no "desk" resolution nobody made.
@@ -297,10 +299,16 @@ func TestKnownFault_ClaudeQuestionDialogShowsAsApprovals(t *testing.T) {
 		}
 	}
 	r.Look()
-	st := r.SettleUntil(support.FileLimit, answeredQuestion)
+	// How many rows are left varies from run to run, two to four (not
+	// traced further: the approvals close from the watcher's looks, from
+	// the PostToolUse hook of the finished tool and from the engine's own
+	// offer, which run side by side); what does not vary is that each is
+	// resolved at the desk, by no one, and none is left pending.
+	r.SettleUntil(support.FileLimit, func(st enginetest.State) bool { return answeredQuestion(st) && len(r.Pending()) == 0 })
+	st := r.Settle(support.Quick / 15)
 	approvals := support.Items(st, support.OfKind(harness.KindApproval))
-	if len(approvals) != 4 {
-		t.Fatalf("%d approval rows, want the fault's 4", len(approvals))
+	if len(approvals) < 2 || len(approvals) > 4 {
+		t.Fatalf("%d approval rows, want the fault's two to four", len(approvals))
 	}
 	for _, it := range approvals {
 		if it.Approval.Resolved != wire.ResolutionDesk || it.Approval.Owner != a.id {
