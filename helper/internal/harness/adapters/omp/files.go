@@ -96,8 +96,9 @@ func (s *session) taskFor(name string, at time.Time) string {
 
 // subagentHeader starts a subagent's file: the row of the task it is named
 // after; else, for a file no task call names, the first task still waiting
-// for a file (omp versions that named files otherwise), or a row of its own
-// that the call adopts when it is read (early.go).
+// for a file that was called no later than the file began (omp versions
+// that named files otherwise), or a row of its own that the call adopts
+// when it is read (early.go).
 func (s *session) subagentHeader(e map[string]any, at time.Time, file string) ([]harness.Item, []harness.Op) {
 	id := str(e, "id")
 	if a, ok := s.headers[id]; ok {
@@ -123,10 +124,14 @@ func (s *session) subagentHeader(e map[string]any, at time.Time, file string) ([
 			return s.bound(id, aid, file)
 		}
 	}
-	if len(s.pending) > 0 {
-		var agentID string
-		agentID, s.pending = s.pending[0], s.pending[1:]
-		return s.bound(id, agentID, file)
+	// A file begun before a task was called is not that task's: after a
+	// restart it is an earlier task's, whose call was not read.
+	for i, p := range s.pending {
+		if a := s.agents[p]; a != nil && a.Agent.Started.After(at) {
+			continue
+		}
+		s.pending = slices.Delete(s.pending, i, i+1)
+		return s.bound(id, p, file)
 	}
 	created, err := time.Parse(time.RFC3339, s.env.Vars["created"])
 	// A file of an earlier session (read because its file was the newest),
