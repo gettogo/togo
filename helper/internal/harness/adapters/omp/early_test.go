@@ -116,7 +116,7 @@ func TestOtherSessionsFileMakesNoEarlyRow(t *testing.T) {
 // After a restart only the end of a long conversation is read. A call that
 // names its task is waiting for its file when the file of an earlier
 // task, whose call is outside what was read, arrives first. That file is
-// not the waiting task's: its steps stay out of the waiting task's row,
+// not the waiting task's: its steps stay out of view,
 // and the waiting task's own file still goes to it.
 func TestEarlierTasksFileIsNotGivenToANamedWaitingTask(t *testing.T) {
 	readAt := t0.Add(2 * time.Hour)
@@ -127,8 +127,10 @@ func TestEarlierTasksFileIsNotGivenToANamedWaitingTask(t *testing.T) {
 	for name, files := range map[string][]harness.Record{"earlier first": append(slices.Clone(earlier), own...), "own first": append(slices.Clone(own), earlier...)} {
 		t.Run(name, func(t *testing.T) {
 			out := run(newSession(env()), opened(t), []harness.Record{call}, files)
-			if p := out.last()["sub-early-1"].Parent; p == "agent-AuditLate" {
-				t.Errorf("the earlier task's step is under the waiting task's row")
+			// The earlier file is old and no call that was read names it:
+			// it stays out of view.
+			if it, shown := out.last()["sub-early-1"]; shown {
+				t.Errorf("the earlier task's step is shown, under %q", it.Parent)
 			}
 			if p := out.last()["sub-late-1"].Parent; p != "agent-AuditLate" {
 				t.Errorf("the waiting task's own step is under %q", p)
